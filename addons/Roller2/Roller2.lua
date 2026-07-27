@@ -25,8 +25,8 @@
 --SOFTWARE, EVEN IFIF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'Roller2'
-_addon.version = '2.0.0-prototype'
-_addon.author = 'Selindrile; Roller2 Snake Eye prototype by Codex'
+_addon.version = '2.1.0-prototype'
+_addon.author = 'Selindrile; Roller2 safety iteration by Codex'
 _addon.commands = {'roller2','r2'}
 
 require('luau')
@@ -34,6 +34,7 @@ chat = require('chat')
 chars = require('chat.chars')
 packets = require('packets')
 texts = require('texts')
+local decision = dofile(windower.addon_path .. 'Roller2Decision.lua')
 
 defaults = {}
 defaults.Roll_ind_1 = 8
@@ -43,11 +44,12 @@ defaults.displayx = nil
 defaults.displayy = nil
 defaults.engaged = false
 defaults.snakeeye_policy = 'conservative'
+defaults.auto_random_deal = false
+defaults.debug = false
 zonedelay = 6
 stealthy = ''
 was_stealthy = ''
 
-lastRoll = 0
 lastRollCrooked = false
 midRoll = false
 snakeEyeUsedThisRoll = false
@@ -56,6 +58,10 @@ snakeEyeCommandSent = false
 snakeEyeDoubleUpPending = false
 snakeEyeSequenceId = 0
 rollSequenceActive = false
+pendingRollAction = nil
+lastDecision = 'Waiting'
+lastDecisionTotal = nil
+lastDecisionRoll = nil
 
 settings = config.load(defaults)
 
@@ -68,6 +74,7 @@ function reset_snake_eye_state()
 	snakeEyeCommandSent = false
 	snakeEyeDoubleUpPending = false
 	rollSequenceActive = false
+	pendingRollAction = nil
 	midRoll = false
 end
 
@@ -78,39 +85,37 @@ function begin_roll_sequence()
 	snakeEyeCommandSent = false
 	snakeEyeDoubleUpPending = false
 	rollSequenceActive = true
+	pendingRollAction = nil
 	midRoll = false
 end
 
+function roll_policy()
+	return decision.normalize_policy(settings.snakeeye_policy)
+end
+
 function snake_eye_policy()
-	local policy = tostring(settings.snakeeye_policy or 'conservative'):lower()
-	if not validSnakeEyePolicies:contains(policy) then
-		policy = 'conservative'
-	end
-	return policy
+	return roll_policy()
 end
 
 function snake_eye_policy_allows_reuse(rollNum)
-	if not snakeEyeUsedThisRoll then
-		return true
-	end
-
-	local policy = snake_eye_policy()
-	if policy == 'aggressive' then
-		return true
-	elseif policy == 'balanced' and rollNum == 10 then
-		return true
-	end
-
-	return false
+	return decision.allows_snake_eye_reuse(
+		roll_policy(), rollNum, snakeEyeUsedThisRoll)
 end
 
-function should_use_snake_eye(rollNum, rollID, available_ja, abil_recasts)
+function available_job_abilities()
+	local abilities = windower.ffxi.get_abilities()
+	return S(abilities and abilities.job_abilities or {})
+end
+
+function ability_recasts()
+	return windower.ffxi.get_ability_recasts() or {}
+end
+
+function snake_eye_is_ready(rollNum, available_ja, abil_recasts)
 	if not available_ja:contains(177) or abil_recasts[197] ~= 0 then
 		return false
 	end
 
-	-- The live Snake Eye buff prevents duplicate requests before Double-Up.
-	-- The per-roll latch prevents reuse after Double-Up consumes that buff.
 	if haveBuff('Snake Eye') or snakeEyeRequestPending or snakeEyeDoubleUpPending then
 		return false
 	end
@@ -118,12 +123,18 @@ function should_use_snake_eye(rollNum, rollID, available_ja, abil_recasts)
 	if not snake_eye_policy_allows_reuse(rollNum) then
 		return false
 	end
+	return true
+end
 
-	local lucky = rollInfo[rollID][15]
-	local unlucky = rollInfo[rollID][16]
-	return rollNum == 10
-		or rollNum == (lucky - 1)
-		or (lastRoll ~= 11 and rollNum > 6 and rollNum == unlucky)
+function set_last_decision(roll_name, total, action, reason)
+	lastDecisionRoll = roll_name
+	lastDecisionTotal = total
+	lastDecision = action:upper() .. ': ' .. reason
+	if settings.debug then
+		windower.add_to_chat(207, ('[Roller2] %s %s -> %s (%s)'):format(
+			roll_name, tostring(total), action:upper(), reason))
+	end
+	update_displaybox()
 end
 
 function finish_snake_eye_request_if_failed(sequenceId)
@@ -132,14 +143,17 @@ function finish_snake_eye_request_if_failed(sequenceId)
 		snakeEyeRequestPending = false
 		snakeEyeCommandSent = false
 		snakeEyeDoubleUpPending = false
+		pendingRollAction = nil
 		midRoll = false
-		windower.add_to_chat(167, '[Roller2] Snake Eye was not confirmed; resuming roll logic.')
+		windower.add_to_chat(167, '[Roller2] Snake Eye was not confirmed; the roll was stopped safely.')
+		update_displaybox()
 	end
 end
 
 function send_snake_eye_when_ready(attempt, sequenceId)
 	attempt = attempt or 1
-	if sequenceId ~= snakeEyeSequenceId or not snakeEyeRequestPending or snakeEyeCommandSent then
+	if sequenceId ~= snakeEyeSequenceId or not autoroll
+		or not snakeEyeRequestPending or snakeEyeCommandSent then
 		return
 	end
 
@@ -147,8 +161,15 @@ function send_snake_eye_when_ready(attempt, sequenceId)
 	-- Phantom Roll has completed. The small initial delay also respects the
 	-- game's post-ability lock without hard-coding the later Double-Up timing.
 	if haveBuff('Double-Up Chance') then
-		snakeEyeCommandSent = true
-		windower.chat.input('/ja "Snake Eye" <me>')
+		local recasts = ability_recasts()
+		if recasts[197] == 0 then
+			snakeEyeCommandSent = true
+			windower.chat.input('/ja "Snake Eye" <me>')
+		elseif attempt < 20 then
+			coroutine.schedule(function()
+				send_snake_eye_when_ready(attempt + 1, sequenceId)
+			end, 0.15)
+		end
 	elseif attempt < 20 then
 		coroutine.schedule(function()
 			send_snake_eye_when_ready(attempt + 1, sequenceId)
@@ -163,14 +184,20 @@ function double_up_after_snake_eye(attempt, sequenceId)
 
 	if not haveBuff('Double-Up Chance') then
 		snakeEyeDoubleUpPending = false
+		pendingRollAction = nil
 		midRoll = false
+		update_displaybox()
 		return
 	end
 
-	local abil_recasts = windower.ffxi.get_ability_recasts()
+	local abil_recasts = ability_recasts()
 	if haveBuff('Snake Eye') and abil_recasts[194] == 0 then
 		snakeEyeDoubleUpPending = false
+		pendingRollAction = 'double_up_sent'
 		windower.chat.input('/ja "Double-Up" <me>')
+		coroutine.schedule(function()
+			confirm_double_up_result(sequenceId)
+		end, 2)
 		return
 	end
 
@@ -180,15 +207,22 @@ function double_up_after_snake_eye(attempt, sequenceId)
 		end, 0.2)
 	else
 		snakeEyeDoubleUpPending = false
+		pendingRollAction = nil
 		midRoll = false
 		windower.add_to_chat(167, '[Roller2] Timed out waiting to use Double-Up after Snake Eye.')
+		update_displaybox()
 	end
 end
 
-function request_snake_eye()
+function request_snake_eye(reason)
 	midRoll = true
 	snakeEyeRequestPending = true
 	snakeEyeCommandSent = false
+	pendingRollAction = 'snake_eye'
+	if settings.debug then
+		windower.add_to_chat(207, '[Roller2] Snake Eye queued: ' .. tostring(reason))
+	end
+	update_displaybox()
 	local requestSequenceId = snakeEyeSequenceId
 	coroutine.schedule(function()
 		send_snake_eye_when_ready(1, requestSequenceId)
@@ -196,6 +230,68 @@ function request_snake_eye()
 	coroutine.schedule(function()
 		finish_snake_eye_request_if_failed(requestSequenceId)
 	end, 5)
+end
+
+function confirm_double_up_result(sequenceId)
+	if sequenceId ~= snakeEyeSequenceId or pendingRollAction ~= 'double_up_sent' then
+		return
+	end
+	pendingRollAction = nil
+	midRoll = false
+	if haveBuff('Double-Up Chance') then
+		windower.add_to_chat(
+			167,
+			'[Roller2] Double-Up was not confirmed. The sequence was stopped without retrying.')
+	end
+	update_displaybox()
+end
+
+function double_up_when_ready(attempt, sequenceId)
+	attempt = attempt or 1
+	if sequenceId ~= snakeEyeSequenceId or pendingRollAction ~= 'double_up' then
+		return
+	end
+	if not autoroll or not haveBuff('Double-Up Chance') or haveBuff('Bust') then
+		pendingRollAction = nil
+		midRoll = false
+		update_displaybox()
+		return
+	end
+
+	local blocked = haveBuff('amnesia') or haveBuff('impairment')
+	local recasts = ability_recasts()
+	if not blocked and recasts[194] == 0 then
+		pendingRollAction = 'double_up_sent'
+		windower.chat.input('/ja "Double-Up" <me>')
+		coroutine.schedule(function()
+			confirm_double_up_result(sequenceId)
+		end, 2)
+		return
+	end
+
+	if attempt < 40 then
+		coroutine.schedule(function()
+			double_up_when_ready(attempt + 1, sequenceId)
+		end, 0.2)
+	else
+		pendingRollAction = nil
+		midRoll = false
+		windower.add_to_chat(167, '[Roller2] Timed out waiting for Double-Up to become ready.')
+		update_displaybox()
+	end
+end
+
+function request_double_up(reason)
+	midRoll = true
+	pendingRollAction = 'double_up'
+	if settings.debug then
+		windower.add_to_chat(207, '[Roller2] Double-Up queued: ' .. tostring(reason))
+	end
+	update_displaybox()
+	local requestSequenceId = snakeEyeSequenceId
+	coroutine.schedule(function()
+		double_up_when_ready(1, requestSequenceId)
+	end, 1)
 end
 
 windower.register_event('addon command',function (...)
@@ -209,7 +305,7 @@ windower.register_event('addon command',function (...)
 		cmd[2] = cmd[2]:lower()
 	end
 
-	if cmd[1] == nil or cmd[1] == "rolls" then
+	if cmd[1] == nil or cmd[1] == "rolls" or cmd[1] == "status" then
 
 		if autoroll == true then
 			windower.add_to_chat(7,'Automatic Rolling is ON.')
@@ -219,22 +315,30 @@ windower.register_event('addon command',function (...)
 
 		windower.add_to_chat(7,'Roll 1: '..Rollindex[settings.Roll_ind_1]..'')
 		windower.add_to_chat(7,'Roll 2: '..Rollindex[settings.Roll_ind_2]..'')
+		windower.add_to_chat(7,'Roll policy: '..roll_policy())
+		windower.add_to_chat(7,'Automatic Random Deal: '..
+			(settings.auto_random_deal and 'ON' or 'OFF'))
+		local display_x, display_y = display_position()
+		windower.add_to_chat(7,('Display: %s at %d, %d'):format(
+			settings.showdisplay and 'ON' or 'OFF', display_x, display_y))
 
     else
 		if cmd[1] == "help" then
 			windower.add_to_chat(7,'To start or stop auto rolling type //roller2 roll')
 			windower.add_to_chat(7,'To set rolls use //roller2 roll# rollname')
 			windower.add_to_chat(7,'Chaos/Samurai preset: //roller2 chaos-samurai')
-			windower.add_to_chat(7,'Snake Eye policy: //roller2 snakeeye conservative|balanced|aggressive')
-		elseif cmd[1] == "snakeeye" or cmd[1] == "sepolicy" then
+			windower.add_to_chat(7,'Roll policy: //roller2 policy conservative|balanced|aggressive')
+			windower.add_to_chat(7,'Display: //roller2 display on|off|pos x y|reset|status')
+			windower.add_to_chat(7,'Diagnostics: //roller2 debug on|off')
+		elseif cmd[1] == "policy" or cmd[1] == "snakeeye" or cmd[1] == "sepolicy" then
 			if cmd[2] == nil then
-				windower.add_to_chat(7,'Snake Eye policy: '..snake_eye_policy())
+				windower.add_to_chat(7,'Roll policy: '..roll_policy())
 			elseif validSnakeEyePolicies:contains(cmd[2]) then
 				settings.snakeeye_policy = cmd[2]
 				config.save(settings)
-				windower.add_to_chat(7,'Snake Eye policy set to: '..cmd[2])
+				windower.add_to_chat(7,'Roll policy set to: '..cmd[2])
 			else
-				windower.add_to_chat(7,'Valid Snake Eye policies: conservative, balanced, aggressive')
+				windower.add_to_chat(7,'Valid roll policies: conservative, balanced, aggressive')
 			end
 		elseif cmd[1] == "display" then
 			if cmd[2] == nil then
@@ -248,9 +352,56 @@ windower.register_event('addon command',function (...)
 				settings.showdisplay = false
 				config.save(settings)
 				windower.add_to_chat(7,'Display Off.')
+			elseif cmd[2] == 'pos' or cmd[2] == 'position' then
+				local x = tonumber(cmd[3])
+				local y = tonumber(cmd[4])
+				if not x or not y then
+					windower.add_to_chat(167,'Usage: //roller2 display pos <x> <y>')
+				else
+					settings.displayx = math.floor(x)
+					settings.displayy = math.floor(y)
+					config.save(settings)
+					create_display(settings)
+					windower.add_to_chat(7,('Display position: %d, %d'):format(
+						settings.displayx, settings.displayy))
+				end
+			elseif cmd[2] == 'reset' then
+				settings.displayx, settings.displayy = default_display_position()
+				config.save(settings)
+				create_display(settings)
+				windower.add_to_chat(7,('Display reset to: %d, %d'):format(
+					settings.displayx, settings.displayy))
+			elseif cmd[2] == 'status' then
+				local x, y = display_position()
+				windower.add_to_chat(7,('Display is %s at %d, %d'):format(
+					settings.showdisplay and 'ON' or 'OFF', x, y))
 			else
-				windower.add_to_chat(7,'Not a recognized display subcommand. (Show, Hide)')
+				windower.add_to_chat(7,'Display commands: on, off, pos x y, reset, status')
 			end
+		elseif cmd[1] == "randomdeal" or cmd[1] == "rd" then
+			if cmd[2] == 'on' then
+				settings.auto_random_deal = true
+			elseif cmd[2] == 'off' then
+				settings.auto_random_deal = false
+			elseif cmd[2] ~= nil then
+				windower.add_to_chat(167,'Usage: //roller2 randomdeal on|off')
+				return
+			end
+			config.save(settings)
+			windower.add_to_chat(7,'Automatic Random Deal: '..
+				(settings.auto_random_deal and 'ON' or 'OFF'))
+		elseif cmd[1] == "debug" then
+			if cmd[2] == 'on' then
+				settings.debug = true
+			elseif cmd[2] == 'off' then
+				settings.debug = false
+			elseif cmd[2] ~= nil then
+				windower.add_to_chat(167,'Usage: //roller2 debug on|off')
+				return
+			end
+			config.save(settings)
+			windower.add_to_chat(7,'Decision diagnostics: '..
+				(settings.debug and 'ON' or 'OFF'))
 		elseif cmd[1] == "engaged" then
 			if cmd[2] == nil then
 				settings.engaged = not settings.engaged
@@ -288,8 +439,10 @@ windower.register_event('addon command',function (...)
 			end
 		elseif cmd[1] == "roll" then
 			if cmd[2] == "roll1" then
+				reset_snake_eye_state()
 				windower.chat.input('/ja "'..Rollindex[settings.Roll_ind_1]..'" <me>')
 			elseif cmd[2] == "roll2" then
+				reset_snake_eye_state()
 				windower.chat.input('/ja "'..Rollindex[settings.Roll_ind_2]..'" <me>')
 			else
 				zonedelay = 6
@@ -298,6 +451,7 @@ windower.register_event('addon command',function (...)
 					windower.add_to_chat(7,'Enabling Automatic Rolling.')
 				elseif autoroll == true then
 					autoroll = false
+					reset_snake_eye_state()
 					windower.add_to_chat(7,'Disabling Automatic Rolling.')
 				end
 			end
@@ -416,7 +570,7 @@ windower.register_event('addon command',function (...)
 
 		elseif cmd[1] == "roll2" then
 			local rollchange = false
-			if cmd[2] == nil then windower.add_to_chat(7,'Roll 1: '..Rollindex[settings.Roll_ind_2]..'') return
+			if cmd[2] == nil then windower.add_to_chat(7,'Roll 2: '..Rollindex[settings.Roll_ind_2]..'') return
 			elseif cmd[2]:startswith("warlock") or cmd[2]:startswith("macc") or cmd[2]:startswith("magic ac") or cmd[2]:startswith("rdm") then settings.Roll_ind_2 = 5 config.save(settings) rollchange = true
 			elseif cmd[2]:startswith("fight") or cmd[2]:startswith("double") or cmd[2]:startswith("dbl") or cmd[2]:startswith("war") then settings.Roll_ind_2 = 1 config.save(settings) rollchange = true
 			elseif cmd[2]:startswith("monk") or cmd[2]:startswith("subtle") or cmd[2]:startswith("mnk") then settings.Roll_ind_2 = 2 config.save(settings) rollchange = true
@@ -514,65 +668,81 @@ windower.register_event('load', function()
     end
 
     settings = config.load(defaults)
-
-	if settings.showdisplay then
-		create_display(settings)
+	settings.snakeeye_policy = roll_policy()
+	settings.Roll_ind_1 = tonumber(settings.Roll_ind_1) or defaults.Roll_ind_1
+	settings.Roll_ind_2 = tonumber(settings.Roll_ind_2) or defaults.Roll_ind_2
+	if settings.Roll_ind_1 < 1 or settings.Roll_ind_1 > #Rollindex then
+		settings.Roll_ind_1 = defaults.Roll_ind_1
 	end
+	if settings.Roll_ind_2 < 1 or settings.Roll_ind_2 > #Rollindex then
+		settings.Roll_ind_2 = defaults.Roll_ind_2
+	end
+	config.save(settings)
+	create_display(settings)
 end)
 
 windower.register_event('action', function(act)
+	if act.category ~= 6 or not rollInfo or not table.containskey(rollInfo, act.param) then
+		return
+	end
 
-    if act.category == 6 and table.containskey(rollInfo, act.param) then
+	local player = windower.ffxi.get_player()
+	local target = act.targets and act.targets[1]
+	local result = target and target.actions and target.actions[1]
+	if not player or act.actor_id ~= player.id or not result then
+		return
+	end
 
-        rollActor = act.actor_id
-        local rollID = act.param
-		if rollID == 177 then return end
-        local rollNum = act.targets[1].actions[1].param
-		--windower.add_to_chat(7,'rollNum: '..act.targets[1].actions[1].param..'')
-		local player = windower.ffxi.get_player()
+	local rollID = act.param
+	local rollNum = tonumber(result.param)
+	if not rollNum then return end
 
-		if act.actor_id == player.id then
-			-- The action packet can arrive before Windower reports buff 308.
-			-- Start the sequence here so a later gain-buff event cannot erase
-			-- a Snake Eye request made from this roll result.
-			if not rollSequenceActive then
-				begin_roll_sequence()
-			end
+	if not rollSequenceActive then
+		begin_roll_sequence()
+	end
 
-			--If roll is lucky or 11 returns.
-			if act.targets[1].actions[1].message ~= 424 then
-				lastRollCrooked = false
-			end
-			if rollNum == rollInfo[rollID][15] or rollNum == 11 then
-				lastRoll = rollNum
-				midRoll = false
-				return
-			end
+	-- Any result packet supersedes a delayed request from the preceding total.
+	pendingRollAction = nil
+	snakeEyeDoubleUpPending = false
+	midRoll = false
 
-			if not autoroll or haveBuff('amnesia') or haveBuff('impairment') then return end
+	if result.message ~= 424 then
+		lastRollCrooked = false
+	end
 
-			if player.main_job == 'COR' then
+	local roll_name = rollInfo[rollID][1] .. ' Roll'
+	if not autoroll then
+		set_last_decision(roll_name, rollNum, 'stop', 'autoroll is off')
+		return
+	end
+	if haveBuff('amnesia') or haveBuff('impairment') then
+		set_last_decision(roll_name, rollNum, 'stop', 'player cannot use job abilities')
+		return
+	end
 
-				local abil_recasts = windower.ffxi.get_ability_recasts()
-				local available_ja = S(windower.ffxi.get_abilities().job_abilities)
-				if should_use_snake_eye(rollNum, rollID, available_ja, abil_recasts) then
-					request_snake_eye()
-				elseif available_ja:contains(178) and abil_recasts[198] == 0 and not lastRollCrooked and rollNum < 9 then
-					midRoll = true
-					windower.send_command('wait 5.5;input /ja "Double-Up" <me>')
-				elseif (rollNum < 6 or lastRoll == 11) and not lastRollCrooked then
-					midRoll = true
-					windower.send_command('wait 5.5;input /ja "Double-Up" <me>')
-				else
-					midRoll = false
-					lastRoll = rollNum
-				end
+	local available_ja = available_job_abilities()
+	local abil_recasts = ability_recasts()
+	local main_cor = player.main_job == 'COR'
+	local snake_ready = main_cor
+		and snake_eye_is_ready(rollNum, available_ja, abil_recasts)
+	local fold_ready = main_cor
+		and available_ja:contains(178)
+		and abil_recasts[198] == 0
+	local action, reason = decision.decide({
+		total = rollNum,
+		lucky = rollInfo[rollID][15],
+		unlucky = rollInfo[rollID][16],
+		policy = roll_policy(),
+		snake_eye_ready = snake_ready,
+		fold_ready = fold_ready,
+		crooked = lastRollCrooked,
+	})
 
-			elseif rollNum < 6 then
-				midRoll = true
-				windower.send_command('@wait 5.5;input /ja "Double-Up" <me>')
-			end
-		end
+	set_last_decision(roll_name, rollNum, action, reason)
+	if action == 'snake_eye' then
+		request_snake_eye(reason)
+	elseif action == 'double_up' then
+		request_double_up(reason)
 	end
 end)
 
@@ -582,7 +752,7 @@ function haveBuff(...)
 	if (player ~= nil) and (player.buffs ~= nil) then
 		for _,bid in pairs(player.buffs) do
 			local buff = res.buffs[bid]
-			if args:contains(buff.en:lower()) then
+			if buff and buff.en and args:contains(buff.en:lower()) then
 				return true
 			end
 		end
@@ -624,6 +794,46 @@ Cities = S{
 	"Leafallia"
 }
 
+function confirm_phantom_roll(sequenceId)
+	if sequenceId ~= snakeEyeSequenceId or pendingRollAction ~= 'phantom_roll_sent' then
+		return
+	end
+	pendingRollAction = nil
+	midRoll = false
+	windower.add_to_chat(167, '[Roller2] Phantom Roll was not confirmed; automation is ready to retry.')
+	update_displaybox()
+end
+
+function send_phantom_roll(roll_name, sequenceId)
+	if sequenceId ~= snakeEyeSequenceId or not autoroll then
+		return
+	end
+	pendingRollAction = 'phantom_roll_sent'
+	windower.chat.input('/ja "' .. roll_name .. '" <me>')
+	coroutine.schedule(function()
+		confirm_phantom_roll(sequenceId)
+	end, 3)
+	update_displaybox()
+end
+
+function request_phantom_roll(roll_name, use_crooked)
+	local requestSequenceId = snakeEyeSequenceId
+	midRoll = true
+	if use_crooked then
+		pendingRollAction = 'crooked_cards'
+		windower.chat.input('/ja "Crooked Cards" <me>')
+		coroutine.schedule(function()
+			if requestSequenceId == snakeEyeSequenceId
+				and pendingRollAction == 'crooked_cards' and autoroll then
+				send_phantom_roll(roll_name, requestSequenceId)
+			end
+		end, 2)
+	else
+		send_phantom_roll(roll_name, requestSequenceId)
+	end
+	update_displaybox()
+end
+
 function doRoll()
 	--if Cities:contains(res.zones[windower.ffxi.get_info().zone].english) then return end
 	if not autoroll or haveBuff('amnesia') or haveBuff('impairment') or midRoll then return end
@@ -636,34 +846,39 @@ function doRoll()
 	was_stealthy = stealthy
 	if stealthy then return end
 	local player = windower.ffxi.get_player()
+	if not player then return end
 	if not (player.main_job == 'COR' or player.sub_job == 'COR') then return end
-	local status = res.statuses[windower.ffxi.get_player().status].english
+	local status_resource = res.statuses[player.status]
+	local status = status_resource and status_resource.english
 	if not (((status == 'Idle') and not settings.engaged) or status == 'Engaged') then return end
-	local abil_recasts = windower.ffxi.get_ability_recasts()
-	local available_ja = S(windower.ffxi.get_abilities().job_abilities)
+	local abil_recasts = ability_recasts()
+	local available_ja = available_job_abilities()
 
-	if player.main_job == 'COR' and abil_recasts[198] and abil_recasts[198] > 0 and abil_recasts[197] and abil_recasts[193] == 0 and abil_recasts[197] > 0 and abil_recasts[196] and abil_recasts[194] == 0 and abil_recasts[196] == 0 then
+	if settings.auto_random_deal and player.main_job == 'COR'
+		and available_ja:contains(133)
+		and abil_recasts[198] and abil_recasts[198] > 0
+		and abil_recasts[197] and abil_recasts[197] > 0
+		and abil_recasts[193] == 0 and abil_recasts[196] == 0 then
 		windower.send_command('input /ja "Random Deal" <me>')
 		return
 	end
 
 	if player.main_job == 'COR' and haveBuff('Bust') and available_ja:contains(178) and abil_recasts[198] and abil_recasts[198] == 0 then windower.send_command('input /ja "Fold" <me>') return end
-	if abil_recasts[193] > 0 then return end
+	if not abil_recasts[193] or abil_recasts[193] > 0 then return end
 
 	if not haveBuff(Rollindex[settings.Roll_ind_1]) and not haveBuff(Rollindex[settings.Roll_ind_2]) then
-		lastRoll = 0
 		lastRollCrooked = false
 	end
 
 	if not haveBuff(Rollindex[settings.Roll_ind_1]) then
 		if player.main_job == 'COR' and player.main_job_level > 94 and abil_recasts[96] == 0 then
-			windower.send_command('input /ja "Crooked Cards" <me>;wait 2;input /ja "'..Rollindex[settings.Roll_ind_1]..'" <me>')
+			request_phantom_roll(Rollindex[settings.Roll_ind_1], true)
 		else
-			windower.send_command('input /ja "'..Rollindex[settings.Roll_ind_1]..'" <me>')
+			request_phantom_roll(Rollindex[settings.Roll_ind_1], false)
 		end
 
 	elseif player.main_job == 'COR' and not haveBuff(Rollindex[settings.Roll_ind_2]) and not haveBuff('Bust') then
-		windower.send_command('input /ja "'..Rollindex[settings.Roll_ind_2]..'" <me>')
+		request_phantom_roll(Rollindex[settings.Roll_ind_2], false)
 	end
 
 end
@@ -682,25 +897,32 @@ windower.register_event('gain buff', function(buff_id)
 		snakeEyeCommandSent = false
 		if requestedByRoller2 then
 			snakeEyeDoubleUpPending = true
+			pendingRollAction = 'snake_eye_double_up'
 			midRoll = true
 			local requestSequenceId = snakeEyeSequenceId
 			coroutine.schedule(function()
 				double_up_after_snake_eye(1, requestSequenceId)
 			end, 0.2)
 		end
+		update_displaybox()
+	elseif buff_id == 309 then
+		pendingRollAction = nil
+		midRoll = false
+		update_displaybox()
 	end
 end)
 
 windower.register_event('lose buff', function(buff_id)
 	if buff_id == 601 then
-		local abil_recasts = windower.ffxi.get_ability_recasts()
+		local abil_recasts = ability_recasts()
 
-		if abil_recasts[193] > 40 and haveBuff("Double-Up Chance") then
+		if (abil_recasts[193] or 0) > 40 and haveBuff("Double-Up Chance") then
 			lastRollCrooked = true
 		end
 	elseif buff_id == 308 then
 		midRoll = false
 		reset_snake_eye_state()
+		update_displaybox()
 	end
 end)
 
@@ -708,8 +930,10 @@ end)
 windower.register_event('zone change', function()
 	zonedelay = 0
 	autoroll = false
-	lastRoll = 0
 	lastRollCrooked = false
+	lastDecision = 'Waiting'
+	lastDecisionTotal = nil
+	lastDecisionRoll = nil
 	reset_snake_eye_state()
 	update_displaybox()
 end)
@@ -717,74 +941,69 @@ end)
 windower.register_event('job change', function()
 	zonedelay = 0
 	autoroll = false
-	lastRoll = 0
 	lastRollCrooked = false
+	lastDecision = 'Waiting'
+	lastDecisionTotal = nil
+	lastDecisionRoll = nil
 	reset_snake_eye_state()
 	update_displaybox()
 end)
 
-function create_display(settings)
-    if displayBox then displayBox:destroy() end
-
-    local windowersettings = windower.get_windower_settings()
-	local x,y
-
-	if settings.displayx and settings.displayy then
-		x = settings.displayx
-		y = settings.displayy
-	elseif windowersettings["ui_x_res"] == 1920 and windowersettings["ui_y_res"] == 1080 then
-		x,y = windowersettings["ui_x_res"]-505, windowersettings["ui_y_res"]-18 -- -285, -18
-	else
-		x,y = 0, windowersettings["ui_y_res"]-17 -- -285, -18
+windower.register_event('unload', function()
+	if displayBox then
+		displayBox:destroy()
+		displayBox = nil
 	end
+end)
 
-    displayBox = texts.new()
-    displayBox:pos(x,y)
-    displayBox:font('Arial')--Arial
-    displayBox:size(12)
-    displayBox:bold(true)
-    displayBox:bg_alpha(0)--128
-    displayBox:right_justified(false)
-    displayBox:stroke_width(2)
-    displayBox:stroke_transparency(192)
+function default_display_position()
+	return 20, 50
+end
 
-    update_displaybox(displayBox)
+function display_position()
+	local default_x, default_y = default_display_position()
+	local x = tonumber(settings.displayx) or default_x
+	local y = tonumber(settings.displayy) or default_y
+	local windowersettings = windower.get_windower_settings() or {}
+	local width = tonumber(windowersettings.ui_x_res) or 1280
+	local height = tonumber(windowersettings.ui_y_res) or 720
+	x = math.max(0, math.min(math.floor(x), math.max(0, width - 20)))
+	y = math.max(0, math.min(math.floor(y), math.max(0, height - 24)))
+	return x, y
+end
+
+function create_display()
+	if displayBox then displayBox:destroy() end
+	local x, y = display_position()
+	displayBox = texts.new()
+	displayBox:pos(x, y)
+	displayBox:font('Arial')
+	displayBox:size(12)
+	displayBox:bold(true)
+	displayBox:bg_alpha(0)
+	displayBox:right_justified(false)
+	displayBox:stroke_width(2)
+	displayBox:stroke_transparency(192)
+	update_displaybox()
 end
 
 function update_displaybox()
+	if not displayBox then return end
 	local player = windower.ffxi.get_player()
-	if not player then return end
-	if not settings.showdisplay or not (player.main_job == 'COR' or player.sub_job == 'COR') then
-		if displayBox then displayBox:hide() end
+	if not player or not settings.showdisplay
+		or not (player.main_job == 'COR' or player.sub_job == 'COR') then
+		displayBox:hide()
 		return
 	end
 
-    -- Define colors for text in the display
-    local clr = {
-        h='\\cs(255,192,0)', -- Yellow for active booleans and non-default modals
-		w='\\cs(255,255,255)', -- White for labels and default modals
-        n='\\cs(192,192,192)', -- White for labels and default modals
-        s='\\cs(96,96,96)' -- Gray for inactive booleans
-    }
-
-    local info = {}
-    local orig = {}
-    local spc = '   '
-
-    -- Define labels for each modal state
-    local labels = {
-
-    }
-
-    displayBox:clear()
-	--displayBox:append(spc)
-
-	displayBox:append("Roll 1: "..Rollindex[settings.Roll_ind_1].."   ")
-	if windower.ffxi.get_player().main_job == 'COR' and settings.Roll_ind_1 ~= settings.Roll_ind_2 then
-		displayBox:append("Roll 2: "..Rollindex[settings.Roll_ind_2].."   ")
+	displayBox:clear()
+	displayBox:append("Roll 1: "..Rollindex[settings.Roll_ind_1])
+	if player.main_job == 'COR' and settings.Roll_ind_1 ~= settings.Roll_ind_2 then
+		displayBox:append("   Roll 2: "..Rollindex[settings.Roll_ind_2])
 	end
-	displayBox:append("Autoroll: ")
-	if autoroll == true then
+
+	displayBox:append("\nAutoroll: ")
+	if autoroll then
 		if haveBuff('Invisible') then
 			displayBox:append("Suspended: Invisible")
 		elseif haveBuff('Sneak') then
@@ -795,15 +1014,23 @@ function update_displaybox()
 	else
 		displayBox:append("Off")
 	end
-
+	displayBox:append("   Policy: "..roll_policy())
 	if settings.engaged then
-		displayBox:append("  Engaged")
+		displayBox:append("   Engaged only")
 	end
-	displayBox:append("  SE: "..snake_eye_policy())
-    -- Update and display current info
-    displayBox:update(info)
-    displayBox:show()
+	if settings.auto_random_deal then
+		displayBox:append("   RD: Auto")
+	end
+	if pendingRollAction then
+		displayBox:append("   Pending: "..pendingRollAction)
+	end
 
+	if lastDecisionRoll and lastDecisionTotal then
+		displayBox:append(("\nLast: %s %s - %s"):format(
+			lastDecisionRoll, tostring(lastDecisionTotal), lastDecision))
+	end
+	displayBox:update({})
+	displayBox:show()
 end
 
 windower.register_event('outgoing chunk', function(id, data)
@@ -814,7 +1041,7 @@ end)
 
 windower.register_event('incoming chunk', function(id, data)
     if id == 0x00A and displayBox then
-        displayBox:show()
+        update_displaybox()
     end
 end)
 

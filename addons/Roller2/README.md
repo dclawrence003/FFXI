@@ -1,13 +1,14 @@
 # Roller2
 
-Roller2 `2.0.0-prototype` is a Windower 4 addon based on Selindrile's Roller
-1.8. It prototypes safer Snake Eye automation while retaining the original
-addon's automatic rolling, roll selection, presets, Crooked Cards, Fold, and
-Random Deal behavior.
+Roller2 `2.1.0-prototype` is a Windower 4 safety-focused iteration on
+Selindrile's Roller 1.8. It retains automatic roll maintenance, roll selection,
+presets, Crooked Cards, Fold, and optional Random Deal while replacing the
+inherited high-risk Double-Up flow with deterministic policies and cancellable
+roll sequences.
 
 ## Origin and attribution
 
-This is an iteration on an existing addon, not an original replacement:
+This is derived work:
 
 - Original Roller author: **Selindrile**
 - Additional people credited by Roller: **Balloon** and **Lorand**
@@ -15,176 +16,231 @@ This is an iteration on an existing addon, not an original replacement:
   repository's owner
 
 The original copyright, redistribution conditions, and disclaimer remain
-verbatim at the top of `Roller2.lua`. Please preserve that header in every copy
-or derivative.
+verbatim at the top of `Roller2.lua`. Preserve that header in every copy or
+derivative. Roller2 has not been endorsed or reviewed by the original author.
 
-Roller2 has its own addon name, folder, command namespace, and settings. It does
-not replace or modify Roller.
+## Important
 
-> Do not run Roller and Roller2 simultaneously on the same character. Both
-> addons would attempt to control Phantom Roll and Double-Up.
+Do not run Roller and Roller2 on the same character. Both addons will attempt
+to control Phantom Roll and Double-Up.
+
+Roller2 is still a prototype. Begin with `conservative`, watch actual behavior,
+and enable diagnostics when reporting a problem.
 
 ## Installation
 
-Copy the complete `Roller2` folder into:
+Copy the complete `Roller2` directory, including `Roller2Decision.lua`, into:
 
 ```text
 Windower\addons\Roller2
 ```
 
-Load it with:
+Load it:
 
 ```text
 //lua load Roller2
 ```
 
-Roller2 always starts with autoroll disabled. It is not necessary to add it to
-`init.txt` for testing.
+Roller2 always loads with autoroll disabled.
 
 ## Quick start
 
-Roller2 defaults to Chaos Roll followed by Samurai Roll:
-
 ```text
-//roller2 chaos-samurai
-//roller2 snakeeye conservative
-//roller2 on
+//r2 chaos-samurai
+//r2 policy conservative
+//r2 display on
+//r2 on
 ```
 
-Stop it with:
+Stop all queued automation:
 
 ```text
-//roller2 off
+//r2 off
 ```
 
-The shorter `//r2` alias may be used in place of `//roller2`.
+## Roll policies
+
+The policy now controls the complete Double-Up strategy, not only Snake Eye
+reuse.
+
+| Policy | Raw Double-Up behavior | Preserved Snake Eye reuse |
+| --- | --- | --- |
+| `conservative` | Only totals 1-5, which cannot bust on the next die | Never in the same roll sequence |
+| `balanced` | Totals 1-5 normally; through 7 only when Fold is ready | Only on 10 to guarantee XI |
+| `aggressive` | Totals 1-5 normally; through 8 only when Fold is ready | Allowed when another configured Snake Eye opportunity occurs |
+
+Rules shared by every policy:
+
+- Stop on the roll's lucky number.
+- Stop on XI.
+- Never raw Double-Up on 9.
+- On 10, use Snake Eye when available; otherwise stop.
+- Use Snake Eye at one below the lucky number.
+- Use Snake Eye to move off an unlucky number above 6.
+- Protect a detected Crooked Cards roll from further Double-Ups.
+
+Snake Eye on 9 would only guarantee 10, not XI, so Roller2 stops on 9 instead.
+
+Set or inspect the policy:
+
+```text
+//r2 policy
+//r2 policy conservative
+//r2 policy balanced
+//r2 policy aggressive
+```
+
+The older `snakeeye` and `sepolicy` commands remain aliases. The saved XML key
+also remains `snakeeye_policy` for backward compatibility.
+
+## Sequence safety
+
+Roller2 no longer sends ordinary Double-Up through an unconditional
+`wait 5.5` command. Delayed actions now:
+
+- Belong to a specific roll-sequence ID.
+- Confirm that Double-Up Chance still exists.
+- Confirm the relevant recast is ready.
+- Cancel after zoning, job changes, disabling autoroll, a newer roll result, or
+  loss of Double-Up Chance.
+- Stop safely without blind retries when an issued Double-Up is not confirmed.
+
+The same cancellation mechanism protects delayed Crooked Cards-to-Phantom Roll
+transitions.
+
+## Snake Eye protection
+
+Roller2 prevents the preserved-recast problem in two ways:
+
+- A live-buff/request guard prevents duplicate Snake Eye commands before the
+  first use is consumed.
+- A per-sequence latch remembers a successful use after Double-Up consumes the
+  buff.
+
+Snake Eye must be confirmed before Roller2 requests the associated Double-Up.
+Delayed callbacks from an old sequence are invalidated.
+
+## Display
+
+The display is now always created at load, even when initially hidden. Its
+default position is `20, 50`, clamped to the current UI resolution.
+
+It shows:
+
+- Both configured rolls
+- Autoroll and suspension state
+- Current risk policy
+- Pending action
+- Last roll total and decision
+
+Commands:
+
+```text
+//r2 display on
+//r2 display off
+//r2 display pos 50 150
+//r2 display reset
+//r2 display status
+```
+
+Position and visibility persist in `Roller2\data\settings.xml`.
 
 ## Selecting rolls
 
-Set each roll independently:
+Set rolls independently:
 
 ```text
-//roller2 roll1 chaos
-//roller2 roll2 samurai
+//r2 roll1 chaos
+//r2 roll2 samurai
+//r2 rolls
 ```
 
-Roll names may be abbreviated. Roller2 prints a confirmation after accepting
-each change:
+The Chaos/Samurai shortcut:
 
 ```text
-Setting Roll 1 to: Chaos Roll
-Setting Roll 2 to: Samurai Roll
+//r2 chaos-samurai
 ```
 
-If no confirmation appears, the change was not accepted or the command handler
-encountered an error. Check the current selections with:
-
-```text
-//roller2 rolls
-```
-
-The Chaos/Samurai pair can be applied together:
-
-```text
-//roller2 chaos-samurai
-```
-
-Common inherited presets:
+Inherited presets:
 
 | Command | Roll 1 | Roll 2 |
 | --- | --- | --- |
-| `//roller2 chaos-samurai` | Chaos | Samurai |
-| `//roller2 melee` | Samurai | Chaos |
-| `//roller2 exp` | Corsair's | Dancer's |
-| `//roller2 tp` | Samurai | Fighter's |
-| `//roller2 speed` | Bolter's | Bolter's |
-| `//roller2 acc` | Samurai | Hunter's |
-| `//roller2 ws` | Chaos | Fighter's |
-| `//roller2 nuke` | Wizard's | Warlock's |
-| `//roller2 pet` | Beast | Drachen |
-| `//roller2 petnuke` | Puppet | Companion's |
+| `//r2 chaos-samurai` | Chaos | Samurai |
+| `//r2 melee` | Samurai | Chaos |
+| `//r2 exp` | Corsair's | Dancer's |
+| `//r2 tp` | Samurai | Fighter's |
+| `//r2 speed` | Bolter's | Bolter's |
+| `//r2 acc` | Samurai | Hunter's |
+| `//r2 ws` | Chaos | Fighter's |
+| `//r2 nuke` | Wizard's | Warlock's |
+| `//r2 pet` | Beast | Drachen |
+| `//r2 petnuke` | Puppet | Companion's |
 
-Selections are stored in `Roller2\data\settings.xml`, separately from Roller's
-settings.
+## Random Deal
 
-## Snake Eye changes
+Inherited Roller could automatically spend Random Deal when selected COR
+abilities were on cooldown. Roller2 2.1 disables that behavior by default
+because Random Deal is strategically valuable.
 
-Roller2 adds two independent protections:
-
-- A live-buff guard prevents another Snake Eye request while the Snake Eye buff
-  is already active.
-- A per-roll latch remembers successful Snake Eye use after Double-Up consumes
-  the buff, preventing an unintentionally preserved recast from being spent
-  again during the same Phantom Roll sequence.
-
-Additional changes:
-
-- Detects successful and manually activated Snake Eye through buff events.
-- Confirms Snake Eye activated before attempting Double-Up.
-- Polls the actual Double-Up recast instead of relying on the original fixed
-  4.4-second Snake Eye-to-Double-Up delay.
-- Times out safely if Snake Eye or Double-Up cannot be confirmed.
-- Invalidates delayed callbacks when a roll ends or a new roll begins.
-- Corrects the original `not lastRoll == 11` expression to `lastRoll ~= 11`.
-
-## Snake Eye policies
-
-The default policy is `conservative`.
-
-- `conservative`: At most one successful Snake Eye use per Phantom Roll
-  sequence.
-- `balanced`: Allows one additional preserved use only when the resulting total
-  is 10, guaranteeing an 11.
-- `aggressive`: Allows the XI-chasing criteria to reuse a preserved Snake Eye
-  during the same sequence.
-
-Set or inspect the policy with:
+Explicitly opt in:
 
 ```text
-//roller2 snakeeye
-//roller2 snakeeye conservative
-//roller2 snakeeye balanced
-//roller2 snakeeye aggressive
+//r2 randomdeal on
+//r2 randomdeal off
 ```
+
+Automatic Fold after a Bust remains enabled when Fold is available.
 
 ## Other commands
 
 ```text
-//roller2 on
-//roller2 off
-//roller2 rolls
-//roller2 display on
-//roller2 display off
-//roller2 engaged on
-//roller2 engaged off
-//roller2 help
+//r2 on
+//r2 off
+//r2 status
+//r2 rolls
+//r2 engaged on
+//r2 engaged off
+//r2 roll roll1
+//r2 roll roll2
+//r2 debug on
+//r2 debug off
+//r2 help
 ```
 
-`engaged on` restricts automatic rolling to combat. `engaged off` permits it
-while idle or engaged, matching the inherited Roller behavior.
+`engaged on` restricts roll maintenance to combat. Manual roll commands cancel
+any delayed action from the previous sequence before issuing the requested
+Phantom Roll.
 
-## Recommended prototype test
+`debug on` prints each total, selected action, and reason to chat. Include those
+messages, the roll name/total, policy, Fold/Snake Eye availability, and visible
+buffs when reporting a problem.
 
-1. Stop and unload Roller: `//roller off`, then `//lua unload Roller`.
-2. Load Roller2: `//lua load Roller2`.
-3. Set the rolls and confirm both confirmation messages.
-4. Select `//roller2 snakeeye conservative`.
-5. Start with `//roller2 on`.
-6. When Snake Eye's no-recast enhancement activates, verify Roller2 does not use
-   Snake Eye again during that same Double-Up Chance window.
-7. Repeat with `balanced` only if chaining a preserved Snake Eye from 10 to 11 is
-   desired.
+## Testing
 
-## Prototype status and limitations
+The pure policy engine is `Roller2Decision.lua`. The included
+`tests\decision_spec.lua` covers conservative, balanced, and aggressive
+ceilings; lucky/XI/bust stops; 9/10 safety; Snake Eye opportunities; Crooked
+Cards protection; invalid-policy fallback; and preserved Snake Eye reuse.
 
-- Lua syntax has been validated, but the preserved-recast sequence still
-  requires live gameplay testing.
-- This project has not been endorsed or reviewed by the original Roller author.
-- The Snake Eye path is event- and recast-driven. Some inherited ordinary
-  Double-Up paths still use the original fixed delays.
-- The inherited automatic Fold, Crooked Cards, and Random Deal strategy has not
-  been redesigned in this prototype.
-- Roller2 is intended for Windower 4.
+From the Roller2 directory, run it with a compatible Lua interpreter:
 
-Please include the selected Snake Eye policy, roll total sequence, and visible
-chat messages when reporting a problem.
+```text
+lua tests\decision_spec.lua
+```
+
+Static parsing and policy tests do not replace live FFXI testing of packet
+timing and job-ability confirmation.
+
+## Changes from Roller2 2.0
+
+- Policy applies to all Double-Up decisions.
+- Removed cross-sequence `lastRoll == 11` behavior.
+- Eliminated blind delayed Double-Up commands.
+- Prohibited raw Double-Up on 9 and 10.
+- Added a pure, tested decision module.
+- Rebuilt the display lifecycle and added positioning commands.
+- Added pending-action and last-decision display fields.
+- Added diagnostic logging and status output.
+- Made automatic Random Deal opt-in.
+- Added guards for missing player, status, buff, recast, and action data.
+- Fixed `//r2 roll2` reporting the wrong roll label.
