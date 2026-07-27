@@ -1,6 +1,6 @@
 _addon.name = 'LootAdvisor'
 _addon.author = 'Dolomedes + Codex'
-_addon.version = '0.1.0'
+_addon.version = '0.1.1'
 _addon.commands = {'la', 'lootadvisor'}
 
 require('tables')
@@ -13,6 +13,48 @@ local last_scan = 0
 http.TIMEOUT = 2
 
 local colors = {KEEP=158, UPGRADE=159, AH=205, HOLD=200, REVIEW=207, VENDOR=057, DROP=167}
+
+local function owner_text(value)
+    if type(value) == 'string' then
+        return value
+    end
+    if type(value) ~= 'table' then
+        return ''
+    end
+
+    local owners = {}
+    for _, owner in ipairs(value) do
+        if type(owner) == 'table' then
+            local name = owner.character or owner.name
+            if name then
+                owners[#owners + 1] = tostring(name) .. ' x' .. tostring(owner.count or 1)
+            end
+        elseif owner ~= nil then
+            owners[#owners + 1] = tostring(owner)
+        end
+    end
+    return table.concat(owners, ', ')
+end
+
+local function normalize_row(row, item_id)
+    if type(row) ~= 'table' then
+        return nil
+    end
+
+    local item = res.items[item_id]
+    return {
+        action = type(row.action) == 'string' and row.action:upper() or 'REVIEW',
+        confidence = type(row.confidence) == 'string' and row.confidence or 'unknown',
+        name = type(row.name) == 'string'
+            and row.name
+            or (item and item.en or ('Item ' .. tostring(item_id))),
+        reason = type(row.reason) == 'string'
+            and row.reason
+            or 'Recommendation details were unavailable.',
+        owners = owner_text(row.owners),
+        market_pending = row.market_pending == true,
+    }
+end
 
 local function load_cache()
     local ok, data = pcall(dofile, windower.addon_path .. 'data/recommendations.lua')
@@ -41,10 +83,11 @@ end
 
 local function recommendation(item_id)
     local row = cache.items and cache.items[item_id]
-    if row then return row end
+    if row then return normalize_row(row, item_id) end
 
     row = live_recommendation(item_id)
     if row then
+        row = normalize_row(row, item_id)
         if not row.market_pending then
             cache.items[item_id] = row
         end
