@@ -1,0 +1,33 @@
+{
+  "presetName": "FullMain",
+  "pollIntervalSeconds": 2,
+  "hidePrimaryTaskbarWhileFfxiRunning": true,
+  "keepSecondaryTaskbarsVisible": true,
+  "windowManagementEnabled": true,
+  "characters": {
+    "Dolomedes": {
+      "logicalProcessors": [12, 13, 14, 15],
+      "window": {"enabled": true, "x": 0, "y": 0, "width": 5120, "height": 2160}
+    },
+    "Tackleberry": {
+      "logicalProcessors": [2, 3],
+      "window": {"enabled": true, "x": -1080, "y": 0, "width": 1080, "height": 608}
+    },
+    "Kickpuncher": {
+      "logicalProcessors": [4, 5],
+      "window": {"enabled": true, "x": -1080, "y": 608, "width": 1080, "height": 608}
+    },
+    "Barneystinson": {
+      "logicalProcessors": [6, 7],
+      "window": {"enabled": true, "x": -1080, "y": 1216, "width": 1080, "height": 608}
+    },
+    "Smalls": {
+      "logicalProcessors": [8, 9],
+      "window": {"enabled": true, "x": 5120, "y": 0, "width": 1080, "height": 608}
+    },
+    "Achoo": {
+      "logicalProcessors": [10, 11],
+      "window": {"enabled": true, "x": 5120, "y": 608, "width": 1080, "height": 608}
+    }
+  }
+}

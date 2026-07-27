@@ -1,0 +1,35 @@
+{
+  "server": "Valefor",
+  "serverId": 9,
+  "paths": {
+    "findAll": "unused-in-unit-tests",
+    "itemsResource": "unused-in-unit-tests",
+    "wikiItems": "unused-in-unit-tests",
+    "lootAdvisor": "unused-in-unit-tests"
+  },
+  "characters": {
+    "Dolomedes": {
+      "aliases": ["Dolo"],
+      "primary": ["BLU"],
+      "secondary": ["PLD", "RUN"],
+      "crafter": true
+    },
+    "Tackleberry": {
+      "aliases": [],
+      "primary": ["COR"],
+      "secondary": [],
+      "crafter": false
+    },
+    "Kickpuncher": {
+      "aliases": [],
+      "primary": ["SAM"],
+      "secondary": ["RDM"],
+      "crafter": false
+    }
+  },
+  "policy": {
+    "allJobsLevel99": true,
+    "keepFutureJobGear": true,
+    "dropAllowlist": []
+  }
+}

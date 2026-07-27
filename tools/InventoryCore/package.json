@@ -1,0 +1,11 @@
+{
+  "name": "ffxi-inventory-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local FFXI multibox inventory index, dashboard, and LootAdvisor cache generator.",
+  "scripts": {
+    "refresh": "node src/refresh.js",
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  }
+}

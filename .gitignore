@@ -1,0 +1,26 @@
+# Personal and generated configuration
+tools/InventoryCore/config.json
+**/data/
+**/settings.xml
+**/settings.lua
+
+# Runtime output
+**/runtime/
+**/backups/
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.pid
+*.tmp
+*.bak
+
+# Archives and dependencies
+*.zip
+node_modules/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

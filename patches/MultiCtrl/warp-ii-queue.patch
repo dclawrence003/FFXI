@@ -1,0 +1,292 @@
+diff --git a/multictrl.lua b/multictrl.lua
+index 2975287..e62a7f3 100644
+--- a/multictrl.lua
++++ b/multictrl.lua
+@@ -32,6 +32,10 @@ default = {
+ 	autows=false,
+ 	rangedmode=false,
+ 	send_all_delay = 0.33,
++	d2_retry_count = 3,
++	d2_post_cast_delay = 2.5,
++	d2_start_timeout = 4.0,
++	d2_success_timeout = 18.0,
+ 	autosub='sleep',
+ 	autosc=false,
+ 	autoarts='',
+@@ -108,6 +112,12 @@ DelayCMDS = S{'buyalltemps','get','enter','go','book','deimos'}
+ isCasting = false
+ isResting = false
+ ipcflag = false
++d2_active = false
++d2_cancelled = false
++d2_current_target = nil
++d2_cast_started = false
++d2_cast_finished = false
++d2_failed = L{}
+ currentPC=windower.ffxi.get_player()
+ new = 0
+ old = 0
+@@ -189,7 +199,15 @@ windower.register_event('addon command', function(input, ...)
+ 	elseif cmd == 'buffall' then					-- No IPC
+ 		buffall(cmd2)
+ 	elseif cmd == 'd2' then							-- No IPC
+-		d2()
++		if cmd2 and cmd2:lower() == 'status' then
++			d2_status()
++		elseif cmd2 and cmd2:lower() == 'retry' then
++			d2_retry()
++		elseif cmd2 and cmd2:lower() == 'cancel' then
++			d2_cancel()
++		else
++			d2()
++		end
+ 	elseif cmd == 'fon' then						-- No IPC
+ 		fon(cmd2)
+ 	elseif cmd == 'foff' then						-- No IPC
+@@ -2112,7 +2130,7 @@ function as(cmd,namearg)
+ 	end
+ end
+ 
+-function d2()
++function d2_legacy()
+ 
+ 	player = windower.ffxi.get_player()
+ 	get_spells = windower.ffxi.get_spells()
+@@ -2161,6 +2179,215 @@ function d2()
+ 	
+ end
+ 
++function d2_member_present(name)
++	for _, member in pairs(windower.ffxi.get_party()) do
++		if type(member) == 'table' and member.name == name and member.mob ~= nil then
++			local mob = windower.ffxi.get_mob_by_name(name)
++			if mob and mob.in_party and mob.distance and math.sqrt(mob.distance) < 19 then
++				return true
++			end
++		end
++	end
++	return false
++end
++
++function d2_ordered_targets()
++	local player = windower.ffxi.get_player()
++	local found = {}
++
++	for key, member in pairs(windower.ffxi.get_party()) do
++		if type(member) == 'table' and member.name and player and member.name ~= player.name
++			and d2_member_present(member.name) then
++			table.insert(found, {key = tostring(key), name = member.name})
++		end
++	end
++
++	table.sort(found, function(left, right)
++		return left.key < right.key
++	end)
++
++	local targets = {}
++	for _, entry in ipairs(found) do
++		table.insert(targets, entry.name)
++	end
++	return targets
++end
++
++function d2_wait_action_ready(timeout)
++	local elapsed = 0
++	while elapsed < timeout and not d2_cancelled do
++		local player = windower.ffxi.get_player()
++		if player and S{0, 1}:contains(player.status) and not d2_cast_started then
++			return true
++		end
++		coroutine.sleep(0.25)
++		elapsed = elapsed + 0.25
++	end
++	return false
++end
++
++function d2_wait_cast_start(timeout)
++	local elapsed = 0
++	while elapsed < timeout and not d2_cancelled do
++		local recasts = windower.ffxi.get_spell_recasts()
++		if d2_cast_started or (recasts and recasts[262] and recasts[262] > 0) then
++			return true
++		end
++		coroutine.sleep(0.25)
++		elapsed = elapsed + 0.25
++	end
++	return false
++end
++
++function d2_wait_target_gone(name, timeout)
++	local elapsed = 0
++	while elapsed < timeout and not d2_cancelled do
++		if not d2_member_present(name) then
++			return true
++		end
++		coroutine.sleep(0.25)
++		elapsed = elapsed + 0.25
++	end
++	return false
++end
++
++function d2_cast_target(name)
++	for attempt = 1, settings.d2_retry_count do
++		if d2_cancelled or not d2_member_present(name) then
++			return not d2_member_present(name)
++		end
++
++		check_mp_rest(262)
++		if not d2_wait_action_ready(settings.d2_start_timeout) then
++			atc('[D2] ' .. name .. ' is waiting for the action lock (' .. attempt .. '/' .. settings.d2_retry_count .. ').')
++		else
++			d2_current_target = name
++			d2_cast_started = false
++			d2_cast_finished = false
++			atc('[D2] Warp II -> ' .. name .. ' (' .. attempt .. '/' .. settings.d2_retry_count .. ')')
++			windower.send_command('input /ma "Warp II" "' .. name .. '"')
++
++			if not d2_wait_cast_start(settings.d2_start_timeout) then
++				atc('[D2] Cast did not start for ' .. name .. '; retrying.')
++			elseif d2_wait_target_gone(name, settings.d2_success_timeout) then
++				atc('[D2] Confirmed ' .. name .. ' warped.')
++				d2_current_target = nil
++				d2_cast_started = false
++				d2_cast_finished = false
++				coroutine.sleep(settings.d2_post_cast_delay)
++				return true
++			else
++				atc('[D2] No departure confirmation for ' .. name .. '; retrying.')
++			end
++		end
++
++		d2_current_target = nil
++		d2_cast_started = false
++		d2_cast_finished = false
++		coroutine.sleep(1)
++	end
++	return false
++end
++
++function d2_run(targets, warp_self)
++	if d2_active then
++		atc('[D2] A Warp II queue is already running. Use //mc d2 status or //mc d2 cancel.')
++		return
++	end
++
++	local player = windower.ffxi.get_player()
++	local spells = windower.ffxi.get_spells()
++	if not player or not S{player.main_job_id, player.sub_job_id}:contains(4)
++		or not spells or not spells[261] or not spells[262] then
++		atc('[D2] Requires BLM main/sub with Warp and Warp II learned.')
++		return
++	end
++
++	d2_active = true
++	d2_cancelled = false
++	d2_failed = {}
++
++	for _, name in ipairs(targets) do
++		if d2_cancelled then
++			break
++		end
++		if not d2_cast_target(name) then
++			table.insert(d2_failed, name)
++			atc('[D2] FAILED: ' .. name)
++		end
++	end
++
++	d2_current_target = nil
++	d2_cast_started = false
++	d2_cast_finished = false
++	d2_active = false
++
++	if d2_cancelled then
++		atc('[D2] Queue cancelled; caster will remain.')
++		return
++	end
++
++	if #d2_failed > 0 then
++		atc('[D2] Caster held. Failed targets: ' .. table.concat(d2_failed, ', ') .. '. Use //mc d2 retry.')
++		return
++	end
++
++	if warp_self then
++		check_mp_rest(261)
++		if d2_wait_action_ready(settings.d2_start_timeout) then
++			coroutine.sleep(settings.d2_post_cast_delay)
++			atc('[D2] All recipients confirmed. Warping caster.')
++			windower.send_command('input /ma "Warp" <me>')
++		else
++			atc('[D2] Caster held because the final action lock did not clear.')
++		end
++	end
++end
++
++function d2()
++	d2_run(d2_ordered_targets(), true)
++end
++
++function d2_retry()
++	if d2_active then
++		atc('[D2] Queue is still active.')
++		return
++	end
++
++	local retry_targets = {}
++	for _, name in ipairs(d2_failed) do
++		if d2_member_present(name) then
++			table.insert(retry_targets, name)
++		end
++	end
++
++	if #retry_targets == 0 then
++		atc('[D2] No failed nearby targets remain. Use //mc d2 for a fresh queue.')
++		d2_failed = {}
++		return
++	end
++	d2_run(retry_targets, true)
++end
++
++function d2_cancel()
++	if not d2_active then
++		atc('[D2] No queue is running.')
++		return
++	end
++	d2_cancelled = true
++	atc('[D2] Cancellation requested; caster will remain.')
++end
++
++function d2_status()
++	if d2_active then
++		atc('[D2] ACTIVE' .. (d2_current_target and (': ' .. d2_current_target) or ''))
++	elseif #d2_failed > 0 then
++		atc('[D2] IDLE. Failed targets: ' .. table.concat(d2_failed, ', '))
++	else
++		atc('[D2] IDLE. No pending failures.')
++	end
++end
++
+ function check_mp_rest(spell)
+ 	isWaiting = true
+ 	while isWaiting == true do
+@@ -3956,6 +4183,20 @@ windower.register_event('incoming chunk', function(id, data)
+ 	end
+ end)
+ 
++windower.register_event('action', function(action)
++	local player = windower.ffxi.get_player()
++	if not d2_active or not d2_current_target or not player or action.actor_id ~= player.id then
++		return
++	end
++
++	if action.category == 8 then
++		d2_cast_started = true
++		d2_cast_finished = false
++	elseif action.category == 4 then
++		d2_cast_finished = true
++	end
++end)
++
+ 
+ function poke_npc(npc,target_index)
+ 	if npc and target_index then
+

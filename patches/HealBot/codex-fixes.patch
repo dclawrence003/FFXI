@@ -1,0 +1,68 @@
+diff --git a/HB_Actions.lua b/HB_Actions.lua
+index 95ec26d..790e28c 100644
+--- a/HB_Actions.lua
++++ b/HB_Actions.lua
+@@ -54,10 +54,12 @@ function actions.get_defensive_action()
+ 		local buffq = buffs.getBuffQueue()
+ 		while (not buffq:empty()) do
+ 			local bact = buffq:pop()
+-            local_queue_insert(bact.action.en, bact.name)
+-			if (action.buff == nil) and healer:in_casting_range(bact.name) and healer:ready_to_use(bact.action) then
+-				action.buff = bact
+-			end
++            if bact.action ~= nil then
++                local_queue_insert(bact.action.en, bact.name)
++			    if (action.buff == nil) and healer:in_casting_range(bact.name) and healer:ready_to_use(bact.action) then
++				    action.buff = bact
++			    end
++            end
+ 		end
+ 	end
+ 	
+
+diff --git a/HealBot.lua b/HealBot.lua
+index 5ab630b..3b84689 100644
+--- a/HealBot.lua
++++ b/HealBot.lua
+@@ -74,6 +74,11 @@ end)
+ 
+ 
+ hb._events['unload'] = windower.register_event('unload', function()
++    for _,text_box in pairs(hb.txts) do
++        if text_box and text_box.destroy then
++            text_box:destroy()
++        end
++    end
+     for _,event in pairs(hb._events) do
+         windower.unregister_event(event)
+     end
+
+diff --git a/HealBot_utils.lua b/HealBot_utils.lua
+index 89ef81e..3c9c82a 100644
+--- a/HealBot_utils.lua
++++ b/HealBot_utils.lua
+@@ -723,6 +723,23 @@ function utils.refresh_textBoxes()
+         end
+         hb.txts[box] = texts.new(bst)
+     end
++    utils.cleanup_orphaned_textBoxes()
++end
++
++function utils.cleanup_orphaned_textBoxes()
++    local current = {}
++    for _,text_box in pairs(hb.txts) do
++        current[text_box] = true
++    end
++
++    local prefix = _addon.name..'_gensym_'
++    for i = #windower.text.saved_texts, 1, -1 do
++        local text_box = windower.text.saved_texts[i]
++        local name = text_box and text_box._name
++        if name and name:sub(1, #prefix) == prefix and not current[text_box] then
++            text_box:destroy()
++        end
++    end
+ end
+ 
+ 
+

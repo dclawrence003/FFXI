@@ -1,0 +1,35 @@
+{
+  "server": "Valefor",
+  "serverId": 9,
+  "paths": {
+    "findAll": "C:\\Program Files (x86)\\Windower\\addons\\findAll\\data",
+    "itemsResource": "C:\\Program Files (x86)\\Windower\\res\\items.lua",
+    "wikiItems": "C:\\Path\\To\\Local-BG-Wiki\\items",
+    "lootAdvisor": "C:\\Program Files (x86)\\Windower\\addons\\LootAdvisor"
+  },
+  "characters": {
+    "MainCharacter": {
+      "aliases": ["Main"],
+      "primary": ["BLU"],
+      "secondary": ["PLD", "RUN"],
+      "crafter": true
+    },
+    "CorsairCharacter": {
+      "aliases": [],
+      "primary": ["COR"],
+      "secondary": [],
+      "crafter": false
+    },
+    "HealerCharacter": {
+      "aliases": [],
+      "primary": ["WHM"],
+      "secondary": [],
+      "crafter": false
+    }
+  },
+  "policy": {
+    "allJobsLevel99": true,
+    "keepFutureJobGear": true,
+    "dropAllowlist": []
+  }
+}

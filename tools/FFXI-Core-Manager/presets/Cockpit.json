@@ -1,0 +1,33 @@
+{
+  "presetName": "Cockpit",
+  "pollIntervalSeconds": 2,
+  "hidePrimaryTaskbarWhileFfxiRunning": true,
+  "keepSecondaryTaskbarsVisible": true,
+  "windowManagementEnabled": true,
+  "characters": {
+    "Dolomedes": {
+      "logicalProcessors": [12, 13, 14, 15],
+      "window": {"enabled": true, "x": 0, "y": 0, "width": 3840, "height": 2160}
+    },
+    "Tackleberry": {
+      "logicalProcessors": [2, 3],
+      "window": {"enabled": true, "x": 3840, "y": 0, "width": 1280, "height": 720}
+    },
+    "Kickpuncher": {
+      "logicalProcessors": [4, 5],
+      "window": {"enabled": true, "x": 3840, "y": 720, "width": 1280, "height": 720}
+    },
+    "Barneystinson": {
+      "logicalProcessors": [6, 7],
+      "window": {"enabled": true, "x": 3840, "y": 1440, "width": 1280, "height": 720}
+    },
+    "Smalls": {
+      "logicalProcessors": [8, 9],
+      "window": {"enabled": true, "x": -1080, "y": 0, "width": 1080, "height": 608}
+    },
+    "Achoo": {
+      "logicalProcessors": [10, 11],
+      "window": {"enabled": true, "x": -1080, "y": 608, "width": 1080, "height": 608}
+    }
+  }
+}
