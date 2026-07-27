@@ -8,7 +8,14 @@
     "enabled": true,
     "monitorInstancePattern": "DISPLAY\\\\GSM9E9D",
     "stablePolls": 3,
-    "characters": ["Dolomedes"]
+    "characters": [
+      "Dolomedes",
+      "Tackleberry",
+      "Kickpuncher",
+      "Barneystinson",
+      "Smalls",
+      "Achoo"
+    ]
   },
   "characters": {
     "Dolomedes": {

@@ -4,6 +4,19 @@
   "hidePrimaryTaskbarWhileFfxiRunning": true,
   "keepSecondaryTaskbarsVisible": true,
   "windowManagementEnabled": true,
+  "monitorRecovery": {
+    "enabled": true,
+    "monitorInstancePattern": "DISPLAY\\\\GSM9E9D",
+    "stablePolls": 3,
+    "characters": [
+      "Dolomedes",
+      "Tackleberry",
+      "Kickpuncher",
+      "Barneystinson",
+      "Smalls",
+      "Achoo"
+    ]
+  },
   "characters": {
     "Dolomedes": {
       "logicalProcessors": [12, 13, 14, 15],
