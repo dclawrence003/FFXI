@@ -99,7 +99,8 @@ Confirm every character, affinity mask, and window rectangle in the output.
 ```
 
 The installer creates the scheduled task `FFXI Character Core Manager`. It
-runs elevated at sign-in and waits for FFXI clients.
+runs elevated at sign-in, waits for FFXI clients, and has no execution-time
+limit so Windows does not terminate monitor recovery after 72 hours.
 
 For persistent Windower loading, add:
 
