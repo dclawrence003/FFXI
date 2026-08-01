@@ -1,5 +1,13 @@
 # Third-party notices
 
+## AutoWS / AutoWS2
+
+`addons/AutoWS2/` is a clean implementation inspired by AutoWS 0.3.1 by
+**Lorand**. Lorand remains the author of the original AutoWS concept and
+addon. AutoWS2 does not redistribute the original source and does not require
+`lor_libs`. Its source and README retain explicit attribution and a BSD-style
+license notice.
+
 ## Roller / Roller2
 
 `addons/Roller2/Roller2.lua` is derived from Roller 1.8 by Selindrile. The

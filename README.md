@@ -29,6 +29,7 @@ limitations before use.
 | Project | Type | Purpose | Status |
 | --- | --- | --- | --- |
 | [EventGuard](addons/EventGuard/) | Windower addon | Records NPC event state and offers cautious recovery commands for a client stuck in an interaction | Prototype |
+| [AutoWS2](addons/AutoWS2/) | Windower addon | Adds shadow-tested, TP-rate-aware AM3 reserve and hard 3000-TP reapplication safety | Prototype; Tizona validation |
 | [Roller2](addons/Roller2/) | Windower addon/fork | Iterates on Selindrile's Roller with safer Snake Eye sequencing | Prototype; live testing |
 | [FFXI Core Manager](tools/FFXI-Core-Manager/) | Windows utility + Windower addon | Assigns characters to logical processors and restores multimonitor window layouts | Personal-system prototype |
 | [InventoryCore + LootAdvisor](tools/InventoryCore/) | Local Node service + Windower addon | Indexes FindAll inventory and provides read-only keep/AH/vendor/upgrade guidance | Valefor prototype |
@@ -42,6 +43,9 @@ Original authors retain credit for all work used as a base:
 - Roller2 derives from Roller 1.8 by **Selindrile**, with the original source
   also crediting **Balloon** and **Lorand**. Roller2 retains the complete
   copyright and redistribution notice from Roller.
+- AutoWS2 is a clean implementation inspired by AutoWS 0.3.1 by **Lorand**.
+  It explicitly credits the original addon and concept but does not require or
+  redistribute `lor_libs`.
 - HealBot is by **Lorand**. This repository contains only a small patch against
   [lorand-ffxi/HealBot](https://github.com/lorand-ffxi/HealBot), not a
   redistributed copy.
