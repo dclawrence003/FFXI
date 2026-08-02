@@ -214,6 +214,12 @@ function user_job_self_command(commandArgs, eventArgs)
         tickdelay = 0
         add_to_chat(122, ('PartyStart BRD: %s / leader %s / GearSwap owns songs.')
             :format(requested, pstart_brd.leader))
+        if pstart_brd_cast_party_song(pstart_brd_profiles[requested]) then
+            add_to_chat(122, 'PartyStart BRD: casting the first missing song now.')
+        else
+            add_to_chat(122,
+                'PartyStart BRD: armed; no missing song was immediately castable.')
+        end
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
