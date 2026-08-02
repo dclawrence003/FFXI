@@ -252,12 +252,6 @@ local function pstart_rdm_cast_debuff(profile)
         if spell then
             local key = tostring(target.id)..':'..tostring(spell.id)
             if (pstart_rdm.debuff_timers[key] or 0) <= os.clock() then
-                local me = windower.ffxi.get_player()
-                if not me or me.target_index ~= leader.target_index then
-                    windower.chat.input('/assist '..pstart_rdm.leader)
-                    tickdelay = os.clock() + 1.3
-                    return true
-                end
                 if pstart_rdm_ready(spell) then
                     pstart_rdm.pending = {
                         kind = 'debuff',
@@ -265,7 +259,11 @@ local function pstart_rdm_cast_debuff(profile)
                         key = key,
                         duration = task.duration,
                     }
-                    windower.chat.input('/ma "'..spell.en..'" <t>')
+                    -- Cast by mob ID. Acquiring the leader's target with
+                    -- /assist can interact with legacy attack-assist modes and
+                    -- is unnecessary for magical support.
+                    windower.chat.input(
+                        '/ma "'..spell.en..'" '..tostring(target.id))
                     tickdelay = os.clock() + 3
                     return true
                 end
@@ -304,6 +302,19 @@ function user_job_self_command(commandArgs, eventArgs)
     if requested == 'tick' then
         pstart_rdm_action()
         return
+    elseif not requested or requested == 'status' then
+        local target = pstart_rdm_enemy()
+        local target_text = target
+            and (target.name..' @ '
+                ..('%.1f'):format((target.distance or 0):sqrt())..'y')
+            or 'none'
+        add_to_chat(122, ('PartyStart RDM: %s / profile %s / leader %s / target %s')
+            :format(
+                pstart_rdm.active and 'On' or 'Off',
+                tostring(pstart_rdm.profile or 'none'),
+                tostring(pstart_rdm.leader or 'none'),
+                target_text))
+        return
     elseif requested == 'off' then
         pstart_rdm.active = false
         pstart_rdm.pending = nil
@@ -330,7 +341,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart RDM usage: gs c pstartrdm '
-            ..'<profile|off> <leader> <haste> <refresh> <phalanx>')
+            ..'<profile|status|off> <leader> <haste> <refresh> <phalanx>')
     end
 end
 

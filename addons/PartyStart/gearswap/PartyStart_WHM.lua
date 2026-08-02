@@ -84,6 +84,61 @@ local function pstart_whm_action()
     return false
 end
 
+local function pstart_whm_status()
+    local blockers = {}
+    if not pstart_whm.active then blockers[#blockers + 1] = 'controller Off' end
+    if midaction() then blockers[#blockers + 1] = 'midaction' end
+    if moving then blockers[#blockers + 1] = 'moving' end
+    if silent_check_disable() then blockers[#blockers + 1] = 'incapacitated' end
+    if tickdelay and os.clock() < tickdelay then
+        blockers[#blockers + 1] =
+            ('delay %.1fs'):format(tickdelay - os.clock())
+    end
+
+    local next_action = 'maintenance complete'
+    local spell
+    if not buffactive['Afflatus Solace'] then
+        next_action = 'Afflatus Solace'
+    elseif pstart_whm.opening.protect or not buffactive['Protect'] then
+        spell = pstart_whm_spell({'Protectra V', 'Protectra IV'})
+        next_action = spell and spell.en or 'Protectra unavailable'
+    elseif pstart_whm.opening.shell or not buffactive['Shell'] then
+        spell = pstart_whm_spell({'Shellra V', 'Shellra IV'})
+        next_action = spell and spell.en or 'Shellra unavailable'
+    elseif not buffactive['Auspice'] then
+        spell = pstart_whm_spell({'Auspice'})
+        next_action = spell and spell.en or 'Auspice unavailable'
+    elseif not buffactive['Aquaveil'] then
+        spell = pstart_whm_spell({'Aquaveil'})
+        next_action = spell and spell.en or 'Aquaveil unavailable'
+    elseif not buffactive['Reraise'] then
+        spell = pstart_whm_spell(
+            {'Reraise IV', 'Reraise III', 'Reraise II', 'Reraise'})
+        next_action = spell and spell.en or 'Reraise unavailable'
+    end
+
+    if spell then
+        local recasts = windower.ffxi.get_spell_recasts() or {}
+        local recast = recasts[spell.id] or 0
+        if recast >= spell_latency then
+            blockers[#blockers + 1] = ('recast %.1fs'):format(recast)
+        end
+        if player.mp < spell.mp_cost then
+            blockers[#blockers + 1] =
+                ('MP %d/%d'):format(player.mp, spell.mp_cost)
+        end
+        if not silent_can_use(spell.id) then
+            blockers[#blockers + 1] = 'no current spell access'
+        end
+    end
+
+    add_to_chat(122, ('PartyStart WHM: %s / next %s / %s')
+        :format(
+            pstart_whm.active and 'On' or 'Off',
+            next_action,
+            #blockers == 0 and 'ready' or table.concat(blockers, ', ')))
+end
+
 local pstart_whm_original_self_command = user_job_self_command
 function user_job_self_command(commandArgs, eventArgs)
     local command = commandArgs[1] and commandArgs[1]:lower() or nil
@@ -98,6 +153,8 @@ function user_job_self_command(commandArgs, eventArgs)
     local requested = commandArgs[2] and commandArgs[2]:lower() or nil
     if requested == 'tick' then
         pstart_whm_action()
+    elseif not requested or requested == 'status' then
+        pstart_whm_status()
     elseif requested == 'off' then
         pstart_whm.active = false
         pstart_whm.pending = nil
@@ -117,7 +174,8 @@ function user_job_self_command(commandArgs, eventArgs)
             'PartyStart WHM: GearSwap owns routine buffs; HealBot owns healing.')
         pstart_whm_action()
     else
-        add_to_chat(123, 'PartyStart WHM usage: gs c pstartwhm <on|off>')
+        add_to_chat(123,
+            'PartyStart WHM usage: gs c pstartwhm <on|status|off>')
     end
 end
 

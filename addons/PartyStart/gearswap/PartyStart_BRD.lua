@@ -253,20 +253,16 @@ local function pstart_brd_cast_debuff(profile)
         if spell then
             local key = pstart_brd_timer_key(target, spell)
             if (pstart_brd.debuff_timers[key] or 0) <= now then
-                local me = windower.ffxi.get_player()
-                if not me or me.target_index ~= leader.target_index then
-                    windower.chat.input('/assist '..pstart_brd.leader)
-                    tickdelay = os.clock() + 1.3
-                    return true
-                end
-
                 if pstart_brd_ready(spell) then
                     pstart_brd.pending = {
                         spell_id = spell.id,
                         target_id = target.id,
                         key = key,
                     }
-                    windower.chat.input('/ma "'..spell.en..'" <t>')
+                    -- Cast by mob ID. Debuff automation should never invoke
+                    -- /assist or inherit an attack/movement target.
+                    windower.chat.input(
+                        '/ma "'..spell.en..'" '..tostring(target.id))
                     tickdelay = os.clock() + 3
                     return true
                 end
@@ -297,11 +293,17 @@ function user_job_self_command(commandArgs, eventArgs)
         end
         return
     elseif not requested then
+        local target = pstart_brd_target()
+        local target_text = target
+            and (target.name..' @ '
+                ..('%.1f'):format((target.distance or 0):sqrt())..'y')
+            or 'none'
         add_to_chat(122, ('PartyStart BRD: %s / profile %s / leader %s')
             :format(
                 pstart_brd.active and 'On' or 'Off',
                 tostring(pstart_brd.profile or 'none'),
                 tostring(pstart_brd.leader or 'none')))
+        add_to_chat(122, 'PartyStart BRD debuff target: '..target_text)
         pstart_brd_report_instrument()
         return
     end

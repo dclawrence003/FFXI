@@ -131,6 +131,11 @@ RDM enfeebles by profile:
 - PartyStart supplies its own maintenance heartbeat for WHM, RDM, and BRD so
   support does not stall when Sel-Include suppresses normal ticks during
   Sneak or Invisible.
+- BRD and RDM cast hostile magic directly by mob ID. They do not use `/assist`
+  to acquire the leader's target.
+- Followers remain support-only while PartyStart is active. If a legacy
+  HealBot or MultiCtrl command engages one, PartyStart disengages it without
+  affecting the leader.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy

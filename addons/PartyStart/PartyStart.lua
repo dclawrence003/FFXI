@@ -10,9 +10,11 @@ local PREFIX = 'PARTYSTART1'
 local APPLY_DELAY = 1.5
 local sessions = {}
 local current_profile = nil
+local current_leader = nil
 local last_profile = 'physical'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
+local support_guard_notified = false
 
 local profiles = {
     physical = {
@@ -327,7 +329,12 @@ local function apply_profile(session)
     -- Profiles never inherit old FastFollow/HealBot movement or engage state.
     -- PartyStart itself must never cause a follower to approach a target.
     issue('ffo stop; hb follow off; hb as off; hb as attack off')
-    windower.ffxi.run(false)
+    if player.name:lower() ~= session.leader:lower() then
+        if player.status == 1 then
+            issue('input /attack off')
+        end
+        windower.ffxi.run(false)
+    end
 
     if player.main_job == 'WHM' then
         apply_whm(player)
@@ -345,6 +352,8 @@ local function apply_profile(session)
     end
 
     current_profile = session.profile
+    current_leader = session.leader
+    support_guard_notified = false
     chat(158, ('%s ready as %s/%s; combat remains disabled.')
         :format(session.profile, player.main_job, player.sub_job))
 end
@@ -400,7 +409,9 @@ local function stop_local()
         issue('gs c set AutoBuffMode Off')
     end
     current_profile = nil
+    current_leader = nil
     next_maintenance = 0
+    support_guard_notified = false
     chat(207, 'Support automation stopped; no combat commands were issued.')
 end
 
@@ -463,6 +474,24 @@ windower.register_event('prerender', function()
         next_maintenance = now + MAINTENANCE_INTERVAL
         local player = windower.ffxi.get_player()
         if player then
+            -- A PartyStart follower is support-only. If an old HealBot or
+            -- MultiCtrl assist mode is re-enabled later, cancel the resulting
+            -- attack/mob pursuit without touching the leader's combat.
+            if current_leader
+                and player.name:lower() ~= current_leader:lower()
+                and player.status == 1
+            then
+                issue('input /attack off; hb as attack off; hb as off')
+                windower.ffxi.run(false)
+                if not support_guard_notified then
+                    chat(123,
+                        'Stopped follower combat enabled outside PartyStart.')
+                    support_guard_notified = true
+                end
+            elseif player.status ~= 1 then
+                support_guard_notified = false
+            end
+
             if player.main_job == 'WHM' then
                 issue('gs c pstartwhm tick')
             elseif player.main_job == 'RDM' then
