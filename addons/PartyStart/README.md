@@ -20,6 +20,9 @@ PartyStart establishes clear ownership:
 - GEO supplies bubbles instead of duplicating RDM Refresh.
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
+- RDM GearSwap maintains Temper II while engaged. PartyStart deliberately does
+  not register Temper with HealBot because its resulting status effect is named
+  Multi Strikes and HealBot cannot map it reliably.
 
 RDM and BRD watch the target of the character that issued PartyStart (normally
 the driver) without engaging. RDM selects the best learned tier of each

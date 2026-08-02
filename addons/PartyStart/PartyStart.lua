@@ -224,8 +224,13 @@ local function apply_rdm(player, profile, roster, leader)
         end
     end
 
+    -- Temper's status effect is named "Multi Strikes". HealBot cannot reliably
+    -- map Temper/Temper II to that effect, while the RDM GearSwap AutoBuff
+    -- controller already handles the spell correctly when engaged. Clear any
+    -- registration left by an older PartyStart version and leave it to GS.
+    issue(('hb cancelbuff %s Temper II; hb cancelbuff %s Temper')
+        :format(player.name, player.name))
     hb_buff(player.name, {
-        first_known{'Temper II', 'Temper'} or '',
         'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise'
     })
     issue('input /ja "Composure" <me>')
