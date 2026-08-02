@@ -136,5 +136,10 @@ RDM enfeebles by profile:
   GearSwap cannot see another player's buffs or an enemy's debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
+- Blurred Harp +1 is Superior 2 equipment. The BRD must have spent at least
+  100 Bard Job Points before it can be equipped. Set
+  `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.
+  PartyStart scans Inventory and Wardrobes 1-8 directly and reports whether
+  two-song or three-song mode is active whenever BRD automation starts.
 - Physical engagement, positioning, weaponskills, Quick Draw enhancement of
   Dia, and damage rotations are intentionally deferred to combat profiles.

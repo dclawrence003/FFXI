@@ -87,15 +87,88 @@ local function pstart_brd_first_spell(choices)
     return nil
 end
 
-local function pstart_brd_extra_instrument()
-    local instrument = info.ExtraSongInstrument
-    if (tonumber(info.ExtraSongs) or 0) > 0
-        and type(instrument) == 'string'
-        and item_available(instrument)
-    then
-        return instrument
+local PSTART_BRD_EQUIPPABLE_BAGS = {
+    'Inventory',
+    'Wardrobe',
+    'Wardrobe2',
+    'Wardrobe3',
+    'Wardrobe4',
+    'Wardrobe5',
+    'Wardrobe6',
+    'Wardrobe7',
+    'Wardrobe8',
+}
+
+-- Use Windower's raw bag data instead of Sel-Utility's name-keyed
+-- item_available(). The latter can return false for an item that FindAll and
+-- GearSwap can both see, which silently reduces the controller to two songs.
+local function pstart_brd_instrument_bag(instrument)
+    if type(instrument) ~= 'string' then
+        return nil
+    end
+
+    local item = res.items:with('en', instrument)
+    if not item then
+        return nil
+    end
+
+    for _, bag_name in ipairs(PSTART_BRD_EQUIPPABLE_BAGS) do
+        local bag = windower.ffxi.get_items(bag_name)
+        if bag and bag.enabled then
+            for _, slot in ipairs(bag) do
+                if slot.id == item.id and (slot.count or 0) > 0 then
+                    return bag_name
+                end
+            end
+        end
     end
     return nil
+end
+
+local function pstart_brd_spent_job_points()
+    local current = windower.ffxi.get_player()
+    local brd = current
+        and current.job_points
+        and current.job_points.brd
+        or nil
+    return brd and (tonumber(brd.jp_spent) or 0) or 0
+end
+
+local function pstart_brd_extra_instrument()
+    local extra = tonumber(info.ExtraSongs) or 0
+    local instrument = info.ExtraSongInstrument
+    if extra <= 0 or type(instrument) ~= 'string' then
+        return nil, 'not configured'
+    end
+
+    local bag_name = pstart_brd_instrument_bag(instrument)
+    if not bag_name then
+        return nil, 'not in an equip-accessible bag'
+    end
+
+    local minimum_jp = tonumber(info.ExtraSongMinimumJobPoints) or 0
+    local spent_jp = pstart_brd_spent_job_points()
+    if spent_jp < minimum_jp then
+        return nil, ('requires %d BRD JP; currently %d')
+            :format(minimum_jp, spent_jp)
+    end
+
+    return instrument, bag_name
+end
+
+local function pstart_brd_report_instrument()
+    local configured = info.ExtraSongInstrument
+    local instrument, detail = pstart_brd_extra_instrument()
+    if instrument then
+        local song_count = 2 + math.max(0, tonumber(info.ExtraSongs) or 0)
+        add_to_chat(122, ('PartyStart BRD: %d-song mode enabled; %s found in %s.')
+            :format(song_count, instrument, detail))
+    elseif type(configured) == 'string' then
+        add_to_chat(123, ('PartyStart BRD: 2-song mode; cannot use %s (%s).')
+            :format(configured, tostring(detail)))
+    else
+        add_to_chat(123, 'PartyStart BRD: 2-song mode; no extra-song instrument configured.')
+    end
 end
 
 local function pstart_brd_force_instrument()
@@ -218,6 +291,7 @@ function user_job_self_command(commandArgs, eventArgs)
                 pstart_brd.active and 'On' or 'Off',
                 tostring(pstart_brd.profile or 'none'),
                 tostring(pstart_brd.leader or 'none')))
+        pstart_brd_report_instrument()
         return
     end
 
@@ -238,6 +312,7 @@ function user_job_self_command(commandArgs, eventArgs)
         tickdelay = 0
         add_to_chat(122, ('PartyStart BRD: %s / leader %s / GearSwap owns songs.')
             :format(requested, pstart_brd.leader))
+        pstart_brd_report_instrument()
         if pstart_brd_cast_party_song(pstart_brd_profiles[requested]) then
             add_to_chat(122, 'PartyStart BRD: casting the first missing song now.')
         else
