@@ -87,8 +87,28 @@ local function pstart_brd_first_spell(choices)
     return nil
 end
 
+local function pstart_brd_extra_instrument()
+    local instrument = info.ExtraSongInstrument
+    if (tonumber(info.ExtraSongs) or 0) > 0
+        and type(instrument) == 'string'
+        and item_available(instrument)
+    then
+        return instrument
+    end
+    return nil
+end
+
+local function pstart_brd_force_instrument()
+    local instrument = pstart_brd_extra_instrument()
+    if instrument then
+        equip({range=instrument})
+    end
+end
+
 local function pstart_brd_song_limit(profile)
-    local extra = tonumber(info.ExtraSongs) or 0
+    local extra = pstart_brd_extra_instrument()
+        and (tonumber(info.ExtraSongs) or 0)
+        or 0
     return math.min(#profile.songs, 2 + math.max(0, extra))
 end
 
@@ -132,6 +152,10 @@ local function pstart_brd_cast_party_song(profile)
                 if index > 2 and state.ExtraSongsMode then
                     state.ExtraSongsMode:set('FullLength')
                 end
+                -- Assert the extra-song instrument before starting the action.
+                -- Character and shared BRD sets may otherwise race to restore
+                -- an idle/ranged item between automated songs.
+                pstart_brd_force_instrument()
                 windower.chat.input('/ma "'..spell.en..'" <me>')
                 tickdelay = os.clock() + 3
                 return true
@@ -265,5 +289,32 @@ function job_aftercast(spell, spellMap, eventArgs)
 
     if pstart_brd_original_job_aftercast then
         return pstart_brd_original_job_aftercast(spell, spellMap, eventArgs)
+    end
+end
+
+-- These are intentionally final-layer hooks. The extra-song instrument must
+-- be in the range slot when a friendly song completes; asserting it after the
+-- shared BRD logic prevents a later character/idle set from stealing the slot.
+local pstart_brd_original_job_post_precast = job_post_precast
+function job_post_precast(spell, spellMap, eventArgs)
+    if pstart_brd_original_job_post_precast then
+        pstart_brd_original_job_post_precast(spell, spellMap, eventArgs)
+    end
+    if pstart_brd.active and spell and spell.type == 'BardSong'
+        and not spell.targets.Enemy
+    then
+        pstart_brd_force_instrument()
+    end
+end
+
+local pstart_brd_original_job_post_midcast = job_post_midcast
+function job_post_midcast(spell, spellMap, eventArgs)
+    if pstart_brd_original_job_post_midcast then
+        pstart_brd_original_job_post_midcast(spell, spellMap, eventArgs)
+    end
+    if pstart_brd.active and spell and spell.type == 'BardSong'
+        and not spell.targets.Enemy
+    then
+        pstart_brd_force_instrument()
     end
 end
