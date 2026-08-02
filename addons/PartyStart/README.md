@@ -122,8 +122,8 @@ RDM enfeebles by profile:
 
 - Run startup while out of combat and with all intended clients online.
 - PartyStart configures support automation; it does not move or attack.
-- Every profile clears inherited HealBot assist and engage state on every
-  client before applying job-specific support settings.
+- Every profile clears inherited HealBot follow, assist, and engage state on
+  every client before applying job-specific support settings.
 - Buffs, songs, rolls, healing, and GEO automation begin when a profile or
   `on` is issued, and continue until `off`, an addon/job reset, or an
   addon-specific zone rule deactivates them.

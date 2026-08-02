@@ -319,9 +319,10 @@ local function apply_profile(session)
         return
     end
 
-    -- Profiles never inherit an old HealBot engage state. Offensive target
-    -- observation is owned by GearSwap controllers.
-    issue('hb as off; hb as attack off')
+    -- Profiles never inherit old HealBot movement or engage state. Offensive
+    -- target observation is owned by GearSwap controllers, and PartyStart
+    -- itself must never cause a follower to approach a target.
+    issue('hb follow off; hb as off; hb as attack off')
 
     if player.main_job == 'WHM' then
         apply_whm(player)
@@ -383,7 +384,7 @@ end
 local function stop_local()
     local player = windower.ffxi.get_player()
     if not player then return end
-    issue('hb db off; hb as off; hb as attack off; hb off')
+    issue('hb follow off; hb db off; hb as off; hb as attack off; hb off')
     if player.main_job == 'COR' then issue('r2 off') end
     if player.main_job == 'BRD' then issue('gs c pstartbrd off') end
     if player.main_job == 'RDM' then issue('gs c pstartrdm off') end
