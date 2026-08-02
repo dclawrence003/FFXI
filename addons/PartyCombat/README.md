@@ -130,7 +130,10 @@ Stopping or zoning revokes authorization.
 
 ## Attribution
 
-Selindrile's SendAllTarget (SAT) demonstrated packet-level target coordination
-for Windower multiboxing. PartyCombat is an independent implementation with a
-different action-driven state model, authorization protocol, movement leash,
-and safety behavior. SAT is not bundled, modified, or required.
+[Selindrile's SendAllTarget (SAT)](https://github.com/Selindrile/SendAllTarget)
+demonstrated packet-level target coordination for Windower multiboxing and
+thanks **Arcon** for code used by SAT. PartyCombat is an independent
+implementation with a different action-driven state model, authorization
+protocol, movement leash, and safety behavior. SAT source is not bundled or
+modified, and SAT is not required. Neither author has endorsed or reviewed
+PartyCombat.

@@ -40,17 +40,26 @@ limitations before use.
 
 ## Attribution
 
-Original authors retain credit for all work used as a base:
+AI generation does not erase upstream authorship. Original authors retain
+credit for all work used as a base:
 
 - Roller2 derives from Roller 1.8 by **Selindrile**, with the original source
   also crediting **Balloon** and **Lorand**. Roller2 retains the complete
   copyright and redistribution notice from Roller.
 - AutoWS2 is a clean implementation inspired by AutoWS 0.3.1 by **Lorand**.
-  It explicitly credits the original addon and concept but does not require or
-  redistribute `lor_libs`.
+  The original was inspected for behavior and command vocabulary, but its
+  source and `lor_libs` are not redistributed.
+- EventGuard adapts the menu-release packet sequence from **Akaden's
+  Superwarp**, whose notice credits **Ivaar** for menu-lock reset functions.
+  The complete applicable BSD notice is retained in EventGuard's source.
+  **DiscipleOfEris's NpcInteract** also supplied behavioral context.
 - PartyCombat is an independent implementation informed by the targeting
-  concept demonstrated by **Selindrile's SendAllTarget**. SAT is not bundled,
-  modified, or required.
+  concept demonstrated by **Selindrile's SendAllTarget**, which itself thanks
+  **Arcon**. SAT is not bundled, modified, or required.
+- PartyStart's optional controllers integrate with **Selindrile's GearSwap
+  framework**, whose shared include credits **Motenten** as an earlier base.
+  Those upstream GearSwap files are required from the user's own installation
+  and are not redistributed here.
 - HealBot is by **Lorand**. This repository contains only a small patch against
   [lorand-ffxi/HealBot](https://github.com/lorand-ffxi/HealBot), not a
   redistributed copy.
@@ -60,6 +69,11 @@ Original authors retain credit for all work used as a base:
 
 See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and each project README
 for details.
+
+This repository has no single blanket license. Each project or inherited
+source notice governs its own files. Where upstream code has no clear
+redistribution license, this repository publishes an original integration or
+a patch instead of republishing the upstream addon.
 
 ## Safety and scope
 

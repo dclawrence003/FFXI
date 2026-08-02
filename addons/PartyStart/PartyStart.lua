@@ -1,3 +1,14 @@
+--[[
+PartyStart is an original support orchestrator. Its optional GearSwap
+controllers integrate with Selindrile's callback/override framework:
+https://github.com/Selindrile/GearSwap
+
+Selindrile's shared include credits Motenten's base files. Neither
+Selindrile's nor Motenten's GearSwap source is redistributed here.
+PartyStart also sends public commands to Roller2 and HealBot; it does not
+bundle either addon.
+]]
+
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
 _addon.version = '0.3.0'

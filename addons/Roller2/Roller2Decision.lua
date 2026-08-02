@@ -1,3 +1,8 @@
+-- Roller2 safety-decision module.
+-- Roller2 is derived from Roller by Selindrile, which also credits Balloon
+-- and Lorand. The upstream notice is retained in Roller2.lua and applies to
+-- inherited Roller code; see README.md for the complete relationship.
+
 local decision = {}
 
 local valid_policies = {

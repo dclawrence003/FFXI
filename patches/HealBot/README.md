@@ -57,5 +57,9 @@ git apply -R C:\path\to\codex-ffxi\patches\HealBot\codex-fixes.patch
 
 ## Attribution
 
-HealBot is authored by Lorand. The five changes in this patch were generated
-by OpenAI Codex while diagnosing runtime spam and orphaned UI boxes.
+[HealBot is authored by Lorand](https://github.com/lorand-ffxi/HealBot).
+The upstream repository does not advertise a repository-level license through
+GitHub, so this directory contains only a focused patch and does not
+redistribute the complete addon. The five changes in this patch were generated
+by OpenAI Codex while diagnosing runtime spam and orphaned UI boxes. Lorand
+has not endorsed or reviewed the patch.

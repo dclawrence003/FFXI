@@ -1,4 +1,7 @@
 -- PartyStart WHM controller for Selindrile-style GearSwap files.
+-- Integration target: https://github.com/Selindrile/GearSwap
+-- Selindrile's shared include credits Motenten's base files. No upstream
+-- GearSwap source is redistributed in this controller.
 -- Load at the end of a participating character's WHM gear file:
 --     include('Common/PartyStart_WHM.lua')
 

@@ -1,4 +1,7 @@
 -- PartyStart BRD controller for Selindrile-style GearSwap files.
+-- Integration target: https://github.com/Selindrile/GearSwap
+-- Selindrile's shared include credits Motenten's base files. No upstream
+-- GearSwap source is redistributed in this controller.
 --
 -- Load this after the character's BRD gear file:
 --     include('Common/PartyStart_BRD.lua')

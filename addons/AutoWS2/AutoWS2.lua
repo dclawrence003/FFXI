@@ -3,9 +3,10 @@ AutoWS2
 
 Aftermath-aware weapon-skill automation inspired by AutoWS 0.3.1 by Lorand.
 This is a clean implementation and does not require Lorand's lor_libs.
+Original AutoWS: https://github.com/lorand-ffxi/addons/tree/master/AutoWS
+No AutoWS source is redistributed in this file.
 
 Copyright (c) 2026 OpenAI
-Copyright (c) 2016 Lorand (original AutoWS concept and command vocabulary)
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -776,4 +777,3 @@ windower.register_event('load', function()
     chat(207, 'Loaded in OFF state. Tizona profiles default to aftermath shadow mode.')
     chat(207, 'Use //aws2 help. Do not run another AutoWS controller simultaneously.')
 end)
-

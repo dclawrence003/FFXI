@@ -14,6 +14,8 @@ tools/InventoryCore/config.json
 *.pid
 *.tmp
 *.bak
+**/__pycache__/
+*.pyc
 
 # Archives and dependencies
 *.zip

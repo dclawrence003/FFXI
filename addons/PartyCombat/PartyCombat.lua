@@ -3,6 +3,11 @@ PartyCombat
 
 Role-scoped combat coordination for Windower multibox parties.
 
+Independent implementation informed by the packet-level target coordination
+concept in SendAllTarget by Selindrile, which thanks Arcon:
+https://github.com/Selindrile/SendAllTarget
+No SendAllTarget source is redistributed in this file.
+
 Copyright (c) 2026 OpenAI
 
 Redistribution and use in source and binary forms, with or without
