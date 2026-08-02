@@ -1,6 +1,6 @@
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.1.0'
+_addon.version = '0.2.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -249,14 +249,30 @@ local function apply_rdm(player, profile, roster, leader)
         ..'gs c set AutoBuffMode Auto; hb on'):format(leader))
 end
 
-local function apply_brd(player, profile, leader)
-    hb_buff(player.name, profile.brd)
-    for _,choices in ipairs(profile.brd_debuffs or {}) do
-        local spell = first_known(choices)
-        if spell then issue('hb db '..spell) end
+local function apply_brd(player, profile_name, leader)
+    -- Remove registrations left by PartyStart versions that delegated BRD to
+    -- HealBot. GearSwap now owns both party songs and hostile songs.
+    local old_songs = {
+        'Victory March', 'Valor Minuet V', 'Blade Madrigal',
+        "Mage's Ballad III", "Sentinel's Scherzo",
+    }
+    local known_old_songs = {}
+    for _, spell in ipairs(old_songs) do
+        if knows_spell(spell) then
+            known_old_songs[#known_old_songs + 1] = spell
+        end
     end
-    -- Song debuffs follow the driver's target, but BRD never engages here.
-    issue(('hb as %s; hb as attack off; hb db on; hb on'):format(leader))
+    if #known_old_songs > 0 then
+        issue(('hb cancelbuff %s %s'):format(
+            player.name, table.concat(known_old_songs, ',')))
+    end
+    for _, spell in ipairs{
+        'Carnage Elegy', 'Battlefield Elegy', 'Pining Nocturne'
+    } do
+        if knows_spell(spell) then issue('hb db rm '..spell) end
+    end
+    issue('hb db off; hb as off; hb as attack off')
+    issue(('gs c pstartbrd %s %s'):format(profile_name, leader))
 end
 
 local function apply_geo(player, profile, roster)
@@ -287,7 +303,7 @@ local function apply_profile(session)
     elseif player.main_job == 'RDM' then
         apply_rdm(player, profile, session.roster, session.leader)
     elseif player.main_job == 'BRD' then
-        apply_brd(player, profile, session.leader)
+        apply_brd(player, session.profile, session.leader)
     elseif player.main_job == 'GEO' then
         apply_geo(player, profile, session.roster)
     elseif player.main_job == 'COR' then
@@ -344,6 +360,7 @@ local function stop_local()
     if not player then return end
     issue('hb db off; hb as off; hb as attack off; hb off')
     if player.main_job == 'COR' then issue('r2 off') end
+    if player.main_job == 'BRD' then issue('gs c pstartbrd off') end
     if player.main_job == 'GEO' or player.main_job == 'RDM'
         or player.main_job == 'BLU' then
         issue('gs c set AutoBuffMode Off')
