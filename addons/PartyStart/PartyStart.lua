@@ -21,6 +21,7 @@ local profiles = {
         },
         geo = {indi='Fury', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
+            {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
             {'Distract III', 'Distract II', 'Distract'},
         },
@@ -33,6 +34,7 @@ local profiles = {
         },
         geo = {indi='Torpor', geo='Frailty', entrust='Fury', entrust_job='BLU'},
         rdm_debuffs = {
+            {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
             {'Distract III', 'Distract II', 'Distract'},
         },
@@ -46,8 +48,8 @@ local profiles = {
         },
         geo = {indi='Acumen', geo='Malaise', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
-            {'Dia III', 'Dia II', 'Dia'},
             {'Frazzle III', 'Frazzle II', 'Frazzle'},
+            {'Dia III', 'Dia II', 'Dia'},
             {'Addle II', 'Addle'},
         },
     },
@@ -60,8 +62,13 @@ local profiles = {
         },
         geo = {indi='Barrier', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
+            {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
             {'Distract III', 'Distract II', 'Distract'},
+            {'Slow II', 'Slow'},
+            {'Paralyze II', 'Paralyze'},
+            {'Blind II', 'Blind'},
+            {'Addle II', 'Addle'},
         },
     },
 }
@@ -203,7 +210,7 @@ local function apply_whm(player)
     issue('hb db off; hb as off; hb as attack off; hb on')
 end
 
-local function apply_rdm(player, profile, roster)
+local function apply_rdm(player, profile, roster, leader)
     local haste = first_known{'Haste II', 'Haste'}
     local refresh = first_known{'Refresh III', 'Refresh II', 'Refresh'}
     local phalanx_ii = first_known{'Phalanx II'}
@@ -232,20 +239,19 @@ local function apply_rdm(player, profile, roster)
         issue('hb db '..spell)
     end
 
-    -- Debuffs are configured but intentionally held until combat setup supplies
-    -- an assist target and explicitly enables them.
-    issue('hb db off; hb as off; hb as attack off; gs c set AutoBuffMode Auto; hb on')
+    -- Follow the driver's target for spell selection without engaging it.
+    issue(('hb as %s; hb as attack off; hb db on; '
+        ..'gs c set AutoBuffMode Auto; hb on'):format(leader))
 end
 
-local function apply_brd(player, profile)
+local function apply_brd(player, profile, leader)
     hb_buff(player.name, profile.brd)
     for _,choices in ipairs(profile.brd_debuffs or {}) do
         local spell = first_known(choices)
         if spell then issue('hb db '..spell) end
     end
-    -- Songs begin immediately; hostile songs are only registered here and
-    -- remain disabled until the future combat phase provides a target.
-    issue('hb db off; hb as off; hb as attack off; hb on')
+    -- Song debuffs follow the driver's target, but BRD never engages here.
+    issue(('hb as %s; hb as attack off; hb db on; hb on'):format(leader))
 end
 
 local function apply_geo(player, profile, roster)
@@ -274,9 +280,9 @@ local function apply_profile(session)
     if player.main_job == 'WHM' then
         apply_whm(player)
     elseif player.main_job == 'RDM' then
-        apply_rdm(player, profile, session.roster)
+        apply_rdm(player, profile, session.roster, session.leader)
     elseif player.main_job == 'BRD' then
-        apply_brd(player, profile)
+        apply_brd(player, profile, session.leader)
     elseif player.main_job == 'GEO' then
         apply_geo(player, profile, session.roster)
     elseif player.main_job == 'COR' then
@@ -313,13 +319,16 @@ local function begin(profile_name)
         nonce = nonce,
         profile = profile_name,
         names = names,
+        leader = player.name,
         roster = {},
         apply_at = os.clock() + APPLY_DELAY,
         applied = false,
     }
     sessions[nonce] = session
     last_profile = profile_name
-    send_ipc{PREFIX, 'start', nonce, profile_name, table.concat(names, ',')}
+    send_ipc{
+        PREFIX, 'start', nonce, profile_name, table.concat(names, ','), player.name
+    }
     report(session)
     chat(207, ('Discovering %d party jobs for profile %s...')
         :format(#names, profile_name))
@@ -349,15 +358,19 @@ windower.register_event('ipc message', function(message)
 
     if kind == 'start' then
         local profile_name = fields[4]
-        if not profiles[profile_name] or type(fields[5]) ~= 'string' then return end
+        local leader = fields[6]
+        if not profiles[profile_name] or type(fields[5]) ~= 'string'
+            or not valid_name(leader) then return end
         local names = split(fields[5], ',')
         local player = windower.ffxi.get_player()
-        if not player or not contains_name(names, player.name) then return end
+        if not player or not contains_name(names, player.name)
+            or not contains_name(names, leader) then return end
 
         sessions[nonce] = sessions[nonce] or {
             nonce = nonce,
             profile = profile_name,
             names = names,
+            leader = leader,
             roster = {},
             apply_at = os.clock() + APPLY_DELAY,
             applied = false,

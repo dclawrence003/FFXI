@@ -21,11 +21,12 @@ PartyStart establishes clear ownership:
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
 
-Offensive RDM debuffs are selected and registered during startup, but remain
-disabled until a later combat command provides an assist target. BRD likewise
-registers Carnage Elegy (falling back to Battlefield Elegy); `magic` and `safe`
-also register Pining Nocturne. Lullaby and Threnody remain manual/content
-specific because indiscriminate automation would be counterproductive.
+RDM and BRD watch the target of the character that issued PartyStart (normally
+the driver) without engaging. RDM selects the best learned tier of each
+profile's enfeebles. BRD uses Carnage Elegy (falling back to Battlefield Elegy);
+`magic` and `safe` also use Pining Nocturne. Lullaby and Threnody remain
+manual/content-specific because indiscriminate automation would be
+counterproductive.
 
 ## Installation
 
@@ -63,7 +64,7 @@ AutoBuff modes. Loading PartyStart itself is inert.
 - BRD: Victory March + Valor Minuet V + Blade Madrigal
 - GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the WHM
 - RDM: best learned Haste/Refresh tiers, self Temper/Gain-STR/Phalanx, and
-  registered Dia + Distract
+  active Frazzle + Dia + Distract maintenance on the driver's target
 - WHM: Protectra V, Shellra V, Auspice, Afflatus Solace, Aquaveil, and Reraise
 
 PartyStart checks the local learned-spell table before asking HealBot to
@@ -78,6 +79,15 @@ maintain a spell. It prefers higher tiers and falls back where configured.
 | `magic` | Wizard / Warlock | Ballad / March / Madrigal | Acumen / Malaise |
 | `safe` | Chaos / Gallant | March / Scherzo / Madrigal | Barrier / Frailty |
 
+RDM enfeebles by profile:
+
+| Profile | Enfeebles |
+| --- | --- |
+| `physical` | Frazzle, Dia, Distract |
+| `accuracy` | Frazzle, Dia, Distract |
+| `magic` | Frazzle, Dia, Addle |
+| `safe` | Frazzle, Dia, Distract, Slow, Paralyze, Blind, Addle |
+
 ## Safety and limitations
 
 - Run startup while out of combat and with all intended clients online.
@@ -89,5 +99,5 @@ maintain a spell. It prefers higher tiers and falls back where configured.
   profile is idempotent, but manually registered unrelated buffs remain.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
-- Buff positioning, combat assist, weaponskills, Quick Draw enhancement of
+- Physical engagement, positioning, weaponskills, Quick Draw enhancement of
   Dia, and damage rotations are intentionally deferred to combat profiles.
