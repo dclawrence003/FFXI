@@ -32,6 +32,7 @@ limitations before use.
 | [AutoWS2](addons/AutoWS2/) | Windower addon | Adds shadow-tested, TP-rate-aware AM3 reserve and hard 3000-TP reapplication safety | Prototype; Tizona validation |
 | [Roller2](addons/Roller2/) | Windower addon/fork | Iterates on Selindrile's Roller with safer Snake Eye sequencing | Prototype; live testing |
 | [PartyStart](addons/PartyStart/) | Windower addon | Discovers current party jobs and configures non-combat support profiles from one command | Six-character prototype |
+| [PartyCombat](addons/PartyCombat/) | Windower addon | Gives selected followers action-driven targeting, distance-limited pursuit, and explicit combat authorization | Tackleberry prototype |
 | [FFXI Core Manager](tools/FFXI-Core-Manager/) | Windows utility + Windower addon | Assigns characters to logical processors and restores multimonitor window layouts | Personal-system prototype |
 | [InventoryCore + LootAdvisor](tools/InventoryCore/) | Local Node service + Windower addon | Indexes FindAll inventory and provides read-only keep/AH/vendor/upgrade guidance | Valefor prototype |
 | [HealBot fixes](patches/HealBot/) | Patch | Guards an invalid queued action and cleans up orphaned text boxes | Applies to Lorand's HealBot |
@@ -47,6 +48,9 @@ Original authors retain credit for all work used as a base:
 - AutoWS2 is a clean implementation inspired by AutoWS 0.3.1 by **Lorand**.
   It explicitly credits the original addon and concept but does not require or
   redistribute `lor_libs`.
+- PartyCombat is an independent implementation informed by the targeting
+  concept demonstrated by **Selindrile's SendAllTarget**. SAT is not bundled,
+  modified, or required.
 - HealBot is by **Lorand**. This repository contains only a small patch against
   [lorand-ffxi/HealBot](https://github.com/lorand-ffxi/HealBot), not a
   redistributed copy.
@@ -67,6 +71,8 @@ for details.
   a last resort; relogging remains the authoritative recovery path.
 - Core Manager changes process affinity, window placement, and taskbar state.
   Its supplied configuration is hardware-specific.
+- PartyCombat injects target/engage packets and can move authorized followers
+  in a straight line. Its distance limits are safety rails, not pathfinding.
 
 ## Repository hygiene
 

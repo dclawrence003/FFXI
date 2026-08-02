@@ -15,6 +15,11 @@ local last_profile = 'physical'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
 local support_guard_notified = false
+local combat_authorized_until = 0
+
+local function combat_authorized()
+    return os.clock() < combat_authorized_until
+end
 
 local profiles = {
     physical = {
@@ -329,7 +334,9 @@ local function apply_profile(session)
     -- Profiles never inherit old FastFollow/HealBot movement or engage state.
     -- PartyStart itself must never cause a follower to approach a target.
     issue('ffo stop; hb follow off; hb as off; hb as attack off')
-    if player.name:lower() ~= session.leader:lower() then
+    if player.name:lower() ~= session.leader:lower()
+        and not combat_authorized()
+    then
         if player.status == 1 then
             issue('input /attack off')
         end
@@ -416,7 +423,27 @@ local function stop_local()
 end
 
 windower.register_event('ipc message', function(message)
-    if type(message) ~= 'string' or not message:startswith(PREFIX..'|') then
+    if type(message) ~= 'string' then return end
+
+    -- PartyCombat grants named followers an explicit, temporary exception to
+    -- PartyStart's support-only combat guard. Every other follower remains
+    -- protected, and authorization is revoked by PartyCombat stop/zone events.
+    if message:startswith('PARTYCOMBAT1|authority|') then
+        local fields = split(message, '|')
+        local player = windower.ffxi.get_player()
+        local leader = fields[3]
+        local attacker = fields[4]
+        local enabled = fields[5]
+        if player and valid_name(leader) and valid_name(attacker)
+            and player.name:lower() == attacker:lower()
+        then
+            combat_authorized_until =
+                enabled == '1' and (os.clock() + 5) or 0
+        end
+        return
+    end
+
+    if not message:startswith(PREFIX..'|') then
         return
     end
     local fields = split(message, '|')
@@ -479,6 +506,7 @@ windower.register_event('prerender', function()
             -- attack/mob pursuit without touching the leader's combat.
             if current_leader
                 and player.name:lower() ~= current_leader:lower()
+                and not combat_authorized()
                 and player.status == 1
             then
                 issue('input /attack off; hb as attack off; hb as off')

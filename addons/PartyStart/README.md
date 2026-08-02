@@ -133,9 +133,10 @@ RDM enfeebles by profile:
   Sneak or Invisible.
 - BRD and RDM cast hostile magic directly by mob ID. They do not use `/assist`
   to acquire the leader's target.
-- Followers remain support-only while PartyStart is active. If a legacy
-  HealBot or MultiCtrl command engages one, PartyStart disengages it without
-  affecting the leader.
+- Followers remain support-only while PartyStart is active unless PartyCombat
+  grants a named character explicit combat authorization. If a legacy HealBot
+  or MultiCtrl command engages anyone else, PartyStart disengages that
+  follower without affecting the leader.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy
@@ -150,5 +151,6 @@ RDM enfeebles by profile:
   `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.
   PartyStart scans Inventory and Wardrobes 1-8 directly and reports whether
   two-song or three-song mode is active whenever BRD automation starts.
-- Physical engagement, positioning, weaponskills, Quick Draw enhancement of
-  Dia, and damage rotations are intentionally deferred to combat profiles.
+- Physical engagement and positioning are delegated to PartyCombat.
+  Weaponskills, Quick Draw enhancement of Dia, and damage rotations remain
+  separate responsibilities.

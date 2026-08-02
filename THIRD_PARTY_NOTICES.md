@@ -39,6 +39,14 @@ That repository does not advertise a repository-level license through GitHub.
 This repository therefore publishes only the generated Warp II queue patch and
 does not redistribute the complete addon.
 
+## SendAllTarget / PartyCombat
+
+Selindrile's SendAllTarget (SAT) demonstrated packet-level target coordination
+for Windower multiboxing. `addons/PartyCombat/` is an independent
+implementation with action-driven target selection, explicit role
+authorization, and distance-limited movement. It does not bundle, modify, or
+require SAT.
+
 ## Windower and game data
 
 The projects rely on Windower APIs and resources but do not redistribute
