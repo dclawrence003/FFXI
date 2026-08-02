@@ -1,6 +1,6 @@
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.0'
+_addon.version = '0.3.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -206,47 +206,68 @@ local function apply_whm(player)
         'Protectra V', 'Shellra V', 'Auspice', 'Afflatus Solace',
         'Aquaveil', 'Reraise IV'
     }
-    hb_buff(player.name, self_spells)
+    local known = {}
+    for _, spell in ipairs(self_spells) do
+        if knows_spell(spell) then known[#known + 1] = spell end
+    end
+    if #known > 0 then
+        issue(('hb cancelbuff %s %s'):format(
+            player.name, table.concat(known, ',')))
+    end
+    issue('gs c pstartwhm on')
     issue('hb db off; hb as off; hb as attack off; hb on')
 end
 
-local function apply_rdm(player, profile, roster, leader)
+local function apply_rdm(player, profile_name, roster, leader)
     local haste = first_known{'Haste II', 'Haste'}
     local refresh = first_known{'Refresh III', 'Refresh II', 'Refresh'}
     local phalanx_ii = first_known{'Phalanx II'}
+    local haste_targets = {}
+    local refresh_targets = {}
+    local phalanx_targets = {}
 
     for _,name in ipairs(sorted_roster(roster)) do
         local job = roster[name].main_job
-        if haste then hb_buff(name, {haste}) end
-        if refresh and mp_jobs:contains(job) then hb_buff(name, {refresh}) end
+        if haste then
+            haste_targets[#haste_targets + 1] = name
+            issue(('hb cancelbuff %s %s'):format(name, haste))
+        end
+        if refresh and mp_jobs:contains(job) then
+            refresh_targets[#refresh_targets + 1] = name
+            issue(('hb cancelbuff %s %s'):format(name, refresh))
+        end
         if phalanx_ii and name ~= player.name and frontline_jobs:contains(job) then
-            hb_buff(name, {phalanx_ii})
+            phalanx_targets[#phalanx_targets + 1] = name
+            issue(('hb cancelbuff %s %s'):format(name, phalanx_ii))
         end
     end
 
-    -- Temper's status effect is named "Multi Strikes". HealBot cannot reliably
-    -- map Temper/Temper II to that effect, while the RDM GearSwap AutoBuff
-    -- controller already handles the spell correctly when engaged. Clear any
-    -- registration left by an older PartyStart version and leave it to GS.
-    issue(('hb cancelbuff %s Temper II; hb cancelbuff %s Temper')
-        :format(player.name, player.name))
-    hb_buff(player.name, {
-        'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise'
-    })
-    issue('input /ja "Composure" <me>')
-
-    local debuffs = {}
-    for _,choices in ipairs(profile.rdm_debuffs) do
-        local spell = first_known(choices)
-        if spell then debuffs[#debuffs + 1] = spell end
+    local old_self = {
+        'Temper II', 'Temper', 'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise'
+    }
+    for _, spell in ipairs(old_self) do
+        if knows_spell(spell) then
+            issue(('hb cancelbuff %s %s'):format(player.name, spell))
+        end
     end
-    for _,spell in ipairs(debuffs) do
-        issue('hb db '..spell)
+    local old_debuffs = {
+        'Frazzle III', 'Frazzle II', 'Frazzle',
+        'Dia III', 'Dia II', 'Dia',
+        'Distract III', 'Distract II', 'Distract',
+        'Slow II', 'Slow', 'Paralyze II', 'Paralyze',
+        'Blind II', 'Blind', 'Addle II', 'Addle',
+    }
+    for _, spell in ipairs(old_debuffs) do
+        if knows_spell(spell) then issue('hb db rm '..spell) end
     end
 
-    -- Follow the driver's target for spell selection without engaging it.
-    issue(('hb as %s; hb as attack off; hb db on; '
-        ..'gs c set AutoBuffMode Auto; hb on'):format(leader))
+    local function csv(names)
+        return #names > 0 and table.concat(names, ',') or '-'
+    end
+    issue(('gs c pstartrdm %s %s %s %s %s'):format(
+        profile_name, leader, csv(haste_targets), csv(refresh_targets),
+        csv(phalanx_targets)))
+    issue('hb db off; hb as off; hb as attack off; hb on')
 end
 
 local function apply_brd(player, profile_name, leader)
@@ -298,10 +319,14 @@ local function apply_profile(session)
         return
     end
 
+    -- Profiles never inherit an old HealBot engage state. Offensive target
+    -- observation is owned by GearSwap controllers.
+    issue('hb as off; hb as attack off')
+
     if player.main_job == 'WHM' then
         apply_whm(player)
     elseif player.main_job == 'RDM' then
-        apply_rdm(player, profile, session.roster, session.leader)
+        apply_rdm(player, session.profile, session.roster, session.leader)
     elseif player.main_job == 'BRD' then
         apply_brd(player, session.profile, session.leader)
     elseif player.main_job == 'GEO' then
@@ -361,6 +386,8 @@ local function stop_local()
     issue('hb db off; hb as off; hb as attack off; hb off')
     if player.main_job == 'COR' then issue('r2 off') end
     if player.main_job == 'BRD' then issue('gs c pstartbrd off') end
+    if player.main_job == 'RDM' then issue('gs c pstartrdm off') end
+    if player.main_job == 'WHM' then issue('gs c pstartwhm off') end
     if player.main_job == 'GEO' or player.main_job == 'RDM'
         or player.main_job == 'BLU' then
         issue('gs c set AutoBuffMode Off')

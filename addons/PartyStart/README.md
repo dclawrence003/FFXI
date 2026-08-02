@@ -14,23 +14,24 @@ that party and require further live testing.
 Separate character macros tend to drift and duplicate responsibilities.
 PartyStart establishes clear ownership:
 
-- RDM maintains Haste, Refresh, self-offense buffs, and available Phalanx.
-- WHM maintains core party defenses and its healing stance.
+- RDM GearSwap maintains Haste, Refresh, self-offense buffs, available
+  Phalanx, and profile-specific enfeebles.
+- WHM GearSwap maintains core party defenses and Afflatus Solace; HealBot is
+  retained only for curing, status removal, and raises.
 - BRD GearSwap maintains the selected party songs and hostile songs.
 - GEO supplies bubbles instead of duplicating RDM Refresh.
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
-- RDM GearSwap maintains Temper II while engaged. PartyStart deliberately does
-  not register Temper with HealBot because its resulting status effect is named
-  Multi Strikes and HealBot cannot map it reliably.
+- RDM GearSwap maintains Temper II while engaged and tracks its Multi Strikes
+  status effect directly.
 
-RDM watches the target of the character that issued PartyStart (normally the
-driver) without engaging. RDM selects the best learned tier of each profile's
-enfeebles. BRD GearSwap reads the driver's target index, changes only the BRD
-client's target when a hostile song is due, and never engages. It uses Carnage
-Elegy (falling back to Battlefield Elegy); `magic` and `safe` also use Pining
-Nocturne. Lullaby and Threnody remain manual/content-specific because
-indiscriminate automation would be counterproductive.
+RDM and BRD GearSwap read the target index of the character that issued
+PartyStart (normally the driver). They change only their local spell target
+when an enfeeble is due and never engage. RDM selects the best learned tier of
+each profile's enfeebles. BRD uses Carnage Elegy (falling back to Battlefield
+Elegy); `magic` and `safe` also use Pining Nocturne. Lullaby and Threnody remain
+manual/content-specific because indiscriminate automation would be
+counterproductive.
 
 ## Installation
 
@@ -52,9 +53,19 @@ Then add this at the end of each participating character's BRD gear file:
 include('Common/PartyStart_BRD.lua')
 ```
 
-HealBot must be loaded for WHM and the current RDM controller. BRD no longer
-uses HealBot for songs. COR requires Roller2. GEO, RDM, BRD, and BLU profiles
-use their GearSwap command interfaces.
+Copy `gearswap\PartyStart_RDM.lua` and `gearswap\PartyStart_WHM.lua` to the
+same GearSwap `data\Common` directory. Add the corresponding include at the
+end of each participating RDM and WHM gear file:
+
+```lua
+include('Common/PartyStart_RDM.lua')
+include('Common/PartyStart_WHM.lua')
+```
+
+HealBot remains loaded for defensive healing and status removal, but PartyStart
+always disables its assist, engage, and offensive-debuff modes. BRD and RDM no
+longer use HealBot for spell automation. COR requires Roller2. GEO, RDM, BRD,
+WHM, and BLU profiles use their GearSwap command interfaces.
 
 ## Commands
 
@@ -80,9 +91,11 @@ AutoBuff modes. Loading PartyStart itself is inert.
 - COR: Chaos Roll + Samurai Roll
 - BRD: Victory March + Valor Minuet V + Blade Madrigal
 - GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the WHM
-- RDM: best learned Haste/Refresh tiers, self Temper/Gain-STR/Phalanx, and
-  active Frazzle + Dia + Distract maintenance on the driver's target
-- WHM: Protectra V, Shellra V, Auspice, Afflatus Solace, Aquaveil, and Reraise
+- RDM GearSwap: best learned Haste/Refresh tiers, self
+  Temper/Gain-STR/Phalanx, and active Frazzle + Dia + Distract maintenance on
+  the driver's target
+- WHM GearSwap: Protectra V, Shellra V, Auspice, Afflatus Solace, Aquaveil,
+  and Reraise; HealBot continues curing and status removal
 
 PartyStart and the BRD GearSwap controller check the local learned-spell table.
 They prefer higher tiers and fall back where configured.
@@ -109,6 +122,8 @@ RDM enfeebles by profile:
 
 - Run startup while out of combat and with all intended clients online.
 - PartyStart configures support automation; it does not move or attack.
+- Every profile clears inherited HealBot assist and engage state on every
+  client before applying job-specific support settings.
 - Buffs, songs, rolls, healing, and GEO automation begin when a profile or
   `on` is issued, and continue until `off`, an addon/job reset, or an
   addon-specific zone rule deactivates them.
@@ -117,6 +132,8 @@ RDM enfeebles by profile:
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy
   and Nocturne after 90 seconds because enemy debuff icons are not exposed to
   GearSwap.
+- RDM party-buff and enemy-debuff timers are maintained locally because
+  GearSwap cannot see another player's buffs or an enemy's debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
 - Physical engagement, positioning, weaponskills, Quick Draw enhancement of

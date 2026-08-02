@@ -1,0 +1,110 @@
+-- PartyStart WHM controller for Selindrile-style GearSwap files.
+-- Load at the end of a participating character's WHM gear file:
+--     include('Common/PartyStart_WHM.lua')
+
+local pstart_whm = {
+    active = false,
+}
+
+local function pstart_whm_spell(choices)
+    local learned = windower.ffxi.get_spells() or {}
+    for _, name in ipairs(choices) do
+        local spell = res.spells:with('en', name)
+        if spell and learned[spell.id] then
+            return spell
+        end
+    end
+    return nil
+end
+
+local function pstart_whm_cast_spell(choices, buff)
+    if buffactive[buff] or midaction() or moving
+        or silent_check_disable()
+    then
+        return false
+    end
+    local spell = pstart_whm_spell(choices)
+    local recasts = windower.ffxi.get_spell_recasts() or {}
+    if spell and (recasts[spell.id] or 0) < spell_latency
+        and player.mp >= spell.mp_cost and silent_can_use(spell.id)
+    then
+        windower.chat.input('/ma "'..spell.en..'" <me>')
+        tickdelay = os.clock() + 3
+        return true
+    end
+    return false
+end
+
+local function pstart_whm_cast_solace()
+    if buffactive['Afflatus Solace'] or midaction() or moving
+        or silent_check_disable()
+    then
+        return false
+    end
+    local ability = res.job_abilities:with('en', 'Afflatus Solace')
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    if ability and (recasts[ability.recast_id] or 0) < latency then
+        windower.chat.input('/ja "Afflatus Solace" <me>')
+        tickdelay = os.clock() + 2
+        return true
+    end
+    return false
+end
+
+local function pstart_whm_action()
+    if not pstart_whm.active then return false end
+    if pstart_whm_cast_solace() then return true end
+    if pstart_whm_cast_spell({'Protectra V', 'Protectra IV'}, 'Protect') then
+        return true
+    end
+    if pstart_whm_cast_spell({'Shellra V', 'Shellra IV'}, 'Shell') then
+        return true
+    end
+    if pstart_whm_cast_spell({'Auspice'}, 'Auspice') then return true end
+    if pstart_whm_cast_spell({'Aquaveil'}, 'Aquaveil') then return true end
+    if pstart_whm_cast_spell(
+        {'Reraise IV', 'Reraise III', 'Reraise II', 'Reraise'}, 'Reraise')
+    then
+        return true
+    end
+    return false
+end
+
+local pstart_whm_original_self_command = user_job_self_command
+function user_job_self_command(commandArgs, eventArgs)
+    local command = commandArgs[1] and commandArgs[1]:lower() or nil
+    if command ~= 'pstartwhm' then
+        if pstart_whm_original_self_command then
+            return pstart_whm_original_self_command(commandArgs, eventArgs)
+        end
+        return
+    end
+
+    eventArgs.handled = true
+    local requested = commandArgs[2] and commandArgs[2]:lower() or nil
+    if requested == 'off' then
+        pstart_whm.active = false
+        state.AutoBuffMode:set('Off')
+        add_to_chat(122, 'PartyStart WHM routine buff maintenance is Off.')
+    elseif requested == 'on' then
+        pstart_whm.active = true
+        state.AutoBuffMode:set('Off')
+        tickdelay = 0
+        add_to_chat(122,
+            'PartyStart WHM: GearSwap owns routine buffs; HealBot owns healing.')
+        pstart_whm_action()
+    else
+        add_to_chat(123, 'PartyStart WHM usage: gs c pstartwhm <on|off>')
+    end
+end
+
+local pstart_whm_original_user_job_tick = user_job_tick
+function user_job_tick()
+    if pstart_whm_action() then
+        return true
+    end
+    if pstart_whm_original_user_job_tick then
+        return pstart_whm_original_user_job_tick()
+    end
+    return false
+end

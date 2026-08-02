@@ -1,0 +1,357 @@
+-- PartyStart RDM controller for Selindrile-style GearSwap files.
+-- Load at the end of a participating character's RDM gear file:
+--     include('Common/PartyStart_RDM.lua')
+
+local pstart_rdm_profiles = {
+    physical = {
+        gain = {'Gain-STR'},
+        temper = true,
+        debuffs = {
+            {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
+            {spells={'Distract III', 'Distract II', 'Distract'}, duration=150},
+        },
+    },
+    accuracy = {
+        gain = {'Gain-DEX'},
+        temper = true,
+        debuffs = {
+            {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
+            {spells={'Distract III', 'Distract II', 'Distract'}, duration=150},
+        },
+    },
+    magic = {
+        gain = {'Gain-INT'},
+        temper = false,
+        debuffs = {
+            {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
+            {spells={'Addle II', 'Addle'}, duration=150},
+        },
+    },
+    safe = {
+        gain = {'Gain-VIT'},
+        temper = false,
+        debuffs = {
+            {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
+            {spells={'Distract III', 'Distract II', 'Distract'}, duration=150},
+            {spells={'Slow II', 'Slow'}, duration=150},
+            {spells={'Paralyze II', 'Paralyze'}, duration=150},
+            {spells={'Blind II', 'Blind'}, duration=150},
+            {spells={'Addle II', 'Addle'}, duration=150},
+        },
+    },
+}
+
+local pstart_rdm = {
+    active = false,
+    profile = nil,
+    leader = nil,
+    haste = {},
+    refresh = {},
+    phalanx = {},
+    buff_timers = {},
+    debuff_timers = {},
+    pending = nil,
+}
+
+local function pstart_rdm_valid_name(name)
+    return type(name) == 'string'
+        and name:match('^[A-Za-z][A-Za-z0-9_-]*$') ~= nil
+        and #name <= 15
+end
+
+local function pstart_rdm_names(value)
+    local names = {}
+    if type(value) ~= 'string' or value == '-' then
+        return names
+    end
+    for name in value:gmatch('[^,]+') do
+        if pstart_rdm_valid_name(name) then
+            names[#names + 1] = name
+        end
+    end
+    return names
+end
+
+local function pstart_rdm_spell(choices)
+    local learned = windower.ffxi.get_spells() or {}
+    for _, name in ipairs(choices) do
+        local spell = res.spells:with('en', name)
+        if spell and learned[spell.id] then
+            return spell
+        end
+    end
+    return nil
+end
+
+local function pstart_rdm_ready(spell)
+    local recasts = windower.ffxi.get_spell_recasts() or {}
+    return spell
+        and not midaction()
+        and not moving
+        and not silent_check_disable()
+        and (recasts[spell.id] or 0) < spell_latency
+        and player.mp >= spell.mp_cost
+        and silent_can_use(spell.id)
+end
+
+local function pstart_rdm_party_token(name)
+    if name:lower() == player.name:lower() then
+        return '<me>'
+    end
+    for key, member in pairs(windower.ffxi.get_party() or {}) do
+        if type(key) == 'string' and key:match('^p[0-5]$')
+            and type(member) == 'table' and member.name
+            and member.name:lower() == name:lower()
+        then
+            return '<'..key..'>'
+        end
+    end
+    return nil
+end
+
+local function pstart_rdm_in_range(name)
+    if name:lower() == player.name:lower() then
+        return true
+    end
+    local mob = windower.ffxi.get_mob_by_name(name)
+    return mob and mob.distance and mob.distance:sqrt() <= 20.5
+end
+
+local function pstart_rdm_buff_key(name, spell)
+    return name:lower()..':'..tostring(spell.id)
+end
+
+local function pstart_rdm_cast_buff(name, choices, buff, duration)
+    local spell = pstart_rdm_spell(choices)
+    local token = pstart_rdm_party_token(name)
+    if not spell or not token or not pstart_rdm_in_range(name) then
+        return false
+    end
+
+    if name:lower() == player.name:lower() and buffactive[buff] then
+        return false
+    end
+
+    local key = pstart_rdm_buff_key(name, spell)
+    if name:lower() ~= player.name:lower()
+        and (pstart_rdm.buff_timers[key] or 0) > os.clock()
+    then
+        return false
+    end
+
+    if pstart_rdm_ready(spell) then
+        pstart_rdm.pending = {
+            kind = 'buff',
+            spell_id = spell.id,
+            key = key,
+            duration = duration,
+        }
+        windower.chat.input('/ma "'..spell.en..'" '..token)
+        tickdelay = os.clock() + 3
+        return true
+    end
+    return false
+end
+
+local function pstart_rdm_cast_party_buffs()
+    for _, name in ipairs(pstart_rdm.haste) do
+        if pstart_rdm_cast_buff(
+            name, {'Haste II', 'Haste'}, 'Haste', 150)
+        then
+            return true
+        end
+    end
+    for _, name in ipairs(pstart_rdm.refresh) do
+        if pstart_rdm_cast_buff(
+            name, {'Refresh III', 'Refresh II', 'Refresh'}, 'Refresh', 120)
+        then
+            return true
+        end
+    end
+    for _, name in ipairs(pstart_rdm.phalanx) do
+        if pstart_rdm_cast_buff(
+            name, {'Phalanx II'}, 'Phalanx', 150)
+        then
+            return true
+        end
+    end
+    return false
+end
+
+local function pstart_rdm_cast_self_buffs(profile)
+    local self_buffs = {
+        {spells=profile.gain, buff=profile.gain[1]},
+        {spells={'Aquaveil'}, buff='Aquaveil'},
+        {spells={'Phalanx'}, buff='Phalanx'},
+        {spells={'Reraise'}, buff='Reraise'},
+    }
+    for _, task in ipairs(self_buffs) do
+        if not buffactive[task.buff]
+            and pstart_rdm_cast_buff(
+                player.name, task.spells, task.buff, 0)
+        then
+            return true
+        end
+    end
+
+    if profile.temper and player.status == 'Engaged'
+        and not buffactive['Multi Strikes']
+        and pstart_rdm_cast_buff(
+            player.name, {'Temper II', 'Temper'}, 'Multi Strikes', 0)
+    then
+        return true
+    end
+    return false
+end
+
+local function pstart_rdm_cast_composure()
+    if buffactive['Composure'] or midaction() or moving
+        or silent_check_disable()
+    then
+        return false
+    end
+    local ability = res.job_abilities:with('en', 'Composure')
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    if ability and (recasts[ability.recast_id] or 0) < latency then
+        windower.chat.input('/ja "Composure" <me>')
+        tickdelay = os.clock() + 2
+        return true
+    end
+    return false
+end
+
+local function pstart_rdm_enemy()
+    local leader = pstart_rdm.leader
+        and windower.ffxi.get_mob_by_name(pstart_rdm.leader)
+        or nil
+    if not leader or not leader.target_index or leader.target_index == 0 then
+        return nil, leader
+    end
+    local target = windower.ffxi.get_mob_by_index(leader.target_index)
+    if not target or not target.valid_target or not target.hpp or target.hpp <= 0 then
+        return nil, leader
+    end
+    return target, leader
+end
+
+local function pstart_rdm_cast_debuff(profile)
+    local target, leader = pstart_rdm_enemy()
+    if not target or not leader then
+        return false
+    end
+
+    for _, task in ipairs(profile.debuffs) do
+        local spell = pstart_rdm_spell(task.spells)
+        if spell then
+            local key = tostring(target.id)..':'..tostring(spell.id)
+            if (pstart_rdm.debuff_timers[key] or 0) <= os.clock() then
+                local me = windower.ffxi.get_player()
+                if not me or me.target_index ~= leader.target_index then
+                    windower.chat.input('/assist '..pstart_rdm.leader)
+                    tickdelay = os.clock() + 1.3
+                    return true
+                end
+                if pstart_rdm_ready(spell) then
+                    pstart_rdm.pending = {
+                        kind = 'debuff',
+                        spell_id = spell.id,
+                        key = key,
+                        duration = task.duration,
+                    }
+                    windower.chat.input('/ma "'..spell.en..'" <t>')
+                    tickdelay = os.clock() + 3
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function pstart_rdm_action()
+    if not pstart_rdm.active then
+        return false
+    end
+    local profile = pstart_rdm_profiles[pstart_rdm.profile]
+    if not profile then
+        return false
+    end
+    if pstart_rdm_cast_composure() then return true end
+    if pstart_rdm_cast_self_buffs(profile) then return true end
+    if pstart_rdm_cast_party_buffs() then return true end
+    return pstart_rdm_cast_debuff(profile)
+end
+
+local pstart_rdm_original_self_command = user_job_self_command
+function user_job_self_command(commandArgs, eventArgs)
+    local command = commandArgs[1] and commandArgs[1]:lower() or nil
+    if command ~= 'pstartrdm' then
+        if pstart_rdm_original_self_command then
+            return pstart_rdm_original_self_command(commandArgs, eventArgs)
+        end
+        return
+    end
+
+    eventArgs.handled = true
+    local requested = commandArgs[2] and commandArgs[2]:lower() or nil
+    if requested == 'off' then
+        pstart_rdm.active = false
+        pstart_rdm.pending = nil
+        state.AutoBuffMode:set('Off')
+        add_to_chat(122, 'PartyStart RDM buff and debuff maintenance is Off.')
+        return
+    end
+
+    if pstart_rdm_profiles[requested]
+        and pstart_rdm_valid_name(commandArgs[3])
+    then
+        pstart_rdm.active = true
+        pstart_rdm.profile = requested
+        pstart_rdm.leader = commandArgs[3]
+        pstart_rdm.haste = pstart_rdm_names(commandArgs[4])
+        pstart_rdm.refresh = pstart_rdm_names(commandArgs[5])
+        pstart_rdm.phalanx = pstart_rdm_names(commandArgs[6])
+        pstart_rdm.pending = nil
+        state.AutoBuffMode:set('Off')
+        tickdelay = 0
+        add_to_chat(122, ('PartyStart RDM: %s / leader %s / GearSwap owns magic.')
+            :format(requested, pstart_rdm.leader))
+        pstart_rdm_action()
+    else
+        add_to_chat(123,
+            'PartyStart RDM usage: gs c pstartrdm '
+            ..'<profile|off> <leader> <haste> <refresh> <phalanx>')
+    end
+end
+
+local pstart_rdm_original_user_job_tick = user_job_tick
+function user_job_tick()
+    if pstart_rdm_action() then
+        return true
+    end
+    if pstart_rdm_original_user_job_tick then
+        return pstart_rdm_original_user_job_tick()
+    end
+    return false
+end
+
+local pstart_rdm_original_job_aftercast = job_aftercast
+function job_aftercast(spell, spellMap, eventArgs)
+    local pending = pstart_rdm.pending
+    if pending and spell and spell.id == pending.spell_id then
+        local retry = spell.interrupted and 3 or pending.duration
+        if pending.kind == 'buff' then
+            pstart_rdm.buff_timers[pending.key] = os.clock() + retry
+        else
+            pstart_rdm.debuff_timers[pending.key] = os.clock() + retry
+        end
+        pstart_rdm.pending = nil
+    end
+    if pstart_rdm_original_job_aftercast then
+        return pstart_rdm_original_job_aftercast(spell, spellMap, eventArgs)
+    end
+end
