@@ -10,11 +10,15 @@ local PREFIX = 'PARTYSTART1'
 local APPLY_DELAY = 1.5
 local sessions = {}
 local current_profile = nil
+local last_profile = 'physical'
 
 local profiles = {
     physical = {
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
         geo = {indi='Fury', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
@@ -24,6 +28,9 @@ local profiles = {
     accuracy = {
         cor = {'chaos', 'hunter'},
         brd = {'Victory March', 'Blade Madrigal', 'Valor Minuet V'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
         geo = {indi='Torpor', geo='Frailty', entrust='Fury', entrust_job='BLU'},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
@@ -33,6 +40,10 @@ local profiles = {
     magic = {
         cor = {'wizard', 'warlock'},
         brd = {"Mage's Ballad III", 'Victory March', 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+            {'Pining Nocturne'},
+        },
         geo = {indi='Acumen', geo='Malaise', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
@@ -43,6 +54,10 @@ local profiles = {
     safe = {
         cor = {'chaos', 'gallant'},
         brd = {'Victory March', "Sentinel's Scherzo", 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+            {'Pining Nocturne'},
+        },
         geo = {indi='Barrier', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
@@ -224,6 +239,12 @@ end
 
 local function apply_brd(player, profile)
     hb_buff(player.name, profile.brd)
+    for _,choices in ipairs(profile.brd_debuffs or {}) do
+        local spell = first_known(choices)
+        if spell then issue('hb db '..spell) end
+    end
+    -- Songs begin immediately; hostile songs are only registered here and
+    -- remain disabled until the future combat phase provides a target.
     issue('hb db off; hb as off; hb as attack off; hb on')
 end
 
@@ -297,6 +318,7 @@ local function begin(profile_name)
         applied = false,
     }
     sessions[nonce] = session
+    last_profile = profile_name
     send_ipc{PREFIX, 'start', nonce, profile_name, table.concat(names, ',')}
     report(session)
     chat(207, ('Discovering %d party jobs for profile %s...')
@@ -369,14 +391,17 @@ windower.register_event('addon command', function(command)
     command = command and command:lower() or 'physical'
     if profiles[command] then
         begin(command)
+    elseif command == 'on' or command == 'start' then
+        begin(last_profile)
     elseif command == 'stop' or command == 'off' then
         send_ipc{PREFIX, 'stop', ('%d-%d'):format(
             os.time(), (windower.ffxi.get_player() or {}).id or 0)}
         stop_local()
     elseif command == 'status' then
-        chat(207, 'Profile: '..(current_profile or 'none'))
+        chat(207, ('Active: %s | Selected: %s')
+            :format(current_profile or 'off', last_profile))
     else
-        chat(207, 'Commands: physical | accuracy | magic | safe | stop | status')
+        chat(207, 'Commands: on | off | physical | accuracy | magic | safe | status')
     end
 end)
 

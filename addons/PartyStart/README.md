@@ -22,7 +22,10 @@ PartyStart establishes clear ownership:
 - BLU enables its existing GearSwap self-buff mode.
 
 Offensive RDM debuffs are selected and registered during startup, but remain
-disabled until a later combat command provides an assist target.
+disabled until a later combat command provides an assist target. BRD likewise
+registers Carnage Elegy (falling back to Battlefield Elegy); `magic` and `safe`
+also register Pining Nocturne. Lullaby and Threnody remain manual/content
+specific because indiscriminate automation would be counterproductive.
 
 ## Installation
 
@@ -44,9 +47,15 @@ Run from any character in the party:
 //pstart accuracy
 //pstart magic
 //pstart safe
+//pstart on
+//pstart off
 //pstart status
-//pstart stop
 ```
+
+Choosing a named profile both selects and activates it. `on` reapplies the last
+selected profile (defaulting to `physical` after an addon reload). `off` and
+`stop` disable HealBot support, Roller2 on COR, and the applicable GearSwap
+AutoBuff modes. Loading PartyStart itself is inert.
 
 `physical` is the default for the current BLU/COR/RDM/BRD/WHM/GEO party:
 
@@ -73,6 +82,9 @@ maintain a spell. It prefers higher tiers and falls back where configured.
 
 - Run startup while out of combat and with all intended clients online.
 - PartyStart configures support automation; it does not move or attack.
+- Buffs, songs, rolls, healing, and GEO automation begin when a profile or
+  `on` is issued, and continue until `off`, an addon/job reset, or an
+  addon-specific zone rule deactivates them.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - Three-song BRD operation assumes a working additional-song instrument. The
