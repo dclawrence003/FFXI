@@ -91,9 +91,9 @@ AutoBuff modes. Loading PartyStart itself is inert.
 - COR: Chaos Roll + Samurai Roll
 - BRD: Victory March + Valor Minuet V + Blade Madrigal
 - GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the WHM
-- RDM GearSwap: best learned Haste/Refresh tiers, self
-  Temper/Gain-STR/Phalanx, and active Frazzle + Dia + Distract maintenance on
-  the driver's target
+- RDM GearSwap: best learned Refresh tiers for MP jobs, Haste for physical
+  participants, self Temper/Gain-STR/Phalanx, and MP-aware Dia + Distract
+  maintenance on the driver's target
 - WHM GearSwap: Protectra V, Shellra V, Auspice, Afflatus Solace, Aquaveil,
   and Reraise; HealBot continues curing and status removal
 
@@ -113,7 +113,7 @@ RDM enfeebles by profile:
 
 | Profile | Enfeebles |
 | --- | --- |
-| `physical` | Frazzle, Dia, Distract |
+| `physical` | Dia, Distract (suspended below 45% MP or below 50% target HP) |
 | `accuracy` | Frazzle, Dia, Distract |
 | `magic` | Frazzle, Dia, Addle |
 | `safe` | Frazzle, Dia, Distract, Slow, Paralyze, Blind, Addle |
@@ -136,7 +136,13 @@ RDM enfeebles by profile:
 - Followers remain support-only while PartyStart is active unless PartyCombat
   grants a named character explicit combat authorization. If a legacy HealBot
   or MultiCtrl command engages anyone else, PartyStart disengages that
-  follower without affecting the leader.
+  follower without affecting the leader. PartyCombat renews that authorization
+  every two seconds; PartyStart allows a 15-second watchdog window so a brief
+  background-client stall does not cause an engage/disengage loop.
+- RDM prioritizes party Refresh (self first), then Haste and Phalanx, then
+  offensive enfeebles. Routine `physical` mode conserves MP by omitting
+  Frazzle, refusing new enfeebles below 45% MP, and ignoring targets already
+  below 50% HP. The heavier profiles retain Frazzle and use a 35% MP floor.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy

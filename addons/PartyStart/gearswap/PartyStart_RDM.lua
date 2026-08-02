@@ -9,8 +9,9 @@ local pstart_rdm_profiles = {
     physical = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,
+        debuff_mp_floor = 45,
+        debuff_min_target_hpp = 50,
         debuffs = {
-            {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
             {spells={'Distract III', 'Distract II', 'Distract'}, duration=150},
         },
@@ -18,6 +19,8 @@ local pstart_rdm_profiles = {
     accuracy = {
         gain = {spells={'Gain-DEX'}, buff='DEX Boost'},
         temper = true,
+        debuff_mp_floor = 35,
+        debuff_min_target_hpp = 35,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
@@ -27,6 +30,8 @@ local pstart_rdm_profiles = {
     magic = {
         gain = {spells={'Gain-INT'}, buff='INT Boost'},
         temper = false,
+        debuff_mp_floor = 35,
+        debuff_min_target_hpp = 35,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
@@ -36,6 +41,8 @@ local pstart_rdm_profiles = {
     safe = {
         gain = {spells={'Gain-VIT'}, buff='VIT Boost'},
         temper = false,
+        debuff_mp_floor = 35,
+        debuff_min_target_hpp = 35,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
@@ -162,23 +169,33 @@ local function pstart_rdm_cast_buff(name, choices, buff, duration)
 end
 
 local function pstart_rdm_cast_party_buffs()
-    for _, name in ipairs(pstart_rdm.haste) do
+    -- Refresh the RDM first so offensive work cannot consume the reserve
+    -- before MP recovery is established.
+    local refresh = {}
+    for _, name in ipairs(pstart_rdm.refresh) do
+        if name:lower() == player.name:lower() then
+            table.insert(refresh, 1, name)
+        else
+            refresh[#refresh + 1] = name
+        end
+    end
+    for _, name in ipairs(refresh) do
         if pstart_rdm_cast_buff(
-            name, {'Haste II', 'Haste'}, 'Haste', 150)
+            name, {'Refresh III', 'Refresh II', 'Refresh'}, 'Refresh', 135)
         then
             return true
         end
     end
-    for _, name in ipairs(pstart_rdm.refresh) do
+    for _, name in ipairs(pstart_rdm.haste) do
         if pstart_rdm_cast_buff(
-            name, {'Refresh III', 'Refresh II', 'Refresh'}, 'Refresh', 120)
+            name, {'Haste II', 'Haste'}, 'Haste', 165)
         then
             return true
         end
     end
     for _, name in ipairs(pstart_rdm.phalanx) do
         if pstart_rdm_cast_buff(
-            name, {'Phalanx II'}, 'Phalanx', 150)
+            name, {'Phalanx II'}, 'Phalanx', 165)
         then
             return true
         end
@@ -249,6 +266,11 @@ local function pstart_rdm_cast_debuff(profile)
     if not target or not leader then
         return false
     end
+    if player.mpp < (profile.debuff_mp_floor or 0)
+        or target.hpp < (profile.debuff_min_target_hpp or 0)
+    then
+        return false
+    end
 
     for _, task in ipairs(profile.debuffs) do
         local spell = pstart_rdm_spell(task.spells)
@@ -285,9 +307,9 @@ local function pstart_rdm_action()
         return false
     end
     if pstart_rdm_cast_composure() then return true end
-    if pstart_rdm_cast_debuff(profile) then return true end
+    if pstart_rdm_cast_party_buffs() then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
-    return pstart_rdm_cast_party_buffs()
+    return pstart_rdm_cast_debuff(profile)
 end
 
 local pstart_rdm_original_self_command = user_job_self_command

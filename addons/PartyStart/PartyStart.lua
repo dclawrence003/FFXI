@@ -25,6 +25,10 @@ local current_leader = nil
 local last_profile = 'physical'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
+-- PartyCombat renews authority every two seconds.  A longer watchdog avoids
+-- engage/disengage loops when a background client briefly misses IPC frames,
+-- while still revoking stale authority promptly if PartyCombat disappears.
+local COMBAT_AUTHORITY_TIMEOUT = 15
 local support_guard_notified = false
 local combat_authorized_until = 0
 
@@ -41,7 +45,6 @@ local profiles = {
         },
         geo = {indi='Fury', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
         rdm_debuffs = {
-            {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
             {'Distract III', 'Distract II', 'Distract'},
         },
@@ -99,6 +102,14 @@ local mp_jobs = S{
 
 local frontline_jobs = S{
     'WAR','MNK','RDM','THF','PLD','DRK','BST','BRD','RNG','SAM','NIN','DRG',
+    'BLU','COR','PUP','DNC','RUN'
+}
+
+-- Routine Haste is reserved for jobs expected to contribute physical TP.
+-- Back-line WHM/GEO/BRD support remains covered by Refresh without making the
+-- RDM maintain three unnecessary Haste II timers.
+local haste_jobs = S{
+    'WAR','MNK','RDM','THF','PLD','DRK','BST','RNG','SAM','NIN','DRG',
     'BLU','COR','PUP','DNC','RUN'
 }
 
@@ -248,7 +259,7 @@ local function apply_rdm(player, profile_name, roster, leader)
 
     for _,name in ipairs(sorted_roster(roster)) do
         local job = roster[name].main_job
-        if haste then
+        if haste and haste_jobs:contains(job) then
             haste_targets[#haste_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, haste))
         end
@@ -449,7 +460,9 @@ windower.register_event('ipc message', function(message)
             and player.name:lower() == attacker:lower()
         then
             combat_authorized_until =
-                enabled == '1' and (os.clock() + 5) or 0
+                enabled == '1'
+                    and (os.clock() + COMBAT_AUTHORITY_TIMEOUT)
+                    or 0
         end
         return
     end
@@ -524,7 +537,8 @@ windower.register_event('prerender', function()
                 windower.ffxi.run(false)
                 if not support_guard_notified then
                     chat(123,
-                        'Stopped follower combat enabled outside PartyStart.')
+                        'Stopped unauthorized follower combat; '
+                        ..'no active PartyCombat authority lease.')
                     support_guard_notified = true
                 end
             elseif player.status ~= 1 then
