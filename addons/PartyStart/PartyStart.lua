@@ -243,7 +243,9 @@ local function apply_rdm(player, profile_name, roster, leader)
     end
 
     local old_self = {
-        'Temper II', 'Temper', 'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise'
+        'Temper II', 'Temper', 'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise',
+        'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect',
+        'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell',
     }
     for _, spell in ipairs(old_self) do
         if knows_spell(spell) then
@@ -264,6 +266,7 @@ local function apply_rdm(player, profile_name, roster, leader)
     local function csv(names)
         return #names > 0 and table.concat(names, ',') or '-'
     end
+    issue('gs c set AutoBuffMode Off')
     issue(('gs c pstartrdm %s %s %s %s %s'):format(
         profile_name, leader, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets)))
@@ -319,10 +322,10 @@ local function apply_profile(session)
         return
     end
 
-    -- Profiles never inherit old HealBot movement or engage state. Offensive
-    -- target observation is owned by GearSwap controllers, and PartyStart
-    -- itself must never cause a follower to approach a target.
-    issue('hb follow off; hb as off; hb as attack off')
+    -- Profiles never inherit old FastFollow/HealBot movement or engage state.
+    -- PartyStart itself must never cause a follower to approach a target.
+    issue('ffo stop; hb follow off; hb as off; hb as attack off')
+    windower.ffxi.run(false)
 
     if player.main_job == 'WHM' then
         apply_whm(player)
@@ -384,7 +387,8 @@ end
 local function stop_local()
     local player = windower.ffxi.get_player()
     if not player then return end
-    issue('hb follow off; hb db off; hb as off; hb as attack off; hb off')
+    issue('ffo stop; hb follow off; hb db off; hb as off; hb as attack off; hb off')
+    windower.ffxi.run(false)
     if player.main_job == 'COR' then issue('r2 off') end
     if player.main_job == 'BRD' then issue('gs c pstartbrd off') end
     if player.main_job == 'RDM' then issue('gs c pstartrdm off') end

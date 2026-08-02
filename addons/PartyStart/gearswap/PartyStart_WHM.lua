@@ -4,6 +4,11 @@
 
 local pstart_whm = {
     active = false,
+    opening = {
+        protect = false,
+        shell = false,
+    },
+    pending = nil,
 }
 
 local function pstart_whm_spell(choices)
@@ -17,8 +22,9 @@ local function pstart_whm_spell(choices)
     return nil
 end
 
-local function pstart_whm_cast_spell(choices, buff)
-    if buffactive[buff] or midaction() or moving
+local function pstart_whm_cast_spell(choices, buff, opening_key)
+    local opening_required = opening_key and pstart_whm.opening[opening_key]
+    if (buffactive[buff] and not opening_required) or midaction() or moving
         or silent_check_disable()
     then
         return false
@@ -28,6 +34,10 @@ local function pstart_whm_cast_spell(choices, buff)
     if spell and (recasts[spell.id] or 0) < spell_latency
         and player.mp >= spell.mp_cost and silent_can_use(spell.id)
     then
+        pstart_whm.pending = {
+            spell_id = spell.id,
+            opening_key = opening_key,
+        }
         windower.chat.input('/ma "'..spell.en..'" <me>')
         tickdelay = os.clock() + 3
         return true
@@ -54,10 +64,14 @@ end
 local function pstart_whm_action()
     if not pstart_whm.active then return false end
     if pstart_whm_cast_solace() then return true end
-    if pstart_whm_cast_spell({'Protectra V', 'Protectra IV'}, 'Protect') then
+    if pstart_whm_cast_spell(
+        {'Protectra V', 'Protectra IV'}, 'Protect', 'protect')
+    then
         return true
     end
-    if pstart_whm_cast_spell({'Shellra V', 'Shellra IV'}, 'Shell') then
+    if pstart_whm_cast_spell(
+        {'Shellra V', 'Shellra IV'}, 'Shell', 'shell')
+    then
         return true
     end
     if pstart_whm_cast_spell({'Auspice'}, 'Auspice') then return true end
@@ -84,10 +98,17 @@ function user_job_self_command(commandArgs, eventArgs)
     local requested = commandArgs[2] and commandArgs[2]:lower() or nil
     if requested == 'off' then
         pstart_whm.active = false
+        pstart_whm.pending = nil
         state.AutoBuffMode:set('Off')
         add_to_chat(122, 'PartyStart WHM routine buff maintenance is Off.')
     elseif requested == 'on' then
         pstart_whm.active = true
+        -- Always establish party-wide defenses once at startup. Checking only
+        -- Smalls' own Protect/Shell could incorrectly skip the AoE cast when
+        -- another source had already protected her.
+        pstart_whm.opening.protect = true
+        pstart_whm.opening.shell = true
+        pstart_whm.pending = nil
         state.AutoBuffMode:set('Off')
         tickdelay = 0
         add_to_chat(122,
@@ -95,6 +116,21 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_whm_action()
     else
         add_to_chat(123, 'PartyStart WHM usage: gs c pstartwhm <on|off>')
+    end
+end
+
+local pstart_whm_original_job_aftercast = job_aftercast
+function job_aftercast(spell, spellMap, eventArgs)
+    local pending = pstart_whm.pending
+    if pending and spell and spell.id == pending.spell_id then
+        if not spell.interrupted and pending.opening_key then
+            pstart_whm.opening[pending.opening_key] = false
+        end
+        pstart_whm.pending = nil
+    end
+
+    if pstart_whm_original_job_aftercast then
+        return pstart_whm_original_job_aftercast(spell, spellMap, eventArgs)
     end
 end
 
