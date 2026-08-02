@@ -9,13 +9,13 @@ RDM = (ROOT / "gearswap" / "PartyStart_RDM.lua").read_text(encoding="utf-8")
 
 
 class PartyStartSourceGuards(unittest.TestCase):
-    def test_combat_authority_tolerates_missed_heartbeats(self):
-        timeout = re.search(
-            r"local COMBAT_AUTHORITY_TIMEOUT = (\d+)", ADDON
-        )
-        self.assertIsNotNone(timeout)
-        self.assertGreaterEqual(int(timeout.group(1)), 12)
-        self.assertIn("os.clock() + COMBAT_AUTHORITY_TIMEOUT", ADDON)
+    def test_partystart_does_not_police_combat(self):
+        self.assertNotIn("PARTYCOMBAT1", ADDON)
+        maintenance = ADDON.split(
+            "windower.register_event('prerender'", 1
+        )[1]
+        self.assertNotIn("input /attack off", maintenance)
+        self.assertNotIn("combat_authorized", ADDON)
 
     def test_physical_profile_is_the_lean_rdm_profile(self):
         physical = RDM.split("accuracy =", 1)[0]

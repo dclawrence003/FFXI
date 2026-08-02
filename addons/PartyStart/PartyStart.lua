@@ -21,20 +21,9 @@ local PREFIX = 'PARTYSTART1'
 local APPLY_DELAY = 1.5
 local sessions = {}
 local current_profile = nil
-local current_leader = nil
 local last_profile = 'physical'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
--- PartyCombat renews authority every two seconds.  A longer watchdog avoids
--- engage/disengage loops when a background client briefly misses IPC frames,
--- while still revoking stale authority promptly if PartyCombat disappears.
-local COMBAT_AUTHORITY_TIMEOUT = 15
-local support_guard_notified = false
-local combat_authorized_until = 0
-
-local function combat_authorized()
-    return os.clock() < combat_authorized_until
-end
 
 local profiles = {
     physical = {
@@ -353,17 +342,10 @@ local function apply_profile(session)
         return
     end
 
-    -- Profiles never inherit old FastFollow/HealBot movement or engage state.
-    -- PartyStart itself must never cause a follower to approach a target.
+    -- Clear legacy movement/assist automation when selecting a support
+    -- profile. PartyStart never polls, disengages, or moves characters after
+    -- this one-time setup; PartyCombat is the sole combat owner.
     issue('ffo stop; hb follow off; hb as off; hb as attack off')
-    if player.name:lower() ~= session.leader:lower()
-        and not combat_authorized()
-    then
-        if player.status == 1 then
-            issue('input /attack off')
-        end
-        windower.ffxi.run(false)
-    end
 
     if player.main_job == 'WHM' then
         apply_whm(player)
@@ -381,9 +363,7 @@ local function apply_profile(session)
     end
 
     current_profile = session.profile
-    current_leader = session.leader
-    support_guard_notified = false
-    chat(158, ('%s ready as %s/%s; combat remains disabled.')
+    chat(158, ('%s ready as %s/%s; combat ownership unchanged.')
         :format(session.profile, player.main_job, player.sub_job))
 end
 
@@ -438,34 +418,12 @@ local function stop_local()
         issue('gs c set AutoBuffMode Off')
     end
     current_profile = nil
-    current_leader = nil
     next_maintenance = 0
-    support_guard_notified = false
     chat(207, 'Support automation stopped; no combat commands were issued.')
 end
 
 windower.register_event('ipc message', function(message)
     if type(message) ~= 'string' then return end
-
-    -- PartyCombat grants named followers an explicit, temporary exception to
-    -- PartyStart's support-only combat guard. Every other follower remains
-    -- protected, and authorization is revoked by PartyCombat stop/zone events.
-    if message:startswith('PARTYCOMBAT1|authority|') then
-        local fields = split(message, '|')
-        local player = windower.ffxi.get_player()
-        local leader = fields[3]
-        local attacker = fields[4]
-        local enabled = fields[5]
-        if player and valid_name(leader) and valid_name(attacker)
-            and player.name:lower() == attacker:lower()
-        then
-            combat_authorized_until =
-                enabled == '1'
-                    and (os.clock() + COMBAT_AUTHORITY_TIMEOUT)
-                    or 0
-        end
-        return
-    end
 
     if not message:startswith(PREFIX..'|') then
         return
@@ -525,26 +483,6 @@ windower.register_event('prerender', function()
         next_maintenance = now + MAINTENANCE_INTERVAL
         local player = windower.ffxi.get_player()
         if player then
-            -- A PartyStart follower is support-only. If an old HealBot or
-            -- MultiCtrl assist mode is re-enabled later, cancel the resulting
-            -- attack/mob pursuit without touching the leader's combat.
-            if current_leader
-                and player.name:lower() ~= current_leader:lower()
-                and not combat_authorized()
-                and player.status == 1
-            then
-                issue('input /attack off; hb as attack off; hb as off')
-                windower.ffxi.run(false)
-                if not support_guard_notified then
-                    chat(123,
-                        'Stopped unauthorized follower combat; '
-                        ..'no active PartyCombat authority lease.')
-                    support_guard_notified = true
-                end
-            elseif player.status ~= 1 then
-                support_guard_notified = false
-            end
-
             if player.main_job == 'WHM' then
                 issue('gs c pstartwhm tick')
             elseif player.main_job == 'RDM' then

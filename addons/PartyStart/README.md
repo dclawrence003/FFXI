@@ -133,12 +133,10 @@ RDM enfeebles by profile:
   Sneak or Invisible.
 - BRD and RDM cast hostile magic directly by mob ID. They do not use `/assist`
   to acquire the leader's target.
-- Followers remain support-only while PartyStart is active unless PartyCombat
-  grants a named character explicit combat authorization. If a legacy HealBot
-  or MultiCtrl command engages anyone else, PartyStart disengages that
-  follower without affecting the leader. PartyCombat renews that authorization
-  every two seconds; PartyStart allows a 15-second watchdog window so a brief
-  background-client stall does not cause an engage/disengage loop.
+- PartyStart performs a one-time clearing of inherited FastFollow and HealBot
+  assist state when a profile is selected. It does not subsequently poll,
+  move, engage, or disengage any character. PartyCombat is the sole owner of
+  physical engagement and movement, avoiding competing combat controllers.
 - RDM prioritizes party Refresh (self first), then Haste and Phalanx, then
   offensive enfeebles. Routine `physical` mode conserves MP by omitting
   Frazzle, refusing new enfeebles below 45% MP, and ignoring targets already
