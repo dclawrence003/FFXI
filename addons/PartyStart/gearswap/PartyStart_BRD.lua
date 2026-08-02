@@ -191,6 +191,7 @@ local function pstart_brd_ready(spell)
         and not midaction()
         and not moving
         and not silent_check_disable()
+        and (not tickdelay or os.clock() >= tickdelay)
         and (recasts[spell.id] or 0) < spell_latency
         and player.mp >= spell.mp_cost
         and silent_can_use(spell.id)
@@ -205,7 +206,9 @@ local function pstart_brd_target()
     end
 
     local target = windower.ffxi.get_mob_by_index(leader.target_index)
-    if not target or not target.valid_target or not target.hpp or target.hpp <= 0 then
+    if not target or target.spawn_type ~= 16 or not target.valid_target
+        or not target.hpp or target.hpp <= 0
+    then
         return nil, leader
     end
     return target, leader
@@ -285,7 +288,15 @@ function user_job_self_command(commandArgs, eventArgs)
 
     eventArgs.handled = true
     local requested = commandArgs[2] and commandArgs[2]:lower() or nil
-    if not requested then
+    if requested == 'tick' then
+        local profile = pstart_brd_profiles[pstart_brd.profile]
+        if pstart_brd.active and profile then
+            if not pstart_brd_cast_party_song(profile) then
+                pstart_brd_cast_debuff(profile)
+            end
+        end
+        return
+    elseif not requested then
         add_to_chat(122, ('PartyStart BRD: %s / profile %s / leader %s')
             :format(
                 pstart_brd.active and 'On' or 'Off',

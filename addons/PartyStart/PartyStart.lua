@@ -11,6 +11,8 @@ local APPLY_DELAY = 1.5
 local sessions = {}
 local current_profile = nil
 local last_profile = 'physical'
+local next_maintenance = 0
+local MAINTENANCE_INTERVAL = 0.75
 
 local profiles = {
     physical = {
@@ -398,6 +400,7 @@ local function stop_local()
         issue('gs c set AutoBuffMode Off')
     end
     current_profile = nil
+    next_maintenance = 0
     chat(207, 'Support automation stopped; no combat commands were issued.')
 end
 
@@ -450,6 +453,23 @@ windower.register_event('prerender', function()
             apply_profile(session)
         elseif session.applied and now - session.apply_at > 30 then
             sessions[nonce] = nil
+        end
+    end
+
+    -- Sel-Include suppresses its normal GearSwap tick while Sneak or Invisible
+    -- is active. Drive PartyStart's support controllers explicitly so a
+    -- stealthed follower does not perform only the first action and then stall.
+    if current_profile and now >= next_maintenance then
+        next_maintenance = now + MAINTENANCE_INTERVAL
+        local player = windower.ffxi.get_player()
+        if player then
+            if player.main_job == 'WHM' then
+                issue('gs c pstartwhm tick')
+            elseif player.main_job == 'RDM' then
+                issue('gs c pstartrdm tick')
+            elseif player.main_job == 'BRD' then
+                issue('gs c pstartbrd tick')
+            end
         end
     end
 end)

@@ -25,7 +25,7 @@ end
 local function pstart_whm_cast_spell(choices, buff, opening_key)
     local opening_required = opening_key and pstart_whm.opening[opening_key]
     if (buffactive[buff] and not opening_required) or midaction() or moving
-        or silent_check_disable()
+        or silent_check_disable() or (tickdelay and os.clock() < tickdelay)
     then
         return false
     end
@@ -47,7 +47,7 @@ end
 
 local function pstart_whm_cast_solace()
     if buffactive['Afflatus Solace'] or midaction() or moving
-        or silent_check_disable()
+        or silent_check_disable() or (tickdelay and os.clock() < tickdelay)
     then
         return false
     end
@@ -96,7 +96,9 @@ function user_job_self_command(commandArgs, eventArgs)
 
     eventArgs.handled = true
     local requested = commandArgs[2] and commandArgs[2]:lower() or nil
-    if requested == 'off' then
+    if requested == 'tick' then
+        pstart_whm_action()
+    elseif requested == 'off' then
         pstart_whm.active = false
         pstart_whm.pending = nil
         state.AutoBuffMode:set('Off')

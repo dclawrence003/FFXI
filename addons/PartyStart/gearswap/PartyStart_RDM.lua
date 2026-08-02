@@ -93,6 +93,7 @@ local function pstart_rdm_ready(spell)
         and not midaction()
         and not moving
         and not silent_check_disable()
+        and (not tickdelay or os.clock() >= tickdelay)
         and (recasts[spell.id] or 0) < spell_latency
         and player.mp >= spell.mp_cost
         and silent_can_use(spell.id)
@@ -232,7 +233,9 @@ local function pstart_rdm_enemy()
         return nil, leader
     end
     local target = windower.ffxi.get_mob_by_index(leader.target_index)
-    if not target or not target.valid_target or not target.hpp or target.hpp <= 0 then
+    if not target or target.spawn_type ~= 16 or not target.valid_target
+        or not target.hpp or target.hpp <= 0
+    then
         return nil, leader
     end
     return target, leader
@@ -281,9 +284,9 @@ local function pstart_rdm_action()
         return false
     end
     if pstart_rdm_cast_composure() then return true end
+    if pstart_rdm_cast_debuff(profile) then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
-    if pstart_rdm_cast_party_buffs() then return true end
-    return pstart_rdm_cast_debuff(profile)
+    return pstart_rdm_cast_party_buffs()
 end
 
 local pstart_rdm_original_self_command = user_job_self_command
@@ -298,7 +301,10 @@ function user_job_self_command(commandArgs, eventArgs)
 
     eventArgs.handled = true
     local requested = commandArgs[2] and commandArgs[2]:lower() or nil
-    if requested == 'off' then
+    if requested == 'tick' then
+        pstart_rdm_action()
+        return
+    elseif requested == 'off' then
         pstart_rdm.active = false
         pstart_rdm.pending = nil
         state.AutoBuffMode:set('Off')

@@ -128,6 +128,9 @@ RDM enfeebles by profile:
 - Buffs, songs, rolls, healing, and GEO automation begin when a profile or
   `on` is issued, and continue until `off`, an addon/job reset, or an
   addon-specific zone rule deactivates them.
+- PartyStart supplies its own maintenance heartbeat for WHM, RDM, and BRD so
+  support does not stall when Sel-Include suppresses normal ticks during
+  Sneak or Invisible.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy
