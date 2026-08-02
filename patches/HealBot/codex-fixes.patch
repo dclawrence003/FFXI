@@ -65,4 +65,139 @@ index 89ef81e..3c9c82a 100644
  end
  
  
-
+diff --git a/HealBot_buffHandling.lua b/HealBot_buffHandling.lua
+index 7e89f58..0baa202 100644
+--- a/HealBot_buffHandling.lua
++++ b/HealBot_buffHandling.lua
+@@ -9,6 +9,7 @@ local buffs = {
+     debuffList = {},
+     buffList = {},
+     ignored_debuffs = {},
++    suppressed_debuffs = {},
+     action_buff_map = lor_settings.load('data/action_buff_map.lua')
+ }
+ local lc_res = _libs.lor.resources.lc_res
+@@ -28,6 +29,21 @@ end
+ 
+ function buffs.review_active_buffs(player, buff_list)
+     if buff_list ~= nil then
++        local active = S(buff_list)
++
++        -- A removal spell can report "No effect" for a status which still
++        -- appears in the target's buff snapshot (for example, an effect whose
++        -- resource classification is wrong).  Keep that status suppressed
++        -- until an authoritative snapshot confirms it has actually gone away.
++        local suppressed = buffs.suppressed_debuffs[player.name]
++        if suppressed ~= nil then
++            for bid,_ in pairs(suppressed) do
++                if not active:contains(bid) then
++                    suppressed[bid] = nil
++                end
++            end
++        end
++
+         --Register everything that's actually active
+         for _,bid in pairs(buff_list) do
+             local buff = res.buffs[bid]
+@@ -37,10 +53,27 @@ function buffs.review_active_buffs(player, buff_list)
+                 buffs.register_buff(player, buff, true)
+             end
+         end
+-        
++
++        -- IPC buff lists are authoritative snapshots.  The original code added
++        -- remotely observed debuffs but never removed them when a later snapshot
++        -- no longer contained the effect.  That left every HealBot instance
++        -- repeatedly trying to erase a debuff which had already worn off.
++        local known_debuffs = buffs.debuffList[player.name]
++        if known_debuffs ~= nil then
++            for bid,_ in pairs(known_debuffs) do
++                if not active:contains(bid) then
++                    local debuff = res.buffs[bid]
++                    known_debuffs[bid] = nil
++                    if debuff ~= nil then
++                        atcd(('Reconciled stale debuff: %s wore off %s'):format(
++                            debuff.en, player.name))
++                    end
++                end
++            end
++        end
++
+         --Double check the list of what should be active
+         local checklist = buffs.buffList[player.name] or {}
+-        local active = S(buff_list)
+         for bname,binfo in pairs(checklist) do
+             if binfo.is_geo or binfo.is_indi then
+                 if binfo.is_geo and binfo.action then
+@@ -85,7 +118,9 @@ function buffs.getBuffQueue()
+                     buffs.register_buff(player, res.buffs[info.buff.id], true)
+                 end
+             end
+-            if (info.landed == nil) then
++            -- Detected GEO effects can exist in buffList without a cast action.
++            -- Only maintained buffs with a valid action belong in the cast queue.
++            if (info.action ~= nil) and (info.landed == nil) then
+                 if (info.attempted == nil) or ((now - info.attempted) >= 3) then
+                     bq:enqueue('buff', info.action, targ, spell_name, nil)
+                 end
+@@ -328,6 +363,10 @@ function buffs.register_debuff(target, debuff, gain, action)
+         if is_enemy then
+             if offense.ignored[debuff.enn] ~= nil then return end
+         else
++            local suppressed = buffs.suppressed_debuffs[tname]
++            if suppressed ~= nil and suppressed[debuff.id] then
++                return
++            end
+             local ignoreList = ignoreDebuffs[debuff.en]
+             local pmInfo = hb.partyMemberInfo[tname]
+             if (ignoreList ~= nil) and (pmInfo ~= nil) then
+@@ -351,6 +390,26 @@ function buffs.register_debuff(target, debuff, gain, action)
+     end
+ end
+ 
++function buffs.register_removal_no_effect(target, removalSpellName)
++    if target == nil or target.name == nil then return end
++
++    local known = buffs.debuffList[target.name]
++    if known == nil then return end
++
++    local suppressed = buffs.suppressed_debuffs[target.name] or {}
++    buffs.suppressed_debuffs[target.name] = suppressed
++    for bid,_ in pairs(known) do
++        local debuff = res.buffs[bid]
++        if debuff ~= nil and debuff_map[debuff.en] == removalSpellName then
++            suppressed[bid] = true
++            known[bid] = nil
++            atc(8, ('Suppressing %s on %s: %s returned No effect. '
++                ..'HealBot will reconsider it after the effect disappears.'):format(
++                debuff.en, target.name, removalSpellName))
++        end
++    end
++end
++
+ 
+ -- local last_action = {}
+ -- function register_action(atype, aid)
+@@ -444,8 +503,10 @@ function buffs.resetDebuffTimers(player)
+         atc(123,'Error: Invalid player name passed to buffs.resetDebuffTimers.')
+     elseif (player == 'ALL') then
+         buffs.debuffList = {}
++        buffs.suppressed_debuffs = {}
+     else
+         buffs.debuffList[player] = {}
++        buffs.suppressed_debuffs[player] = {}
+     end
+ end
+ 
+diff --git a/HealBot_packetHandling.lua b/HealBot_packetHandling.lua
+index f5504e7..872e96b 100644
+--- a/HealBot_packetHandling.lua
++++ b/HealBot_packetHandling.lua
+@@ -172,6 +172,7 @@ function registerEffect(ai, tact, actor, target, monitored_ids)
+         if (spell ~= nil) then
+             if spells_statusRemoval:contains(spell.id) then
+                 --The debuff must have worn off or have been removed already
++                buffs.register_removal_no_effect(target, spell.en)
+                 local debuffs = removal_map[spell.en]
+                 if (debuffs ~= nil) then
+                     for _,debuff in pairs(debuffs) do
