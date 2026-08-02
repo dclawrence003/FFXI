@@ -46,6 +46,11 @@ local client:
 lua load PartyCombat
 ```
 
+All clients share one Windower settings file. If simultaneous first-time loads
+observe that XML while another client is still creating it, PartyCombat falls
+back to its safe in-memory defaults instead of aborting. A later reload uses
+the completed file.
+
 Recommended `scripts\init.txt` bindings:
 
 ```text

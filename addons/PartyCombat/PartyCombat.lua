@@ -49,7 +49,17 @@ local defaults = {
     },
 }
 
-local settings = config.load(defaults)
+-- Every local client shares this addon's data/settings.xml. Loading six
+-- instances simultaneously can expose another instance's half-written first
+-- save to the XML parser. Never let that race prevent command registration:
+-- use the complete in-memory defaults for this session and allow a later
+-- reload to consume the finished file.
+local config_ok, loaded_settings = pcall(config.load, defaults)
+local settings = config_ok
+    and type(loaded_settings) == 'table'
+    and loaded_settings
+    or defaults
+local config_warning = config_ok and nil or tostring(loaded_settings)
 local armed = false
 local authorized = false
 local active_target_id = nil
@@ -461,3 +471,8 @@ end)
 
 chat(158,
     'Loaded inert. Use //pc force on the leader or Alt+P; Alt+O stops combat.')
+if config_warning then
+    chat(123,
+        'Settings XML was unavailable during startup; using safe defaults. '
+        ..config_warning)
+end

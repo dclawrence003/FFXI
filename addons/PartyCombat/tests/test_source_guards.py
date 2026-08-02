@@ -9,6 +9,7 @@ SOURCE = (Path(__file__).parents[1] / "PartyCombat.lua").read_text(
 def test_addon_starts_inert():
     assert "local armed = false" in SOURCE
     assert "local authorized = false" in SOURCE
+    assert "pcall(config.load, defaults)" in SOURCE
 
 
 def test_only_damage_actions_drive_automatic_targets():
