@@ -4,7 +4,7 @@
 
 local pstart_rdm_profiles = {
     physical = {
-        gain = {'Gain-STR'},
+        gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
@@ -13,7 +13,7 @@ local pstart_rdm_profiles = {
         },
     },
     accuracy = {
-        gain = {'Gain-DEX'},
+        gain = {spells={'Gain-DEX'}, buff='DEX Boost'},
         temper = true,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
@@ -22,7 +22,7 @@ local pstart_rdm_profiles = {
         },
     },
     magic = {
-        gain = {'Gain-INT'},
+        gain = {spells={'Gain-INT'}, buff='INT Boost'},
         temper = false,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
@@ -31,7 +31,7 @@ local pstart_rdm_profiles = {
         },
     },
     safe = {
-        gain = {'Gain-VIT'},
+        gain = {spells={'Gain-VIT'}, buff='VIT Boost'},
         temper = false,
         debuffs = {
             {spells={'Frazzle III', 'Frazzle II', 'Frazzle'}, duration=150},
@@ -185,7 +185,7 @@ end
 
 local function pstart_rdm_cast_self_buffs(profile)
     local self_buffs = {
-        {spells=profile.gain, buff=profile.gain[1]},
+        {spells=profile.gain.spells, buff=profile.gain.buff},
         {spells={'Aquaveil'}, buff='Aquaveil'},
         {spells={'Phalanx'}, buff='Phalanx'},
         {spells={'Reraise'}, buff='Reraise'},
