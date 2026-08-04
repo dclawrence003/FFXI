@@ -35,7 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'AutoWS2'
 _addon.author = 'OpenAI Codex, inspired by Lorand'
-_addon.version = '0.1.0'
+_addon.version = '0.2.0'
 _addon.command = 'autows2'
 _addon.commands = {'autows2', 'aws2'}
 
@@ -49,6 +49,8 @@ local AFTERMATH_IDS = {
     lv3 = 272,
     relic = 273,
 }
+
+local RESERVE_MODEL_VERSION = 2
 
 local defaults = {
     display = {
@@ -157,10 +159,11 @@ local function base_profile(weapon)
         aftermath_type = 'lv3',
         aftermath_ws = '',
         aftermath_duration = 180,
-        fallback_reserve = 20,
-        minimum_reserve = 12,
-        maximum_reserve = 35,
-        safety_margin = 4,
+        reserve_model_version = RESERVE_MODEL_VERSION,
+        fallback_reserve = 18,
+        minimum_reserve = 4,
+        maximum_reserve = 30,
+        safety_margin = 3,
         rate_window = 12,
         minimum_rate_span = 4,
     }
@@ -178,6 +181,25 @@ end
 
 local function fill_missing(profile, weapon)
     local template = base_profile(weapon)
+    local version = tonumber(profile.reserve_model_version) or 1
+    if version < RESERVE_MODEL_VERSION then
+        -- Migrate only the original shipped values. Explicit user tuning is
+        -- preserved, while existing default profiles receive the tighter v2
+        -- bounds required by the remaining-TP forecast.
+        if tonumber(profile.fallback_reserve) == 20 then
+            profile.fallback_reserve = template.fallback_reserve
+        end
+        if tonumber(profile.minimum_reserve) == 12 then
+            profile.minimum_reserve = template.minimum_reserve
+        end
+        if tonumber(profile.maximum_reserve) == 35 then
+            profile.maximum_reserve = template.maximum_reserve
+        end
+        if tonumber(profile.safety_margin) == 4 then
+            profile.safety_margin = template.safety_margin
+        end
+        profile.reserve_model_version = RESERVE_MODEL_VERSION
+    end
     for key, value in pairs(template) do
         if profile[key] == nil then
             profile[key] = value
@@ -318,17 +340,21 @@ local function tp_rate(now)
     return gained / span, span
 end
 
-local function reserve_window(now)
+local function reserve_window(now, tp)
     local rate = tp_rate(now)
     local fallback = tonumber(current_profile.fallback_reserve) or 20
+    local deficit = math.max(0, 3000 - (tonumber(tp) or 0))
+    local safety = tonumber(current_profile.safety_margin) or 3
+    local minimum = tonumber(current_profile.minimum_reserve) or 4
+    local maximum = tonumber(current_profile.maximum_reserve) or 30
     if not rate or rate <= 0 then
-        return fallback, nil
+        local scaled_fallback = fallback * (deficit / 3000) + safety
+        return clamp(scaled_fallback, minimum, maximum), nil
     end
 
-    local safety = tonumber(current_profile.safety_margin) or 4
-    local minimum = tonumber(current_profile.minimum_reserve) or 12
-    local maximum = tonumber(current_profile.maximum_reserve) or 35
-    local predicted = (3000 / rate) + safety
+    -- Forecast only the TP still missing. The v1 model always divided 3000
+    -- by the rate, which reserved far too early whenever TP was already built.
+    local predicted = (deficit / rate) + safety
     return clamp(predicted, minimum, maximum), rate
 end
 
@@ -728,7 +754,7 @@ windower.register_event('prerender', function()
 
     local aftermath_active = has_buff(player, target_aftermath_id())
     observe_aftermath(now, aftermath_active)
-    local reserve_seconds, rate = reserve_window(now)
+    local reserve_seconds, rate = reserve_window(now, tp)
     local remaining = remaining_aftermath(now)
 
     if enabled and current_profile.aftermath_enabled and

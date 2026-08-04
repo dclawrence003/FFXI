@@ -40,9 +40,9 @@ The first tested profile is Tizona:
 | Aftermath type | Level 3 |
 | Aftermath WS | Expiacion |
 | AM3 duration | 180 seconds |
-| Fallback reserve | 20 seconds |
-| Minimum/maximum reserve | 12/35 seconds |
-| Safety margin | 4 seconds |
+| Fallback full-build estimate | 18 seconds |
+| Minimum/maximum reserve | 4/30 seconds |
+| Safety margin | 3 seconds |
 | Initial mode | Shadow |
 
 Tizona AM3 provides a 40% chance of attacking twice and a 20% chance of
@@ -55,15 +55,19 @@ AutoWS2 samples positive TP changes during engaged combat over a rolling
 window. When enough data exists, it calculates:
 
 ```text
-reserve seconds = 3000 / recent TP per second + safety margin
+TP deficit = 3000 - current TP
+reserve seconds = TP deficit / recent TP per second + safety margin
 ```
 
 The result is clamped between the configured minimum and maximum. Until enough
-data is available, the fallback reserve value is used.
+data is available, the fallback full-build estimate is scaled by the remaining
+fraction of 3000 TP, then the safety margin is added.
 
-The conservative calculation assumes that one more normal weapon skill spends
-the current TP and requires rebuilding from approximately zero. Once the
-remaining AM3 time enters the calculated window, active mode latches reserve.
+Version 0.2 migrates profiles still using the original 20/12/35/4 defaults to
+18/4/30/3. Explicitly customized values are preserved. This removes the v1
+error that forecast an entire 3000 TP build even when substantial TP was
+already available. Once the remaining AM3 time enters the calculated window,
+active mode latches reserve.
 
 Large implausible one-tick TP jumps are excluded from training. Zoning, logout,
 job changes, and weapon-profile changes reset the estimator.

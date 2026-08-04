@@ -39,6 +39,20 @@ class SourceGuardTests(unittest.TestCase):
         self.assertIn("profile.aftermath_ws = 'Expiacion'", block)
         self.assertNotIn("aftermath_mode = 'active'", block)
 
+    def test_reserve_forecast_uses_remaining_tp(self):
+        self.assertIn(
+            "local deficit = math.max(0, 3000 - (tonumber(tp) or 0))",
+            SOURCE,
+        )
+        self.assertIn("local predicted = (deficit / rate) + safety", SOURCE)
+        self.assertNotIn("local predicted = (3000 / rate)", SOURCE)
+
+    def test_legacy_defaults_are_migrated(self):
+        self.assertIn("local RESERVE_MODEL_VERSION = 2", SOURCE)
+        self.assertIn(
+            "profile.reserve_model_version = RESERVE_MODEL_VERSION", SOURCE
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
