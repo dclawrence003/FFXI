@@ -193,6 +193,19 @@ diff --git a/HealBot_packetHandling.lua b/HealBot_packetHandling.lua
 index f5504e7..872e96b 100644
 --- a/HealBot_packetHandling.lua
 +++ b/HealBot_packetHandling.lua
+@@ -20,5 +20,12 @@ local parse_char_update = _libs.lor.packets.parse_char_update
+ --]]
+ function handle_incoming_chunk(id, data)
++    -- Windower can deliver login packets after this handler is registered but
++    -- before HealBot's load callback has created the Actor and text boxes.
++    -- Ignore that brief startup window; later packets provide fresh state.
++    if not hb.configs_loaded or type(healer.indi) ~= 'table' then
++        return
++    end
++
+     if S{0x28,0x29}:contains(id) then   --Action / Action Message
+         local monitored_ids = hb.getMonitoredIds()
+         local ai = get_action_info(id, data)
 @@ -172,6 +172,7 @@ function registerEffect(ai, tact, actor, target, monitored_ids)
          if (spell ~= nil) then
              if spells_statusRemoval:contains(spell.id) then

@@ -14,6 +14,11 @@ The package has two parts:
 
 It does not automate gameplay and does not use the network.
 
+The optional Windower addon requires the official WinControl plugin. Enable
+WinControl in the Windower launcher so the generated autoload script loads it
+once. CoreManager deliberately does not issue a second `load WinControl`
+command, avoiding a harmless but noisy “Plugin already loaded” warning.
+
 ## Prototype warning
 
 The committed configuration and presets are the tested settings for one

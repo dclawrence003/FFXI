@@ -6,24 +6,27 @@ Lorand's work; the complete addon is deliberately not redistributed here.
 
 ## Changes
 
-The patch contains five focused corrections:
+The patch contains six focused corrections:
 
-1. `HB_Actions.lua` ignores a queued buff entry whose resolved `action` is nil.
+1. `HealBot_packetHandling.lua` ignores login packets received before
+   HealBot's load callback has initialized its Actor and text boxes. This
+   prevents startup errors involving `healer.indi` and `montoredBox`.
+2. `HB_Actions.lua` ignores a queued buff entry whose resolved `action` is nil.
    This prevents the repeated `attempt to index field 'action'` runtime error.
-2. `HealBot.lua` destroys active text objects when the addon unloads.
-3. `HealBot_utils.lua` removes orphaned HealBot-generated text objects after a
+3. `HealBot.lua` destroys active text objects when the addon unloads.
+4. `HealBot_utils.lua` removes orphaned HealBot-generated text objects after a
    text-box refresh.
-4. `HealBot_buffHandling.lua` reconciles the stored debuff table against each
+5. `HealBot_buffHandling.lua` reconciles the stored debuff table against each
    authoritative IPC buff snapshot. This clears effects that have worn off and
    prevents every HealBot client from repeatedly casting Erase for a stale
    remote debuff.
-5. A status-removal spell returning `No effect` quarantines the corresponding
+6. A status-removal spell returning `No effect` quarantines the corresponding
    status until a live buff snapshot confirms that it disappeared. This stops
    Erase/na-spell retry storms caused by an active status being incorrectly
    classified as removable, while allowing it to be reconsidered if it returns.
 
-The second and third changes address old monitored-character/status boxes
-remaining visible after refreshes or unloads. The fourth and fifth address
+The third and fourth changes address old monitored-character/status boxes
+remaining visible after refreshes or unloads. The fifth and sixth address
 synchronized Erase/na-spell spam that continues with `No effect`.
 
 ## Tested base
@@ -60,6 +63,6 @@ git apply -R C:\path\to\codex-ffxi\patches\HealBot\codex-fixes.patch
 [HealBot is authored by Lorand](https://github.com/lorand-ffxi/HealBot).
 The upstream repository does not advertise a repository-level license through
 GitHub, so this directory contains only a focused patch and does not
-redistribute the complete addon. The five changes in this patch were generated
+redistribute the complete addon. The six changes in this patch were generated
 by OpenAI Codex while diagnosing runtime spam and orphaned UI boxes. Lorand
 has not endorsed or reviewed the patch.

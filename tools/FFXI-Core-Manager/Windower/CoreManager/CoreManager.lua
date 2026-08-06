@@ -1,6 +1,6 @@
 _addon.name = 'CoreManager'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.1.1'
+_addon.version = '1.1.2'
 _addon.command = 'core'
 _addon.commands = {'core', 'cores'}
 
@@ -171,7 +171,6 @@ end)
 windower.register_event('login', function()
     coroutine.schedule(function()
         request('apply')
-        windower.send_command('load WinControl')
         local width, height = get_saved_layout_dimensions()
         apply_aspect_ratio(width, height)
     end, 5)
@@ -180,7 +179,6 @@ end)
 coroutine.schedule(function()
     if get_character() then
         request('apply')
-        windower.send_command('load WinControl')
         local width, height = get_saved_layout_dimensions()
         apply_aspect_ratio(width, height)
     end
