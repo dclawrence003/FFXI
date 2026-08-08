@@ -19,7 +19,9 @@ PartyStart establishes clear ownership:
   Phalanx, and profile-specific enfeebles.
 - WHM GearSwap maintains core party defenses and Afflatus Solace; HealBot is
   retained only for curing, status removal, and raises.
-- BRD GearSwap maintains the selected party songs and hostile songs.
+- The character's native BRD GearSwap controller is the sole owner of party
+  songs. PartyStart selects its Melee, Tank, or Mage preset and separately
+  maintains only hostile songs.
 - GEO supplies bubbles instead of duplicating RDM Refresh.
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
@@ -160,9 +162,9 @@ RDM enfeebles by profile:
   GearSwap cannot see another player's buffs or an enemy's debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
-- In the physical profile, BRD locks the configured `DualSavage` melee mode
-  through song casts. For the current roster this is Naegling with Izhiikoh;
-  songs may change the range instrument and armor, but never the main dagger.
+- PartyStart does not force BRD weapons or instruments. Barney's character
+  GearSwap and inventory-backed weapon sets keep Naegling, Izhiikoh, and
+  Blurred Harp +1 equipped for the physical profile.
 - Blurred Harp +1 is Superior 2 equipment. The BRD must have spent at least
   100 Bard Job Points before it can be equipped. Set
   `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.

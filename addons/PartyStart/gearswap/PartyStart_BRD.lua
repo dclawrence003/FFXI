@@ -12,6 +12,7 @@
 
 local pstart_brd_profiles = {
     physical = {
+        song_mode = 'Melee',
         songs = {
             {spell='Victory March', buff='march'},
             {spell='Valor Minuet V', buff='minuet'},
@@ -22,6 +23,7 @@ local pstart_brd_profiles = {
         },
     },
     accuracy = {
+        song_mode = 'Melee',
         songs = {
             {spell='Victory March', buff='march'},
             {spell='Blade Madrigal', buff='madrigal'},
@@ -32,6 +34,7 @@ local pstart_brd_profiles = {
         },
     },
     magic = {
+        song_mode = 'Mage',
         songs = {
             {spell="Mage's Ballad III", buff='ballad'},
             {spell='Victory March', buff='march'},
@@ -43,6 +46,7 @@ local pstart_brd_profiles = {
         },
     },
     safe = {
+        song_mode = 'Tank',
         songs = {
             {spell='Victory March', buff='march'},
             {spell="Sentinel's Scherzo", buff='scherzo'},
@@ -64,41 +68,6 @@ local pstart_brd = {
 }
 
 local PSTART_BRD_DEBUFF_RETRY = 90
-local PSTART_BRD_PHYSICAL_WEAPON = 'DualSavage'
-
--- The current physical BRD has no beneficial song-casting dagger. Keep the
--- owned Naegling/Izhiikoh loadout locked while songs change only the range
--- instrument and normal armor slots.
-local function pstart_brd_ensure_physical_weapon()
-    if not pstart_brd.active or pstart_brd.profile ~= 'physical'
-        or not state.Weapons
-        or not sets.weapons[PSTART_BRD_PHYSICAL_WEAPON]
-    then
-        return false
-    end
-
-    if state.Weapons.value ~= PSTART_BRD_PHYSICAL_WEAPON then
-        state.Weapons:set(PSTART_BRD_PHYSICAL_WEAPON)
-    end
-    if state.UnlockWeapons and state.UnlockWeapons.value then
-        state.UnlockWeapons:set(false)
-    end
-
-    local weapon_set = sets.weapons[PSTART_BRD_PHYSICAL_WEAPON]
-    if not midaction() and (player.equipment.main ~= weapon_set.main
-        or (weapon_set.sub and player.equipment.sub ~= weapon_set.sub))
-    then
-        if equip_weaponset then
-            equip_weaponset(PSTART_BRD_PHYSICAL_WEAPON)
-        else
-            enable('main', 'sub')
-            equip(weapon_set)
-            disable('main', 'sub')
-        end
-        return true
-    end
-    return false
-end
 
 local function pstart_brd_valid_name(name)
     return type(name) == 'string'
@@ -209,20 +178,6 @@ local function pstart_brd_report_instrument()
     end
 end
 
-local function pstart_brd_force_instrument()
-    local instrument = pstart_brd_extra_instrument()
-    if instrument then
-        equip({range=instrument})
-    end
-end
-
-local function pstart_brd_song_limit(profile)
-    local extra = pstart_brd_extra_instrument()
-        and (tonumber(info.ExtraSongs) or 0)
-        or 0
-    return math.min(#profile.songs, 2 + math.max(0, extra))
-end
-
 local function pstart_brd_ready(spell)
     local recasts = windower.ffxi.get_spell_recasts() or {}
     return spell
@@ -254,29 +209,6 @@ end
 
 local function pstart_brd_timer_key(target, spell)
     return tostring(target.id)..':'..tostring(spell.id)
-end
-
-local function pstart_brd_cast_party_song(profile)
-    local limit = pstart_brd_song_limit(profile)
-    for index = 1, limit do
-        local song = profile.songs[index]
-        if not buffactive[song.buff] then
-            local spell = pstart_brd_spell(song.spell)
-            if pstart_brd_ready(spell) then
-                if index > 2 and state.ExtraSongsMode then
-                    state.ExtraSongsMode:set('FullLength')
-                end
-                -- Assert the extra-song instrument before starting the action.
-                -- Character and shared BRD sets may otherwise race to restore
-                -- an idle/ranged item between automated songs.
-                pstart_brd_force_instrument()
-                windower.chat.input('/ma "'..spell.en..'" <me>')
-                tickdelay = os.clock() + 3
-                return true
-            end
-        end
-    end
-    return false
 end
 
 local function pstart_brd_cast_debuff(profile)
@@ -325,10 +257,9 @@ function user_job_self_command(commandArgs, eventArgs)
     if requested == 'tick' then
         local profile = pstart_brd_profiles[pstart_brd.profile]
         if pstart_brd.active and profile then
-            pstart_brd_ensure_physical_weapon()
-            if not pstart_brd_cast_party_song(profile) then
-                pstart_brd_cast_debuff(profile)
-            end
+            -- Barney's character GearSwap is the sole party-song owner.
+            -- PartyStart's explicit heartbeat is only for hostile songs.
+            pstart_brd_cast_debuff(profile)
         end
         return
     elseif not requested then
@@ -360,18 +291,14 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_brd.leader = commandArgs[3]
         pstart_brd.pending = nil
         pstart_brd.debuff_timers = {}
+        state.SongMode:set(pstart_brd_profiles[requested].song_mode)
         state.AutoSongMode:set(true)
         tickdelay = 0
-        pstart_brd_ensure_physical_weapon()
-        add_to_chat(122, ('PartyStart BRD: %s / leader %s / GearSwap owns songs.')
+        add_to_chat(122, ('PartyStart BRD: %s / leader %s / native GearSwap owns songs.')
             :format(requested, pstart_brd.leader))
         pstart_brd_report_instrument()
-        if pstart_brd_cast_party_song(pstart_brd_profiles[requested]) then
-            add_to_chat(122, 'PartyStart BRD: casting the first missing song now.')
-        else
-            add_to_chat(122,
-                'PartyStart BRD: armed; no missing song was immediately castable.')
-        end
+        add_to_chat(122,
+            'PartyStart BRD: debuffs armed; party songs delegated to character GearSwap.')
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
@@ -396,7 +323,9 @@ function check_song()
     if not profile or not state.AutoSongMode.value then
         return false
     end
-    if pstart_brd_cast_party_song(profile) then
+    if pstart_brd_original_check_song
+        and pstart_brd_original_check_song()
+    then
         return true
     end
     return pstart_brd_cast_debuff(profile)
@@ -417,33 +346,5 @@ function job_aftercast(spell, spellMap, eventArgs)
 
     if pstart_brd_original_job_aftercast then
         pstart_brd_original_job_aftercast(spell, spellMap, eventArgs)
-    end
-    pstart_brd_ensure_physical_weapon()
-end
-
--- These are intentionally final-layer hooks. The extra-song instrument must
--- be in the range slot when a friendly song completes; asserting it after the
--- shared BRD logic prevents a later character/idle set from stealing the slot.
-local pstart_brd_original_job_post_precast = job_post_precast
-function job_post_precast(spell, spellMap, eventArgs)
-    if pstart_brd_original_job_post_precast then
-        pstart_brd_original_job_post_precast(spell, spellMap, eventArgs)
-    end
-    if pstart_brd.active and spell and spell.type == 'BardSong'
-        and not spell.targets.Enemy
-    then
-        pstart_brd_force_instrument()
-    end
-end
-
-local pstart_brd_original_job_post_midcast = job_post_midcast
-function job_post_midcast(spell, spellMap, eventArgs)
-    if pstart_brd_original_job_post_midcast then
-        pstart_brd_original_job_post_midcast(spell, spellMap, eventArgs)
-    end
-    if pstart_brd.active and spell and spell.type == 'BardSong'
-        and not spell.targets.Enemy
-    then
-        pstart_brd_force_instrument()
     end
 end

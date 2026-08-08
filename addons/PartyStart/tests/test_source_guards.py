@@ -59,14 +59,12 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("issue('aws2 off')", owned_stop)
         self.assertIn("player.name == 'Dolomedes'", ADDON)
 
-    def test_brd_restores_physical_weapon_after_song_actions(self):
-        self.assertIn("PSTART_BRD_PHYSICAL_WEAPON = 'DualSavage'", BRD)
-        self.assertIn("pstart_brd_ensure_physical_weapon()", BRD)
-        aftercast = BRD.split("function job_aftercast(", 1)[1]
-        self.assertIn("pstart_brd_ensure_physical_weapon()", aftercast)
-        self.assertIn("player.equipment.main ~= weapon_set.main", BRD)
-        self.assertIn("state.UnlockWeapons:set(false)", BRD)
-        self.assertIn("disable('main', 'sub')", BRD)
+    def test_brd_has_one_party_song_owner(self):
+        self.assertIn("pstart_brd_original_check_song()", BRD)
+        self.assertIn("state.SongMode:set", BRD)
+        self.assertNotIn("pstart_brd_cast_party_song", BRD)
+        self.assertNotIn("pstart_brd_force_instrument", BRD)
+        self.assertNotIn("pstart_brd_ensure_physical_weapon", BRD)
 
 
 if __name__ == "__main__":
