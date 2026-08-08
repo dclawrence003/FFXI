@@ -163,8 +163,9 @@ RDM enfeebles by profile:
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
 - PartyStart does not force BRD weapons or instruments. Barney's character
-  GearSwap and inventory-backed weapon sets keep Naegling, Izhiikoh, and
-  Blurred Harp +1 equipped for the physical profile.
+  GearSwap keeps Naegling and Izhiikoh in the physical weapon mode. Weapon
+  modes intentionally do not own or lock the range slot; the normal BRD song
+  casting sets equip Blurred Harp +1.
 - Blurred Harp +1 is Superior 2 equipment. The BRD must have spent at least
   100 Bard Job Points before it can be equipped. Set
   `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.
