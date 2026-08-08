@@ -159,6 +159,9 @@ RDM enfeebles by profile:
   GearSwap cannot see another player's buffs or an enemy's debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
+- In the physical profile, BRD temporarily permits song-specific weapon gear
+  while casting, then restores the configured `DualSavage` melee mode after
+  the action. For the current roster this is Naegling with Izhiikoh.
 - Blurred Harp +1 is Superior 2 equipment. The BRD must have spent at least
   100 Bard Job Points before it can be equipped. Set
   `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.

@@ -64,6 +64,34 @@ local pstart_brd = {
 }
 
 local PSTART_BRD_DEBUFF_RETRY = 90
+local PSTART_BRD_PHYSICAL_WEAPON = 'DualSavage'
+
+-- BRD must be allowed to equip song-specific main-hand gear while casting.
+-- Once the action finishes, restore the physical profile's weapon mode and
+-- owned melee loadout (Naegling/Izhiikoh for the current roster).
+local function pstart_brd_ensure_physical_weapon()
+    if not pstart_brd.active or pstart_brd.profile ~= 'physical'
+        or not state.Weapons
+        or not sets.weapons[PSTART_BRD_PHYSICAL_WEAPON]
+    then
+        return false
+    end
+
+    if state.Weapons.value ~= PSTART_BRD_PHYSICAL_WEAPON then
+        state.Weapons:set(PSTART_BRD_PHYSICAL_WEAPON)
+    end
+    if state.UnlockWeapons and not state.UnlockWeapons.value then
+        state.UnlockWeapons:set(true)
+    end
+
+    local weapon_set = sets.weapons[PSTART_BRD_PHYSICAL_WEAPON]
+    if not midaction() and player.equipment.main ~= weapon_set.main then
+        enable('main', 'sub')
+        equip(weapon_set)
+        return true
+    end
+    return false
+end
 
 local function pstart_brd_valid_name(name)
     return type(name) == 'string'
@@ -290,6 +318,7 @@ function user_job_self_command(commandArgs, eventArgs)
     if requested == 'tick' then
         local profile = pstart_brd_profiles[pstart_brd.profile]
         if pstart_brd.active and profile then
+            pstart_brd_ensure_physical_weapon()
             if not pstart_brd_cast_party_song(profile) then
                 pstart_brd_cast_debuff(profile)
             end
@@ -326,6 +355,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_brd.debuff_timers = {}
         state.AutoSongMode:set(true)
         tickdelay = 0
+        pstart_brd_ensure_physical_weapon()
         add_to_chat(122, ('PartyStart BRD: %s / leader %s / GearSwap owns songs.')
             :format(requested, pstart_brd.leader))
         pstart_brd_report_instrument()
@@ -379,8 +409,9 @@ function job_aftercast(spell, spellMap, eventArgs)
     end
 
     if pstart_brd_original_job_aftercast then
-        return pstart_brd_original_job_aftercast(spell, spellMap, eventArgs)
+        pstart_brd_original_job_aftercast(spell, spellMap, eventArgs)
     end
+    pstart_brd_ensure_physical_weapon()
 end
 
 -- These are intentionally final-layer hooks. The extra-song instrument must

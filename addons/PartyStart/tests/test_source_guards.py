@@ -6,6 +6,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 ADDON = (ROOT / "PartyStart.lua").read_text(encoding="utf-8")
 RDM = (ROOT / "gearswap" / "PartyStart_RDM.lua").read_text(encoding="utf-8")
+BRD = (ROOT / "gearswap" / "PartyStart_BRD.lua").read_text(encoding="utf-8")
 
 
 class PartyStartSourceGuards(unittest.TestCase):
@@ -57,6 +58,13 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("if autows2_owned then", owned_stop)
         self.assertIn("issue('aws2 off')", owned_stop)
         self.assertIn("player.name == 'Dolomedes'", ADDON)
+
+    def test_brd_restores_physical_weapon_after_song_actions(self):
+        self.assertIn("PSTART_BRD_PHYSICAL_WEAPON = 'DualSavage'", BRD)
+        self.assertIn("pstart_brd_ensure_physical_weapon()", BRD)
+        aftercast = BRD.split("function job_aftercast(", 1)[1]
+        self.assertIn("pstart_brd_ensure_physical_weapon()", aftercast)
+        self.assertIn("player.equipment.main ~= weapon_set.main", BRD)
 
 
 if __name__ == "__main__":
