@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.1.0'
+_addon.version = '0.2.0'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local config = require('config')
@@ -47,6 +47,26 @@ local defaults = {
     leader = 'Dolomedes',
     attackers = {
         Tackleberry = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
+        Kickpuncher = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
+        Barneystinson = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
+        Smalls = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
+        Achoo = {
             auto_distance = 10,
             force_distance = 30,
             engage_distance = 2.8,

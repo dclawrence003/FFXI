@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.3.0'
+_addon.version = '0.4.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -21,6 +21,7 @@ local PREFIX = 'PARTYSTART1'
 local APPLY_DELAY = 1.5
 local sessions = {}
 local current_profile = nil
+local autows2_owned = false
 local last_profile = 'physical'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
@@ -100,6 +101,27 @@ local frontline_jobs = S{
 local haste_jobs = S{
     'WAR','MNK','RDM','THF','PLD','DRK','BST','RNG','SAM','NIN','DRG',
     'BLU','COR','PUP','DNC','RUN'
+}
+
+-- Current roster offense assignments. PartyStart only applies these during
+-- the physical profile and never applies one to Dolomedes. GearSwap selects
+-- the weapon; AutoWS2 remains the sole weapon-skill decision maker.
+local physical_offense = {
+    Tackleberry = {
+        weapon_mode = 'Naegling', ws = 'Savage Blade', tp = 2000,
+    },
+    Kickpuncher = {
+        weapon_mode = 'Tauret', ws = 'Evisceration', tp = 1000,
+    },
+    Barneystinson = {
+        weapon_mode = 'DualSavage', ws = 'Savage Blade', tp = 2000,
+    },
+    Smalls = {
+        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 2000,
+    },
+    Achoo = {
+        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 2000,
+    },
 }
 
 local function chat(color, message)
@@ -189,6 +211,26 @@ local function issue(command)
     if command and command ~= '' then
         windower.send_command(command)
     end
+end
+
+local function stop_owned_autows2()
+    if autows2_owned then
+        issue('aws2 off')
+        autows2_owned = false
+    end
+end
+
+local function apply_physical_offense(player)
+    local offense = physical_offense[player.name]
+    if not offense or player.name == 'Dolomedes' then
+        stop_owned_autows2()
+        return
+    end
+
+    issue(('gs c set Weapons %s; wait 1; aws2 aftermath off; '
+        ..'aws2 use %s; aws2 tp %d; aws2 on')
+        :format(offense.weapon_mode, offense.ws, offense.tp))
+    autows2_owned = true
 end
 
 local function hb_buff(target, spells)
@@ -362,9 +404,16 @@ local function apply_profile(session)
         issue('gs c set AutoBuffMode Auto')
     end
 
+    if session.profile == 'physical' then
+        apply_physical_offense(player)
+    else
+        stop_owned_autows2()
+    end
+
     current_profile = session.profile
-    chat(158, ('%s ready as %s/%s; combat ownership unchanged.')
-        :format(session.profile, player.main_job, player.sub_job))
+    chat(158, ('%s ready as %s/%s; follower AutoWS2 %s; combat ownership unchanged.')
+        :format(session.profile, player.main_job, player.sub_job,
+            autows2_owned and 'on' or 'unchanged'))
 end
 
 local function begin(profile_name)
@@ -407,6 +456,7 @@ end
 local function stop_local()
     local player = windower.ffxi.get_player()
     if not player then return end
+    stop_owned_autows2()
     issue('ffo stop; hb follow off; hb db off; hb as off; hb as attack off; hb off')
     windower.ffxi.run(false)
     if player.main_job == 'COR' then issue('r2 off') end

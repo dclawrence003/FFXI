@@ -10,7 +10,8 @@ local chats = {}
 
 package.preload.config = function()
     return {
-        load = function(defaults)
+        load = function(filepath, defaults)
+            defaults = defaults or filepath
             function defaults:save()
             end
             return defaults
@@ -32,10 +33,21 @@ package.preload.texts = function()
 end
 
 package.preload.resources = function()
+    local weapon_skills = {
+        [2] = {id = 2, en = 'Expiacion'},
+    }
+    function weapon_skills:with(field, value)
+        for _, resource in pairs(self) do
+            if type(resource) == 'table' and resource[field] == value then
+                return resource
+            end
+        end
+    end
     return {
         items = {
             [1] = {id = 1, en = 'Tizona'},
         },
+        weapon_skills = weapon_skills,
     }
 end
 
@@ -62,6 +74,9 @@ windower = {
     ffxi = {
         get_player = function()
             return player
+        end,
+        get_abilities = function()
+            return {weapon_skills = {2}}
         end,
         get_items = function(bag, slot)
             if bag == nil then

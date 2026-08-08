@@ -26,7 +26,10 @@ def test_distance_limits_are_separate():
 
 
 def test_combat_authority_is_explicit():
-    assert "Tackleberry = {" in SOURCE
+    for name in (
+        "Tackleberry", "Kickpuncher", "Barneystinson", "Smalls", "Achoo"
+    ):
+        assert f"{name} = {{" in SOURCE
     assert "broadcast_authority(true)" in SOURCE
     assert "broadcast_authority(false)" in SOURCE
     assert "if not authorized or not is_attacker() then return end" in SOURCE

@@ -37,6 +37,27 @@ class PartyStartSourceGuards(unittest.TestCase):
             "target.hpp < (profile.debuff_min_target_hpp or 0)", RDM
         )
 
+    def test_physical_profile_configures_all_follower_weapon_skills(self):
+        expected = {
+            "Tackleberry": ("Naegling", "Savage Blade", "2000"),
+            "Kickpuncher": ("Tauret", "Evisceration", "1000"),
+            "Barneystinson": ("DualSavage", "Savage Blade", "2000"),
+            "Smalls": ("Maxentius", "Black Halo", "2000"),
+            "Achoo": ("Maxentius", "Black Halo", "2000"),
+        }
+        for name, values in expected.items():
+            block = ADDON.split(f"{name} = {{", 1)[1].split("},", 1)[0]
+            for value in values:
+                self.assertIn(value, block)
+
+    def test_partystart_only_stops_autows2_it_owns(self):
+        self.assertIn("local autows2_owned = false", ADDON)
+        owned_stop = ADDON.split("local function stop_owned_autows2()", 1)[1]
+        owned_stop = owned_stop.split("\nend", 1)[0]
+        self.assertIn("if autows2_owned then", owned_stop)
+        self.assertIn("issue('aws2 off')", owned_stop)
+        self.assertIn("player.name == 'Dolomedes'", ADDON)
+
 
 if __name__ == "__main__":
     unittest.main()

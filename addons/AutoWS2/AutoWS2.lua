@@ -35,7 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'AutoWS2'
 _addon.author = 'OpenAI Codex, inspired by Lorand'
-_addon.version = '0.2.0'
+_addon.version = '0.3.0'
 _addon.command = 'autows2'
 _addon.commands = {'autows2', 'aws2'}
 
@@ -51,6 +51,7 @@ local AFTERMATH_IDS = {
 }
 
 local RESERVE_MODEL_VERSION = 2
+local OFFENSE_PROFILE_VERSION = 1
 
 local defaults = {
     display = {
@@ -80,7 +81,14 @@ local defaults = {
     profiles = {},
 }
 
-local settings = config.load(defaults)
+-- Each local client is a separate process. A shared settings.xml lets
+-- simultaneous profile saves clobber one another, so isolate configuration by
+-- character. The installer can seed these files from the legacy settings.xml.
+local startup_player = windower.ffxi.get_player()
+local settings_character = startup_player and startup_player.name or 'Unknown'
+settings_character = tostring(settings_character):gsub('[^%w_-]', '_')
+local settings_path = ('data/settings_%s.xml'):format(settings_character)
+local settings = config.load(settings_path, defaults)
 local display = texts.new('${value}', settings.display)
 
 local enabled = false
@@ -96,6 +104,7 @@ local last_command_at = 0
 local last_check_at = 0
 local pause_until = 0
 local last_decision = 'Idle'
+local last_ws_warning_key = nil
 
 local telemetry = {
     last_tp = nil,
@@ -166,6 +175,7 @@ local function base_profile(weapon)
         safety_margin = 3,
         rate_window = 12,
         minimum_rate_span = 4,
+        offense_profile_version = OFFENSE_PROFILE_VERSION,
     }
 
     if weapon == 'Tizona' then
@@ -174,6 +184,15 @@ local function base_profile(weapon)
         profile.aftermath_type = 'lv3'
         profile.aftermath_ws = 'Expiacion'
         profile.aftermath_duration = 180
+    elseif weapon == 'Naegling' then
+        profile.normal_ws = 'Savage Blade'
+        profile.normal_tp = 2000
+    elseif weapon == 'Tauret' then
+        profile.normal_ws = 'Evisceration'
+        profile.normal_tp = 1000
+    elseif weapon == 'Maxentius' then
+        profile.normal_ws = 'Black Halo'
+        profile.normal_tp = 2000
     end
 
     return profile
@@ -181,6 +200,17 @@ end
 
 local function fill_missing(profile, weapon)
     local template = base_profile(weapon)
+    local offense_version = tonumber(profile.offense_profile_version) or 0
+    if offense_version < OFFENSE_PROFILE_VERSION then
+        if trim(profile.normal_ws) == '' and template.normal_ws ~= '' then
+            profile.normal_ws = template.normal_ws
+        end
+        if (profile.normal_tp == nil or tonumber(profile.normal_tp) == 1000)
+            and template.normal_tp ~= 1000 then
+            profile.normal_tp = template.normal_tp
+        end
+        profile.offense_profile_version = OFFENSE_PROFILE_VERSION
+    end
     local version = tonumber(profile.reserve_model_version) or 1
     if version < RESERVE_MODEL_VERSION then
         -- Migrate only the original shipped values. Explicit user tuning is
@@ -253,6 +283,7 @@ local function load_current_profile(force)
     current_profile = fill_missing(settings.profiles[key], weapon)
     current_profile_key = key
     current_weapon = weapon
+    last_ws_warning_key = nil
     save_settings()
     reset_runtime('Profile changed')
     chat(207, ('Profile: %s / %s / %s'):format(
@@ -415,6 +446,33 @@ local function send_ws(name, reason)
         last_decision = 'WS not configured'
         return false
     end
+
+    local resource = res.weapon_skills:with('en', name)
+    local abilities = windower.ffxi.get_abilities() or {}
+    local available = false
+    if resource then
+        for key, value in pairs(abilities.weapon_skills or {}) do
+            if tonumber(value) == resource.id
+                or (value == true and tonumber(key) == resource.id)
+            then
+                available = true
+                break
+            end
+        end
+    end
+    if not resource or not available then
+        local warning_key = tostring(current_profile_key)..'|'..name
+        last_decision = resource and ('WS unavailable: '..name)
+            or ('Unknown WS: '..name)
+        if last_ws_warning_key ~= warning_key then
+            chat(123, resource
+                and ('%s is not currently available. Equip the granting main weapon or unlock the WS.'):format(name)
+                or ('Unknown weapon skill: %s.'):format(name))
+            last_ws_warning_key = warning_key
+        end
+        return false
+    end
+    last_ws_warning_key = nil
 
     local now = os.clock()
     if now - last_command_at < 2.8 then
@@ -632,6 +690,7 @@ windower.register_event('addon command', function(command, ...)
         print_status()
     elseif command == 'use' or command == 'ws' or command == 'set' then
         current_profile.normal_ws = trim(table.concat(args, ' '))
+        last_ws_warning_key = nil
         save_settings()
         print_status()
     elseif command == 'tp' then

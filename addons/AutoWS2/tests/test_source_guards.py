@@ -53,6 +53,29 @@ class SourceGuardTests(unittest.TestCase):
             "profile.reserve_model_version = RESERVE_MODEL_VERSION", SOURCE
         )
 
+    def test_current_ambuscade_weapon_defaults(self):
+        for weapon, ws, tp in (
+            ("Naegling", "Savage Blade", 2000),
+            ("Tauret", "Evisceration", 1000),
+            ("Maxentius", "Black Halo", 2000),
+        ):
+            block = SOURCE.split(f"elseif weapon == '{weapon}' then", 1)[1]
+            block = block.split("\n    end", 1)[0]
+            self.assertIn(f"profile.normal_ws = '{ws}'", block)
+            self.assertIn(f"profile.normal_tp = {tp}", block)
+
+    def test_unavailable_ws_is_blocked_without_chat_spam(self):
+        send_ws = SOURCE.split("local function send_ws(name, reason)", 1)[1]
+        send_ws = send_ws.split("\nend", 1)[0]
+        self.assertIn("windower.ffxi.get_abilities()", send_ws)
+        self.assertIn("last_ws_warning_key ~= warning_key", send_ws)
+        self.assertIn("return false", send_ws)
+
+    def test_multibox_settings_are_isolated_per_character(self):
+        self.assertIn("data/settings_%s.xml", SOURCE)
+        self.assertIn("settings_character", SOURCE)
+        self.assertIn("config.load(settings_path, defaults)", SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()

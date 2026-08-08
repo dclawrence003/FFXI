@@ -49,6 +49,21 @@ Tizona AM3 provides a 40% chance of attacking twice and a 20% chance of
 attacking three times. The additional attacks substantially improve TP
 generation; they are not conventional Haste or Double Attack.
 
+Version 0.3 also supplies non-aftermath defaults for the current Ambuscade
+weapons:
+
+| Main weapon | Weapon skill | TP threshold |
+| --- | --- | ---: |
+| Naegling | Savage Blade | 2000 |
+| Tauret | Evisceration | 1000 |
+| Maxentius | Black Halo | 2000 |
+
+These profiles keep aftermath disabled. Before issuing a weapon skill,
+AutoWS2 checks Windower's current weapon-skill availability table. An unknown
+or unavailable skill is blocked and reported once per profile/skill instead
+of producing chat spam. Equipping the granting weapon or unlocking the skill
+makes subsequent attempts eligible automatically.
+
 ## Predictor
 
 AutoWS2 samples positive TP changes during engaged combat over a rolling
@@ -108,7 +123,11 @@ weapon-skill mode so there is only one WS decision-maker. GearSwap still sees
 AutoWS2's normal `/ws` commands and equips the appropriate weapon-skill gear.
 
 AutoWS2 always loads **off**. Configuration is saved per character, main job,
-and equipped main weapon.
+and equipped main weapon. Version 0.3 uses a separate
+`data/settings_<Character>.xml` file for each client, preventing simultaneous
+multibox profile saves from corrupting or overwriting a shared XML file. When
+upgrading, copy the old `data/settings.xml` once for each character if its
+existing profiles need to be retained.
 
 ## Recommended Tizona trial
 
@@ -194,6 +213,8 @@ on a nearly defeated target.
   not eliminate this risk.
 - The addon retries a failed WS command after its command cooldown if TP
   remains available.
+- A configured WS that is not in the character's current available-ability
+  table is never issued; check the main-hand weapon and job access if warned.
 - Only one addon should own automatic weapon-skill decisions.
 - This is third-party automation and is not supported by Square Enix or
   Windower.
