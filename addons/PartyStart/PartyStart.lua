@@ -108,19 +108,19 @@ local haste_jobs = S{
 -- the weapon; AutoWS2 remains the sole weapon-skill decision maker.
 local physical_offense = {
     Tackleberry = {
-        weapon_mode = 'Naegling', ws = 'Savage Blade', tp = 2000,
+        weapon_mode = 'Naegling', ws = 'Savage Blade', tp = 1000,
     },
     Kickpuncher = {
         weapon_mode = 'Tauret', ws = 'Evisceration', tp = 1000,
     },
     Barneystinson = {
-        weapon_mode = 'DualSavage', ws = 'Savage Blade', tp = 2000,
+        weapon_mode = 'DualSavage', ws = 'Savage Blade', tp = 1000,
     },
     Smalls = {
-        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 2000,
+        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 1000,
     },
     Achoo = {
-        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 2000,
+        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 1000,
     },
 }
 

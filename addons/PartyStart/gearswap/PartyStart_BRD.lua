@@ -66,9 +66,9 @@ local pstart_brd = {
 local PSTART_BRD_DEBUFF_RETRY = 90
 local PSTART_BRD_PHYSICAL_WEAPON = 'DualSavage'
 
--- BRD must be allowed to equip song-specific main-hand gear while casting.
--- Once the action finishes, restore the physical profile's weapon mode and
--- owned melee loadout (Naegling/Izhiikoh for the current roster).
+-- The current physical BRD has no beneficial song-casting dagger. Keep the
+-- owned Naegling/Izhiikoh loadout locked while songs change only the range
+-- instrument and normal armor slots.
 local function pstart_brd_ensure_physical_weapon()
     if not pstart_brd.active or pstart_brd.profile ~= 'physical'
         or not state.Weapons
@@ -80,14 +80,21 @@ local function pstart_brd_ensure_physical_weapon()
     if state.Weapons.value ~= PSTART_BRD_PHYSICAL_WEAPON then
         state.Weapons:set(PSTART_BRD_PHYSICAL_WEAPON)
     end
-    if state.UnlockWeapons and not state.UnlockWeapons.value then
-        state.UnlockWeapons:set(true)
+    if state.UnlockWeapons and state.UnlockWeapons.value then
+        state.UnlockWeapons:set(false)
     end
 
     local weapon_set = sets.weapons[PSTART_BRD_PHYSICAL_WEAPON]
-    if not midaction() and player.equipment.main ~= weapon_set.main then
-        enable('main', 'sub')
-        equip(weapon_set)
+    if not midaction() and (player.equipment.main ~= weapon_set.main
+        or (weapon_set.sub and player.equipment.sub ~= weapon_set.sub))
+    then
+        if equip_weaponset then
+            equip_weaponset(PSTART_BRD_PHYSICAL_WEAPON)
+        else
+            enable('main', 'sub')
+            equip(weapon_set)
+            disable('main', 'sub')
+        end
         return true
     end
     return false

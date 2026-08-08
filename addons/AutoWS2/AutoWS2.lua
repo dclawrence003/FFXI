@@ -35,7 +35,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'AutoWS2'
 _addon.author = 'OpenAI Codex, inspired by Lorand'
-_addon.version = '0.3.0'
+_addon.version = '0.3.1'
 _addon.command = 'autows2'
 _addon.commands = {'autows2', 'aws2'}
 
@@ -51,7 +51,7 @@ local AFTERMATH_IDS = {
 }
 
 local RESERVE_MODEL_VERSION = 2
-local OFFENSE_PROFILE_VERSION = 1
+local OFFENSE_PROFILE_VERSION = 2
 
 local defaults = {
     display = {
@@ -186,13 +186,13 @@ local function base_profile(weapon)
         profile.aftermath_duration = 180
     elseif weapon == 'Naegling' then
         profile.normal_ws = 'Savage Blade'
-        profile.normal_tp = 2000
+        profile.normal_tp = 1000
     elseif weapon == 'Tauret' then
         profile.normal_ws = 'Evisceration'
         profile.normal_tp = 1000
     elseif weapon == 'Maxentius' then
         profile.normal_ws = 'Black Halo'
-        profile.normal_tp = 2000
+        profile.normal_tp = 1000
     end
 
     return profile
@@ -205,8 +205,9 @@ local function fill_missing(profile, weapon)
         if trim(profile.normal_ws) == '' and template.normal_ws ~= '' then
             profile.normal_ws = template.normal_ws
         end
-        if (profile.normal_tp == nil or tonumber(profile.normal_tp) == 1000)
-            and template.normal_tp ~= 1000 then
+        if weapon == 'Naegling' or weapon == 'Tauret'
+            or weapon == 'Maxentius'
+        then
             profile.normal_tp = template.normal_tp
         end
         profile.offense_profile_version = OFFENSE_PROFILE_VERSION

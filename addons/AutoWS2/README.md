@@ -54,15 +54,19 @@ weapons:
 
 | Main weapon | Weapon skill | TP threshold |
 | --- | --- | ---: |
-| Naegling | Savage Blade | 2000 |
+| Naegling | Savage Blade | 1000 |
 | Tauret | Evisceration | 1000 |
-| Maxentius | Black Halo | 2000 |
+| Maxentius | Black Halo | 1000 |
 
 These profiles keep aftermath disabled. Before issuing a weapon skill,
 AutoWS2 checks Windower's current weapon-skill availability table. An unknown
 or unavailable skill is blocked and reported once per profile/skill instead
 of producing chat spam. Equipping the granting weapon or unlocking the skill
 makes subsequent attempts eligible automatically.
+
+Version 0.3.1 migrates the Naegling, Tauret, and Maxentius profiles to a
+1000-TP threshold for immediate follower throughput. A future TP Bonus
+offhand or deliberate hold strategy can still be configured with `//aws2 tp`.
 
 ## Predictor
 

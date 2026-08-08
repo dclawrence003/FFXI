@@ -55,9 +55,9 @@ class SourceGuardTests(unittest.TestCase):
 
     def test_current_ambuscade_weapon_defaults(self):
         for weapon, ws, tp in (
-            ("Naegling", "Savage Blade", 2000),
+            ("Naegling", "Savage Blade", 1000),
             ("Tauret", "Evisceration", 1000),
-            ("Maxentius", "Black Halo", 2000),
+            ("Maxentius", "Black Halo", 1000),
         ):
             block = SOURCE.split(f"elseif weapon == '{weapon}' then", 1)[1]
             block = block.split("\n    end", 1)[0]

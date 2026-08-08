@@ -40,11 +40,11 @@ class PartyStartSourceGuards(unittest.TestCase):
 
     def test_physical_profile_configures_all_follower_weapon_skills(self):
         expected = {
-            "Tackleberry": ("Naegling", "Savage Blade", "2000"),
+            "Tackleberry": ("Naegling", "Savage Blade", "1000"),
             "Kickpuncher": ("Tauret", "Evisceration", "1000"),
-            "Barneystinson": ("DualSavage", "Savage Blade", "2000"),
-            "Smalls": ("Maxentius", "Black Halo", "2000"),
-            "Achoo": ("Maxentius", "Black Halo", "2000"),
+            "Barneystinson": ("DualSavage", "Savage Blade", "1000"),
+            "Smalls": ("Maxentius", "Black Halo", "1000"),
+            "Achoo": ("Maxentius", "Black Halo", "1000"),
         }
         for name, values in expected.items():
             block = ADDON.split(f"{name} = {{", 1)[1].split("},", 1)[0]
@@ -65,6 +65,8 @@ class PartyStartSourceGuards(unittest.TestCase):
         aftercast = BRD.split("function job_aftercast(", 1)[1]
         self.assertIn("pstart_brd_ensure_physical_weapon()", aftercast)
         self.assertIn("player.equipment.main ~= weapon_set.main", BRD)
+        self.assertIn("state.UnlockWeapons:set(false)", BRD)
+        self.assertIn("disable('main', 'sub')", BRD)
 
 
 if __name__ == "__main__":

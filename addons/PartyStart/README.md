@@ -101,9 +101,10 @@ Loading PartyStart itself is inert.
   maintenance on the driver's target
 - WHM GearSwap: Protectra V, Shellra V, Auspice, Afflatus Solace, Aquaveil,
   and Reraise; HealBot continues curing and status removal
-- Follower offense: Tackleberry and Barneystinson use Savage Blade at 2000 TP,
-  Kickpuncher uses Evisceration at 1000 TP, and Smalls and Achoo use Black Halo
-  at 2000 TP. GearSwap selects Naegling, Tauret, and Maxentius respectively.
+- Follower offense: Tackleberry and Barneystinson use Savage Blade,
+  Kickpuncher uses Evisceration, and Smalls and Achoo use Black Halo. All five
+  fire at 1000 TP. GearSwap selects Naegling, Tauret, and Maxentius
+  respectively.
 
 PartyStart and the BRD GearSwap controller check the local learned-spell table.
 They prefer higher tiers and fall back where configured.
@@ -159,9 +160,9 @@ RDM enfeebles by profile:
   GearSwap cannot see another player's buffs or an enemy's debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
-- In the physical profile, BRD temporarily permits song-specific weapon gear
-  while casting, then restores the configured `DualSavage` melee mode after
-  the action. For the current roster this is Naegling with Izhiikoh.
+- In the physical profile, BRD locks the configured `DualSavage` melee mode
+  through song casts. For the current roster this is Naegling with Izhiikoh;
+  songs may change the range instrument and armor, but never the main dagger.
 - Blurred Harp +1 is Superior 2 equipment. The BRD must have spent at least
   100 Bard Job Points before it can be equipped. Set
   `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.
