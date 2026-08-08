@@ -30,10 +30,9 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.0'
+_addon.version = '0.2.1'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
-local config = require('config')
 local packets = require('packets')
 local res = require('resources')
 require('strings')
@@ -74,17 +73,27 @@ local defaults = {
     },
 }
 
--- Every local client shares this addon's data/settings.xml. Loading six
--- instances simultaneously can expose another instance's half-written first
--- save to the XML parser. Never let that race prevent command registration:
--- use the complete in-memory defaults for this session and allow a later
--- reload to consume the finished file.
-local config_ok, loaded_settings = pcall(config.load, defaults)
-local settings = config_ok
-    and type(loaded_settings) == 'table'
-    and loaded_settings
-    or defaults
-local config_warning = config_ok and nil or tostring(loaded_settings)
+-- PartyCombat only needs read-only settings. Windower's shared XML config
+-- loader can fail when six local processes reload together, so use a normal
+-- Lua table that is never rewritten by the addon.
+local settings = defaults
+local settings_warning = nil
+local settings_loader, settings_load_error = loadfile(
+    windower.addon_path..'data/settings.lua')
+if settings_loader then
+    local ok, loaded = pcall(settings_loader)
+    if ok and type(loaded) == 'table'
+        and type(loaded.leader) == 'string'
+        and type(loaded.attackers) == 'table'
+    then
+        settings = loaded
+    else
+        settings_warning = ok and 'settings.lua did not return a valid table.'
+            or tostring(loaded)
+    end
+else
+    settings_warning = tostring(settings_load_error)
+end
 local armed = false
 local authorized = false
 local active_target_id = nil
@@ -496,8 +505,8 @@ end)
 
 chat(158,
     'Loaded inert. Use //pc force on the leader or Alt+P; Alt+O stops combat.')
-if config_warning then
+if settings_warning then
     chat(123,
-        'Settings XML was unavailable during startup; using safe defaults. '
-        ..config_warning)
+        'settings.lua was unavailable during startup; using safe defaults. '
+        ..settings_warning)
 end

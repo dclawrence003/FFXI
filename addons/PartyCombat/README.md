@@ -47,10 +47,9 @@ local client:
 lua load PartyCombat
 ```
 
-All clients share one Windower settings file. If simultaneous first-time loads
-observe that XML while another client is still creating it, PartyCombat falls
-back to its safe in-memory defaults instead of aborting. A later reload uses
-the completed file.
+All clients read the same `data\settings.lua` file. PartyCombat never writes
+to it. This deliberately avoids Windower's shared XML config loader, which can
+fail when several local clients reload an addon simultaneously.
 
 Recommended `scripts\init.txt` bindings:
 
@@ -90,26 +89,27 @@ The normal flow is:
 
 ## Configuration
 
-Windower creates `addons\PartyCombat\data\settings.xml`. The default structure
-contains all five followers. Each entry uses the same initial limits:
+Edit `addons\PartyCombat\data\settings.lua` to change the roster or limits.
+The default table contains all five followers. Each entry uses the same
+initial limits:
 
-```xml
-<leader>Dolomedes</leader>
-<attackers>
-    <Tackleberry>
-        <auto_distance>10</auto_distance>
-        <force_distance>30</force_distance>
-        <engage_distance>2.8</engage_distance>
-    </Tackleberry>
-    <Kickpuncher>...</Kickpuncher>
-    <Barneystinson>...</Barneystinson>
-    <Smalls>...</Smalls>
-    <Achoo>...</Achoo>
-</attackers>
+```lua
+return {
+    leader = 'Dolomedes',
+    attackers = {
+        Tackleberry = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
+        -- Additional character entries use the same fields.
+    },
+}
 ```
 
 Attackers can be added or removed as character-named entries. Each client must
-use the same configuration.
+read the same configuration. The old `data\settings.xml` is ignored by
+version 0.2.1 and may be retained as a historical backup.
 
 ## PartyStart and AutoWS2 integration
 

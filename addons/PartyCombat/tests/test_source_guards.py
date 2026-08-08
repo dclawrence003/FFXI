@@ -4,12 +4,17 @@ from pathlib import Path
 SOURCE = (Path(__file__).parents[1] / "PartyCombat.lua").read_text(
     encoding="utf-8"
 )
+SETTINGS = (Path(__file__).parents[1] / "data" / "settings.lua").read_text(
+    encoding="utf-8"
+)
 
 
 def test_addon_starts_inert():
     assert "local armed = false" in SOURCE
     assert "local authorized = false" in SOURCE
-    assert "pcall(config.load, defaults)" in SOURCE
+    assert "loadfile(" in SOURCE
+    assert "data/settings.lua" in SOURCE
+    assert "require('config')" not in SOURCE
 
 
 def test_only_damage_actions_drive_automatic_targets():
@@ -30,6 +35,7 @@ def test_combat_authority_is_explicit():
         "Tackleberry", "Kickpuncher", "Barneystinson", "Smalls", "Achoo"
     ):
         assert f"{name} = {{" in SOURCE
+        assert f"{name} = {{" in SETTINGS
     assert "broadcast_authority(true)" in SOURCE
     assert "broadcast_authority(false)" in SOURCE
     assert "if not authorized or not is_attacker() then return end" in SOURCE
