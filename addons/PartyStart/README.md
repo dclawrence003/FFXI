@@ -134,9 +134,9 @@ RDM enfeebles by profile:
 - Run startup while out of combat and with all intended clients online.
 - PartyStart configures support and follower AutoWS2 automation; it does not
   select targets, move, or engage. PartyCombat exclusively owns those actions.
-- Every profile clears inherited FastFollow movement and HealBot follow,
-  assist, and engage state on every client before applying job-specific
-  support settings.
+- Every profile clears inherited HealBot follow, assist, and engage state on
+  every client before applying job-specific support settings. FastFollow is
+  user-owned: neither profile activation nor `off` changes its state.
 - Buffs, songs, rolls, healing, and GEO automation begin when a profile or
   `on` is issued, and continue until `off`, an addon/job reset, or an
   addon-specific zone rule deactivates them.
@@ -145,10 +145,11 @@ RDM enfeebles by profile:
   Sneak or Invisible.
 - BRD and RDM cast hostile magic directly by mob ID. They do not use `/assist`
   to acquire the leader's target.
-- PartyStart performs a one-time clearing of inherited FastFollow and HealBot
+- PartyStart performs a one-time clearing of inherited HealBot follow and
   assist state when a profile is selected. It does not subsequently poll,
-  move, engage, or disengage any character. PartyCombat is the sole owner of
-  physical engagement and movement, avoiding competing combat controllers.
+  move, engage, or disengage any character, and never sends FastFollow
+  commands. PartyCombat is the sole owner of physical engagement and combat
+  movement, avoiding competing combat controllers.
 - RDM prioritizes party Refresh (self first), then Haste and Phalanx, then
   offensive enfeebles. Routine `physical` mode conserves MP by omitting
   Frazzle, refusing new enfeebles below 45% MP, and ignoring targets already

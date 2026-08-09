@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.4.0'
+_addon.version = '0.4.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -384,10 +384,9 @@ local function apply_profile(session)
         return
     end
 
-    -- Clear legacy movement/assist automation when selecting a support
-    -- profile. PartyStart never polls, disengages, or moves characters after
-    -- this one-time setup; PartyCombat is the sole combat owner.
-    issue('ffo stop; hb follow off; hb as off; hb as attack off')
+    -- Clear HealBot movement/assist automation when selecting a support
+    -- profile. FastFollow is user-owned and must remain unchanged.
+    issue('hb follow off; hb as off; hb as attack off')
 
     if player.main_job == 'WHM' then
         apply_whm(player)
@@ -457,7 +456,7 @@ local function stop_local()
     local player = windower.ffxi.get_player()
     if not player then return end
     stop_owned_autows2()
-    issue('ffo stop; hb follow off; hb db off; hb as off; hb as attack off; hb off')
+    issue('hb follow off; hb db off; hb as off; hb as attack off; hb off')
     windower.ffxi.run(false)
     if player.main_job == 'COR' then issue('r2 off') end
     if player.main_job == 'BRD' then issue('gs c pstartbrd off') end

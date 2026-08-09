@@ -12,6 +12,7 @@ BRD = (ROOT / "gearswap" / "PartyStart_BRD.lua").read_text(encoding="utf-8")
 class PartyStartSourceGuards(unittest.TestCase):
     def test_partystart_does_not_police_combat(self):
         self.assertNotIn("PARTYCOMBAT1", ADDON)
+        self.assertNotIn("ffo ", ADDON.lower())
         maintenance = ADDON.split(
             "windower.register_event('prerender'", 1
         )[1]
