@@ -97,6 +97,20 @@ The launcher:
 4. Starts the localhost dashboard at <http://127.0.0.1:8787>.
 5. Watches FindAll character files and refreshes after changes.
 
+### Start automatically with Windows
+
+Install the per-user scheduled task once:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Install-AutoStart.ps1
+```
+
+The task starts InventoryCore at logon, keeps the server attached to the task so
+Windows can restart it after a failure, and does not open the dashboard. It
+serves the existing database immediately; FindAll's file watcher performs the
+next refresh after inventory changes. The launcher checks the normal Node.js
+install locations and Codex's bundled Node runtime in addition to `PATH`.
+
 Manual commands:
 
 ```powershell
