@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.1'
+_addon.version = '0.2.2'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -190,9 +190,15 @@ local function stop_running()
     end
 end
 
-local function clear_legacy_movement()
+local function clear_healbot_combat_automation()
     windower.send_command(
-        'ffo stop; hb follow off; hb as off; hb as attack off')
+        'hb follow off; hb as off; hb as attack off')
+    windower.ffxi.run(false)
+    running = false
+end
+
+local function claim_combat_movement()
+    windower.send_command('ffo stop')
     windower.ffxi.run(false)
     running = false
 end
@@ -277,6 +283,10 @@ local function accept_target(id, mode)
         return
     end
 
+    -- FastFollow remains user-owned while PartyCombat is merely armed. Stop
+    -- it only when this attacker has accepted a real combat target and
+    -- PartyCombat is about to take movement control.
+    claim_combat_movement()
     active_target_id = target.id
     active_mode = force and 'force' or 'auto'
     pursuit_limit = limit
@@ -381,7 +391,7 @@ windower.register_event('ipc message', function(message)
             local was_authorized = authorized
             authorized = enabled
             if enabled and not was_authorized then
-                clear_legacy_movement()
+                clear_healbot_combat_automation()
             elseif not enabled then
                 stop_local(nil, true)
             end

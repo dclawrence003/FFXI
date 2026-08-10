@@ -41,6 +41,25 @@ def test_combat_authority_is_explicit():
     assert "if not authorized or not is_attacker() then return end" in SOURCE
 
 
+def test_fastfollow_is_claimed_only_after_a_target_is_accepted():
+    authority = SOURCE.split("if kind == 'authority'", 1)[1]
+    authority = authority.split("elseif kind == 'target'", 1)[0]
+    assert "ffo stop" not in authority
+    assert "clear_healbot_combat_automation()" in authority
+
+    accept = SOURCE.split("local function accept_target", 1)[1]
+    accept = accept.split("local function current_leader_target", 1)[0]
+    assert "claim_combat_movement()" in accept
+    assert accept.index("if distance > limit") < accept.index(
+        "claim_combat_movement()"
+    )
+
+    movement_claim = SOURCE.split(
+        "local function claim_combat_movement()", 1
+    )[1].split("\nend", 1)[0]
+    assert "ffo stop" in movement_claim
+
+
 def test_no_all_character_attack_command():
     assert "send @all" not in SOURCE
     assert "allattack" not in SOURCE

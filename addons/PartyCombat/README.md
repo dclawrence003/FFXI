@@ -33,10 +33,12 @@ PartyCombat follows combat actions, not cursor movement:
 - Zoning disarms the addon.
 - Only configured attackers respond. Other characters are observers.
 
-PartyCombat clears inherited FastFollow and HealBot follow/assist/engage state
-when it authorizes an attacker. GearSwap remains responsible for equipment,
-and AutoWS2 or another separately configured system remains responsible for
-weaponskills.
+Arming PartyCombat does not change FastFollow. It clears inherited HealBot
+follow/assist/engage state when it authorizes an attacker, then stops
+FastFollow only after that attacker accepts a valid combat target and
+PartyCombat is about to take movement control. GearSwap remains responsible
+for equipment, and AutoWS2 or another separately configured system remains
+responsible for weaponskills.
 
 ## Installation
 
@@ -72,7 +74,7 @@ only when issued from the configured leader.
 ```
 
 - `on`: Arms automatic damage-target synchronization without selecting or
-  approaching anything.
+  approaching anything and without changing FastFollow.
 - `force`: Arms synchronization and explicitly orders the configured attacker
   to approach and engage the leader's current enemy.
 - `stop`: Disarms synchronization, stops movement, and disengages attackers.
