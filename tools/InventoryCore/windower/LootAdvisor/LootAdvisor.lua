@@ -1,6 +1,6 @@
 _addon.name = 'LootAdvisor'
 _addon.author = 'Dolomedes + Codex'
-_addon.version = '0.2.0'
+_addon.version = '0.2.1'
 _addon.commands = {'la', 'lootadvisor'}
 
 require('tables')
@@ -15,12 +15,8 @@ local last_scan = 0
 http.TIMEOUT = 2
 local api_root = 'http://127.0.0.1:8787'
 local currencies = {}
-local previous_units = {}
-local pending_chest = nil
-local current_sector = {Temenos = nil, Apollyon = nil}
 local last_telemetry = 0
 local last_currency_request = 0
-local last_temp_scan = 0
 local telemetry_warning_at = 0
 
 local colors = {KEEP=158, UPGRADE=159, AH=205, HOLD=200, REVIEW=207, VENDOR=057, DROP=167}
@@ -264,80 +260,8 @@ local function filtered_currency_packet(packet)
     return output
 end
 
-local function sector_for_item(item_id)
-    if item_id >= 9956 and item_id <= 9962 then return 'Temenos', 'North' end
-    if item_id >= 9963 and item_id <= 9969 then return 'Temenos', 'West' end
-    if item_id >= 9970 and item_id <= 9976 then return 'Temenos', 'East' end
-    if item_id >= 9977 and item_id <= 9980 then return 'Temenos', 'Central' end
-    if item_id >= 9981 and item_id <= 9985 then return 'Apollyon', 'NW' end
-    if item_id >= 9986 and item_id <= 9989 then return 'Apollyon', 'SW' end
-    if item_id >= 9990 and item_id <= 9994 then return 'Apollyon', 'NE' end
-    if item_id >= 9995 and item_id <= 9998 then return 'Apollyon', 'SE' end
-    return nil, nil
-end
-
-local function scan_limbus_data()
-    local temporary = windower.ffxi.get_items('temporary') or {}
-    for _, slot in pairs(temporary) do
-        if type(slot) == 'table' and tonumber(slot.id or slot.item_id) then
-            local area, sector = sector_for_item(tonumber(slot.id or slot.item_id))
-            if area then current_sector[area] = sector end
-        end
-    end
-end
-
-local function current_area()
-    local player = windower.ffxi.get_player()
-    local zone = player and res.zones[player.zone]
-    local name = zone and zone.en or ''
-    if name:lower():find('temenos', 1, true) then return 'Temenos' end
-    if name:lower():find('apollyon', 1, true) then return 'Apollyon' end
-    return nil
-end
-
-local function begin_chest(target_id)
-    local area = current_area()
-    if not area then return end
-    local mob = windower.ffxi.get_mob_by_id(target_id)
-    if not mob or not mob.name or mob.name:lower() ~= 'treasure chest' then return end
-    pending_chest = {
-        area = area,
-        chest = current_sector[area],
-        target_id = target_id,
-        started = os.time(),
-    }
-    coroutine.schedule(request_currencies, 0.5)
-    coroutine.schedule(request_currencies, 2.0)
-end
-
-local function finish_chest_if_ready(packet)
-    local name = player_name()
-    if not pending_chest or not name or os.time() - pending_chest.started > 15 then
-        pending_chest = nil
-        return
-    end
-    local field = pending_chest.area .. ' Units'
-    local before = previous_units[field]
-    local after = packet[field]
-    local gained = before and after and (after - before) or nil
-    if gained == 3000 or gained == 5000 then
-        post_json('/api/limbus/chest', {
-            character = name,
-            area = pending_chest.area,
-            chest = pending_chest.chest,
-            target_id = pending_chest.target_id,
-            units = gained,
-            signature = table.concat({
-                name, pending_chest.area, pending_chest.target_id,
-                before, after, pending_chest.started
-            }, ':'),
-        })
-        pending_chest = nil
-    end
-end
 windower.register_event('load', function()
     load_cache()
-    scan_limbus_data()
     send_telemetry()
     coroutine.schedule(request_currencies, 1)
 end)
@@ -348,21 +272,12 @@ windower.register_event('prerender', function()
         scan_pool(false)
     end
     local wall_time = os.time()
-    if wall_time - last_temp_scan >= 1 then
-        last_temp_scan = wall_time
-        scan_limbus_data()
-    end
     if wall_time - last_telemetry >= 60 then
         send_telemetry()
     end
     if wall_time - last_currency_request >= 300 then
         request_currencies()
     end
-end)
-windower.register_event('outgoing chunk', function(id, original)
-    if id ~= 0x01A then return end
-    local ok, packet = pcall(packets.parse, 'outgoing', original)
-    if ok and packet and packet.Target then begin_chest(packet.Target) end
 end)
 
 windower.register_event('incoming chunk', function(id, original, modified)
@@ -372,37 +287,29 @@ windower.register_event('incoming chunk', function(id, original, modified)
     if id == 0x113 then
         currencies['1'] = filtered_currency_packet(packet)
     else
-        finish_chest_if_ready(packet)
         currencies['2'] = filtered_currency_packet(packet)
-        previous_units['Temenos Units'] = packet['Temenos Units']
-        previous_units['Apollyon Units'] = packet['Apollyon Units']
     end
     coroutine.schedule(send_telemetry, 0.1)
 end)
 
 local function refresh_character_telemetry()
-    pending_chest = nil
-    current_sector = {Temenos = nil, Apollyon = nil}
-    scan_limbus_data()
     coroutine.schedule(request_currencies, 1)
     coroutine.schedule(send_telemetry, 2)
 end
 
 windower.register_event('login', refresh_character_telemetry)
 windower.register_event('zone change', refresh_character_telemetry)
-windower.register_event('logout', function() pending_chest = nil end)
 
 windower.register_event('addon command', function(command, ...)
     command = command and command:lower() or 'help'
     if command == 'pool' then
         scan_pool(true)
     elseif command == 'reload' or command == 'refresh' then
+        load_cache()
     elseif command == 'telemetry' then
-        scan_limbus_data()
         request_currencies()
         send_telemetry()
         windower.add_to_chat(158, '[LA] Character telemetry sent to InventoryCore.')
-        load_cache()
     elseif command == 'item' then
         local query = table.concat({...}, ' '):lower()
         for id, item in pairs(res.items) do

@@ -62,13 +62,21 @@ class AttributionAudit(unittest.TestCase):
                 f"{readme} has no attribution or authorship section",
             )
 
-    def test_limbus_tracker_is_display_only(self):
+    def test_limbus_tracker_is_standalone_and_persistent(self):
         path = ROOT / "addons/LimbusTracker/LimbusTracker.lua"
         text = path.read_text(encoding="utf-8")
-        self.assertIn("/api/dashboard", text)
+        self.assertIn("history_", text)
+        self.assertIn("save_history", text)
+        self.assertIn("0x118", text)
+        self.assertIn("packets.inject", text)
         self.assertNotIn("/api/telemetry", text)
-        self.assertNotIn("/api/limbus/chest", text)
-        self.assertNotIn("packets.inject", text)
+        self.assertNotIn("/api/dashboard", text)
+
+        loot_advisor = (
+            ROOT / "tools/InventoryCore/windower/LootAdvisor/LootAdvisor.lua"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("/api/limbus/chest", loot_advisor)
+        self.assertNotIn("sector_for_item", loot_advisor)
 
 
 if __name__ == "__main__":

@@ -159,17 +159,17 @@ The browser has three views:
   game's Currencies and Currencies 2 packets, including Nyzul tokens and
   Temenos/Apollyon units.
 
-LootAdvisor is also the small Windower-to-InventoryCore telemetry bridge. Load
-it on every tracked character. It posts only to the localhost service, sends a
-full character snapshot once per minute, refreshes currency packets every five
-minutes, and refreshes after login or zoning. `//la telemetry` forces an
-immediate snapshot and currency request.
+LootAdvisor is the Windower-to-InventoryCore collector for gil, key items, and
+currencies. Load it on every tracked character. It posts only to the localhost
+service, sends a full character snapshot once per minute, refreshes currency
+packets every five minutes, and refreshes after login or zoning.
+`//la telemetry` forces an immediate snapshot and currency request.
 
-Limbus chest tracking is automatic. LootAdvisor identifies the active sector
-from the area's temporary floor-data item, notices interaction with the final
-Treasure Chest, and confirms the opening from the resulting 3,000- or
-5,000-unit currency increase. InventoryCore retains a continuous per-character
-history rather than resetting it weekly.
+The standalone LimbusTracker addon identifies the active sector, notices the
+final Treasure Chest interaction, confirms the resulting 3,000- or 5,000-unit
+increase, and persists its own per-character history. Its optional localhost
+sync supplies those events to this dashboard. InventoryCore retains the
+mirrored history continuously rather than resetting it weekly.
 
 Each area displays the five most recent chest openings, marks the last 5,000
 bonus in gold, and lists **Next** as the least recently opened of the four
@@ -180,13 +180,13 @@ next bonus: the game may select the same bonus chest again.
 Key items and currencies require LootAdvisor to be loaded on each tracked
 character and InventoryCore to be running locally.
 
-### Optional in-game Limbus display
+### Standalone in-game Limbus tracker
 
-The repository's standalone `addons\LimbusTracker` companion reads the same
-localhost dashboard API and presents the rotation in a compact Windower text
-panel. It is display-only: LootAdvisor remains the sole telemetry collector,
-so loading LimbusTracker does not duplicate chest events or currency requests.
-Its default mode automatically appears in Temenos/Apollyon and hides elsewhere.
+The repository's `addons\LimbusTracker` independently detects chest openings,
+persists per-character history, and presents the rotation in a compact
+Windower panel. It works without InventoryCore or LootAdvisor. Its optional
+localhost sync mirrors saved events to this browser dashboard and safely
+retries unsynced events when InventoryCore was unavailable.
 
 ## Authorship
 

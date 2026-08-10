@@ -64,14 +64,12 @@ When InventoryCore is running locally, LootAdvisor also reports:
 
 - current gil;
 - all owned key items;
-- all numeric Currencies and Currencies 2 values;
-- confirmed Temenos and Apollyon chest openings.
+- all numeric Currencies and Currencies 2 values.
 
 Snapshots are sent once per minute and after login or zoning. Currency packets
 are requested every five minutes. Data is posted only to
 `http://127.0.0.1:8787`; no remote telemetry service is used.
 
-Limbus tracking needs no manual sector selection. The addon derives the sector
-from Windower's temporary floor-data item IDs, detects interaction with the
-final Treasure Chest, and records only a confirmed 3,000- or 5,000-unit
-increase. Load LootAdvisor on every character whose history should be tracked.
+Limbus chest detection was moved to the standalone `LimbusTracker` addon in
+version 0.2.1. LootAdvisor no longer observes chest interactions or writes
+Limbus events.
