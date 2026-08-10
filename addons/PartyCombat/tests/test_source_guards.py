@@ -60,6 +60,21 @@ def test_fastfollow_is_claimed_only_after_a_target_is_accepted():
     assert "ffo stop" in movement_claim
 
 
+def test_fastfollow_is_restored_only_after_partycombat_claimed_it():
+    assert "local fastfollow_claimed = false" in SOURCE
+
+    restore = SOURCE.split(
+        "local function restore_fastfollow()", 1
+    )[1].split("\nend", 1)[0]
+    assert "if fastfollow_claimed" in restore
+    assert "ffo follow '..settings.leader" in restore
+    assert "fastfollow_claimed = false" in restore
+
+    stop_local = SOURCE.split("local function stop_local", 1)[1]
+    stop_local = stop_local.split("local function inject_combat_target", 1)[0]
+    assert "restore_fastfollow()" in stop_local
+
+
 def test_active_attackers_face_their_combat_target():
     assert "local function face_target(self, target)" in SOURCE
     assert "windower.ffxi.turn(-math.atan2(dy, dx))" in SOURCE

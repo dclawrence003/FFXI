@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.3'
+_addon.version = '0.2.4'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -105,6 +105,7 @@ local last_engage_at = 0
 local running = false
 local last_ignore_target = nil
 local last_ignore_at = 0
+local fastfollow_claimed = false
 
 local function chat(color, message)
     windower.add_to_chat(color or 207, '[PartyCombat] '..message)
@@ -198,9 +199,21 @@ local function clear_healbot_combat_automation()
 end
 
 local function claim_combat_movement()
-    windower.send_command('ffo stop')
+    if not fastfollow_claimed then
+        windower.send_command('ffo stop')
+        fastfollow_claimed = true
+    end
     windower.ffxi.run(false)
     running = false
+end
+
+local function restore_fastfollow()
+    -- The local player record can be temporarily unavailable during a zone
+    -- transition. The claim flag itself proves this client was an attacker.
+    if fastfollow_claimed and valid_name(settings.leader) then
+        windower.send_command('ffo follow '..settings.leader)
+    end
+    fastfollow_claimed = false
 end
 
 local function face_target(self, target)
@@ -228,6 +241,7 @@ local function stop_local(reason, revoke)
     if revoke then
         authorized = false
     end
+    restore_fastfollow()
     if reason then
         chat(207, reason)
     end

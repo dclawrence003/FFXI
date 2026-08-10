@@ -33,15 +33,20 @@ PartyCombat follows combat actions, not cursor movement:
   attacker toward that enemy, including when the attacker begins inside the
   2.8-yalm movement threshold.
 - A dead, despawned, or invalid target ends the pursuit.
+- Ending pursuit hands movement back to FastFollow for followers whose follow
+  state PartyCombat previously claimed. This includes battlefield exits and
+  other zone transitions.
 - Zoning disarms the addon.
 - Only configured attackers respond. Other characters are observers.
 
 Arming PartyCombat does not change FastFollow. It clears inherited HealBot
 follow/assist/engage state when it authorizes an attacker, then stops
 FastFollow only after that attacker accepts a valid combat target and
-PartyCombat is about to take movement control. GearSwap remains responsible
-for equipment, and AutoWS2 or another separately configured system remains
-responsible for weaponskills.
+PartyCombat is about to take movement control. When pursuit ends, PartyCombat
+is stopped, or a zone transition occurs, only a follower whose FastFollow state
+PartyCombat claimed is returned to following the configured leader. GearSwap
+remains responsible for equipment, and AutoWS2 or another separately configured
+system remains responsible for weaponskills.
 
 ## Installation
 
