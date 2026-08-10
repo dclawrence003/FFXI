@@ -45,6 +45,7 @@ class AttributionAudit(unittest.TestCase):
         readmes = [
             "addons/AutoWS2/README.md",
             "addons/EventGuard/README.md",
+            "addons/LimbusTracker/README.md",
             "addons/PartyCombat/README.md",
             "addons/PartyStart/README.md",
             "addons/Roller2/README.md",
@@ -60,6 +61,14 @@ class AttributionAudit(unittest.TestCase):
                 any(word in text for word in ("attribution", "authorship")),
                 f"{readme} has no attribution or authorship section",
             )
+
+    def test_limbus_tracker_is_display_only(self):
+        path = ROOT / "addons/LimbusTracker/LimbusTracker.lua"
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("/api/dashboard", text)
+        self.assertNotIn("/api/telemetry", text)
+        self.assertNotIn("/api/limbus/chest", text)
+        self.assertNotIn("packets.inject", text)
 
 
 if __name__ == "__main__":
