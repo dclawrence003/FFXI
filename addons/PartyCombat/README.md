@@ -35,7 +35,9 @@ PartyCombat follows combat actions, not cursor movement:
 - A dead, despawned, or invalid target ends the pursuit.
 - Ending pursuit hands movement back to FastFollow for followers whose follow
   state PartyCombat previously claimed. This includes battlefield exits and
-  other zone transitions.
+  other zone transitions. Battlefield exits receive one additional guarded
+  follow command after 3.5 seconds, once client state has settled; accepting a
+  new combat target cancels that delayed recovery.
 - Zoning disarms the addon.
 - Only configured attackers respond. Other characters are observers.
 

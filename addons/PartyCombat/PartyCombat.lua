@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.4'
+_addon.version = '0.2.5'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -106,6 +106,7 @@ local running = false
 local last_ignore_target = nil
 local last_ignore_at = 0
 local fastfollow_claimed = false
+local zone_follow_restore_at = nil
 
 local function chat(color, message)
     windower.add_to_chat(color or 207, '[PartyCombat] '..message)
@@ -308,6 +309,7 @@ local function accept_target(id, mode)
     -- FastFollow remains user-owned while PartyCombat is merely armed. Stop
     -- it only when this attacker has accepted a real combat target and
     -- PartyCombat is about to take movement control.
+    zone_follow_restore_at = nil
     claim_combat_movement()
     active_target_id = target.id
     active_mode = force and 'force' or 'auto'
@@ -428,6 +430,16 @@ end)
 windower.register_event('prerender', function()
     local now = os.clock()
 
+    -- The immediate ownership handoff can occur while a battlefield exit is
+    -- still rebuilding client state. Reinforce it once after the zone settles.
+    -- A newly accepted combat target cancels this pending recovery.
+    if zone_follow_restore_at and now >= zone_follow_restore_at then
+        zone_follow_restore_at = nil
+        if not active_target_id and valid_name(settings.leader) then
+            windower.send_command('ffo follow '..settings.leader)
+        end
+    end
+
     if armed and is_leader() and now >= next_authority then
         next_authority = now + AUTHORITY_INTERVAL
         broadcast_authority(true)
@@ -521,12 +533,16 @@ windower.register_event('addon command', function(command)
 end)
 
 windower.register_event('zone change', function()
+    local restore_after_zone = fastfollow_claimed
     if armed and is_leader() then
         broadcast_authority(false)
     end
     armed = false
     authorized = false
     stop_local(nil, true)
+    if restore_after_zone then
+        zone_follow_restore_at = os.clock() + 3.5
+    end
 end)
 
 windower.register_event('logout', 'unload', function()

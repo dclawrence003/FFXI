@@ -75,6 +75,25 @@ def test_fastfollow_is_restored_only_after_partycombat_claimed_it():
     assert "restore_fastfollow()" in stop_local
 
 
+def test_zone_follow_recovery_is_delayed_and_cancelled_by_new_combat():
+    assert "local zone_follow_restore_at = nil" in SOURCE
+    zone = SOURCE.split(
+        "windower.register_event('zone change'", 1
+    )[1].split("windower.register_event('logout'", 1)[0]
+    assert "local restore_after_zone = fastfollow_claimed" in zone
+    assert "zone_follow_restore_at = os.clock() + 3.5" in zone
+
+    accept = SOURCE.split("local function accept_target", 1)[1]
+    accept = accept.split("local function current_leader_target", 1)[0]
+    assert "zone_follow_restore_at = nil" in accept
+
+    prerender = SOURCE.split(
+        "windower.register_event('prerender'", 1
+    )[1].split("windower.register_event('addon command'", 1)[0]
+    assert "if zone_follow_restore_at and now >= zone_follow_restore_at" in prerender
+    assert "not active_target_id" in prerender
+
+
 def test_active_attackers_face_their_combat_target():
     assert "local function face_target(self, target)" in SOURCE
     assert "windower.ffxi.turn(-math.atan2(dy, dx))" in SOURCE
