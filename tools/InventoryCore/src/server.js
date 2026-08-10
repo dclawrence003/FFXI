@@ -12,6 +12,7 @@ const { buildIndex, normalize, parseWiki } = require('./wiki');
 const { parseItemBasic } = require('./vendor');
 const { evaluate } = require('./recommend');
 const { getPriceState } = require('./ffxiah');
+const { ingestTelemetry, recordLimbusChest, dashboard, keyItemView, currencyView } = require('./telemetry');
 
 const host = '127.0.0.1';
 const port = Number(process.env.FFXI_INVENTORY_PORT || 8787);
@@ -29,6 +30,54 @@ function json(response, value) {
   response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify(value));
 }
+function errorJson(response, status, message) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store'
+  });
+  response.end(JSON.stringify({ error: message }));
+}
+
+function readJsonBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 1024 * 1024) {
+        reject(new Error('Request body is too large.'));
+        request.destroy();
+      }
+    });
+    request.on('end', () => {
+      try {
+        resolve(JSON.parse(body || '{}'));
+      } catch {
+        reject(new Error('Invalid JSON request body.'));
+      }
+    });
+    request.on('error', reject);
+  });
+}
+
+async function postApi(request, url, response) {
+  const db = openDb();
+  try {
+    const payload = await readJsonBody(request);
+    if (url.pathname === '/api/telemetry') {
+      return json(response, ingestTelemetry(db, payload, config));
+    }
+    if (url.pathname === '/api/limbus/chest') {
+      return json(response, recordLimbusChest(db, payload, config));
+    }
+    return errorJson(response, 404, 'Unknown endpoint.');
+  } catch (error) {
+    if (!response.writableEnded) errorJson(response, 400, error.message);
+  } finally {
+    db.close();
+  }
+}
+
 
 function lootRecommendation(itemId, db) {
   const item = resourceItems.get(itemId);
@@ -75,6 +124,15 @@ function lootRecommendation(itemId, db) {
 function api(url, response) {
   const db = openDb();
   try {
+    if (url.pathname === '/api/dashboard') {
+      return json(response, dashboard(db, config));
+    }
+    if (url.pathname === '/api/key-items') {
+      return json(response, keyItemView(db, config));
+    }
+    if (url.pathname === '/api/currencies') {
+      return json(response, currencyView(db, config));
+    }
     if (url.pathname === '/api/status') {
       return json(response, db.prepare('SELECT * FROM source_status ORDER BY source').all());
     }
@@ -136,9 +194,13 @@ function api(url, response) {
   }
 }
 
-const server = http.createServer((request, response) => {
+const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${host}:${port}`);
-  if (url.pathname.startsWith('/api/')) return api(url, response);
+  if (url.pathname.startsWith('/api/')) {
+    if (request.method === 'POST') return postApi(request, url, response);
+    if (request.method === 'GET') return api(url, response);
+    return errorJson(response, 405, 'Method not allowed.');
+  }
   const requested = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
   const file = path.resolve(publicDir, requested);
   if (!file.startsWith(publicDir) || !fs.existsSync(file)) {

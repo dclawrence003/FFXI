@@ -22,11 +22,13 @@ Copy this complete folder into `Windower\addons\LootAdvisor`, then load it:
 //la pool
 //la item <exact English item name>
 //la reload
+//la telemetry
 ```
 
 - `pool` reprints recommendations for the current treasure pool.
 - `item` requests one exact Windower resource name.
 - `reload` reloads InventoryCore's generated owned-item cache.
+- `telemetry` forces a character, key-item, currency, and gil refresh.
 
 ## Recommendation behavior
 
@@ -54,3 +56,22 @@ part of the InventoryCore prototype. It consumes Windower item resources,
 FindAll-derived ownership data, and InventoryCore recommendations; it does not
 bundle FindAll, BG Wiki, FFXIAH, or LandSandBoat code or data. See the
 repository's `THIRD_PARTY_NOTICES.md` for complete dependency credits.
+
+## InventoryCore telemetry
+
+
+When InventoryCore is running locally, LootAdvisor also reports:
+
+- current gil;
+- all owned key items;
+- all numeric Currencies and Currencies 2 values;
+- confirmed Temenos and Apollyon chest openings.
+
+Snapshots are sent once per minute and after login or zoning. Currency packets
+are requested every five minutes. Data is posted only to
+`http://127.0.0.1:8787`; no remote telemetry service is used.
+
+Limbus tracking needs no manual sector selection. The addon derives the sector
+from Windower's temporary floor-data item IDs, detects interaction with the
+final Treasure Chest, and records only a confirmed 3,000- or 5,000-unit
+increase. Load LootAdvisor on every character whose history should be tracked.

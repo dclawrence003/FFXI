@@ -34,7 +34,7 @@ limitations before use.
 | [PartyStart](addons/PartyStart/) | Windower addon | Discovers current party jobs and configures non-combat support profiles from one command | Six-character prototype |
 | [PartyCombat](addons/PartyCombat/) | Windower addon | Gives selected followers action-driven targeting, distance-limited pursuit, and explicit combat authorization | Tackleberry prototype |
 | [FFXI Core Manager](tools/FFXI-Core-Manager/) | Windows utility + Windower addon | Assigns characters to logical processors and restores multimonitor window layouts | Personal-system prototype |
-| [InventoryCore + LootAdvisor](tools/InventoryCore/) | Local Node service + Windower addon | Indexes FindAll inventory and provides read-only keep/AH/vendor/upgrade guidance | Valefor prototype |
+| [InventoryCore + LootAdvisor](tools/InventoryCore/) | Local Node service + Windower addon | FindAll inventory guidance, roster gil/key-item/currency views, and automatic Limbus chest rotation tracking | Valefor prototype |
 | [HealBot fixes](patches/HealBot/) | Patch | Guards an invalid queued action and cleans up orphaned text boxes | Applies to Lorand's HealBot |
 | [MultiCtrl Warp II queue](patches/MultiCtrl/) | Patch | Replaces fire-and-forget `d2` behavior with confirmation, retries, status, and cancellation | Based on a customized MultiCtrl tree |
 

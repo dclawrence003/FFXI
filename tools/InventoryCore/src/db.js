@@ -4,9 +4,7 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { runtimeDir, ensureRuntime } = require('./common');
 
-function openDb() {
-  ensureRuntime();
-  const db = new DatabaseSync(path.join(runtimeDir, 'inventory.db'));
+function initializeDb(db) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS items (
@@ -31,6 +29,29 @@ function openDb() {
     CREATE TABLE IF NOT EXISTS source_status (
       source TEXT PRIMARY KEY, ok INTEGER NOT NULL, updated_at TEXT, details TEXT
     );
+    CREATE TABLE IF NOT EXISTS character_state (
+      character TEXT PRIMARY KEY, gil INTEGER, observed_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS key_items (
+      character TEXT NOT NULL, item_id INTEGER NOT NULL, name TEXT NOT NULL,
+      observed_at TEXT NOT NULL, PRIMARY KEY(character,item_id)
+    );
+    CREATE TABLE IF NOT EXISTS currencies (
+      character TEXT NOT NULL, page INTEGER NOT NULL, name TEXT NOT NULL,
+      amount INTEGER NOT NULL, observed_at TEXT NOT NULL,
+      PRIMARY KEY(character,page,name)
+    );
+    CREATE TABLE IF NOT EXISTS limbus_chest_targets (
+      area TEXT NOT NULL, target_id INTEGER NOT NULL, chest TEXT NOT NULL,
+      learned_at TEXT NOT NULL, PRIMARY KEY(area,target_id)
+    );
+    CREATE TABLE IF NOT EXISTS limbus_chest_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, character TEXT NOT NULL,
+      area TEXT NOT NULL, chest TEXT, target_id INTEGER NOT NULL,
+      units INTEGER NOT NULL, opened_at TEXT NOT NULL, signature TEXT NOT NULL UNIQUE
+    );
+    CREATE INDEX IF NOT EXISTS idx_limbus_character_area_time
+      ON limbus_chest_events(character,area,opened_at DESC);
   `);
   const itemColumns = new Set(db.prepare('PRAGMA table_info(items)').all().map((column) => column.name));
   if (!itemColumns.has('ah_category')) db.exec('ALTER TABLE items ADD COLUMN ah_category TEXT');
@@ -47,4 +68,9 @@ function openDb() {
   return db;
 }
 
-module.exports = { openDb };
+function openDb() {
+  ensureRuntime();
+  return initializeDb(new DatabaseSync(path.join(runtimeDir, 'inventory.db')));
+}
+
+module.exports = { openDb, initializeDb };

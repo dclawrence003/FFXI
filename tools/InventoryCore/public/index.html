@@ -16,6 +16,20 @@
     <button id="refresh">Reload view</button>
   </header>
   <main>
+    <nav class="tabbar" aria-label="Inventory Command views">
+      <button class="tab active" data-tab="inventory-tab">Inventory</button>
+      <button class="tab" data-tab="key-items-tab">Key Items</button>
+      <button class="tab" data-tab="currencies-tab">Currencies</button>
+    </nav>
+    <section id="inventory-tab" class="tab-panel active">
+      <section class="dashboard">
+        <div class="section-heading">
+          <div><p class="eyebrow">PARTY DASHBOARD</p><h2>At a glance</h2></div>
+          <p id="dashboard-time" class="muted"></p>
+        </div>
+        <div id="gil-board" class="gil-board"></div>
+        <div id="limbus-board" class="limbus-board"></div>
+      </section>
     <section id="summary" class="summary"></section>
     <section class="panel controls">
       <label>Search <input id="search" placeholder="Item name"></label>
@@ -36,6 +50,19 @@
     <section class="panel status-panel">
       <div><p class="eyebrow">DATA HEALTH</p><h2>Sources</h2></div>
       <div id="status" class="status"></div>
+    </section>
+    </section>
+    <section id="key-items-tab" class="tab-panel" hidden>
+      <section class="panel list-tools">
+        <label>Search key items <input id="key-search" placeholder="Key item name"></label>
+      </section>
+      <section id="key-items-board" class="matrix-board" aria-live="polite"></section>
+    </section>
+    <section id="currencies-tab" class="tab-panel" hidden>
+      <section class="panel list-tools">
+        <label>Search currencies <input id="currency-search" placeholder="Currency name"></label>
+      </section>
+      <section id="currencies-board" class="matrix-board" aria-live="polite"></section>
     </section>
   </main>
   <script src="/app.js"></script>

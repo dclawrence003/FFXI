@@ -1,9 +1,11 @@
 _addon.name = 'LootAdvisor'
 _addon.author = 'Dolomedes + Codex'
-_addon.version = '0.1.1'
+_addon.version = '0.2.0'
 _addon.commands = {'la', 'lootadvisor'}
 
 require('tables')
+local packets = require('packets')
+local ltn12 = require('ltn12')
 local res = require('resources')
 local http = require('socket.http')
 local json = require('json')
@@ -11,6 +13,15 @@ local cache = {items = {}, generated_at = 'not loaded'}
 local seen = {}
 local last_scan = 0
 http.TIMEOUT = 2
+local api_root = 'http://127.0.0.1:8787'
+local currencies = {}
+local previous_units = {}
+local pending_chest = nil
+local current_sector = {Temenos = nil, Apollyon = nil}
+local last_telemetry = 0
+local last_currency_request = 0
+local last_temp_scan = 0
+local telemetry_warning_at = 0
 
 local colors = {KEEP=158, UPGRADE=159, AH=205, HOLD=200, REVIEW=207, VENDOR=057, DROP=167}
 
@@ -141,20 +152,256 @@ local function scan_pool(force)
     end
 end
 
-windower.register_event('load', load_cache)
+local function json_escape(value)
+    return tostring(value):gsub('[%z\1-\31\\"]', function(character)
+        local replacements = {['"'] = '\\"', ['\\'] = '\\\\', ['\b'] = '\\b',
+            ['\f'] = '\\f', ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t'}
+        return replacements[character] or ('\\u%04x'):format(character:byte())
+    end)
+end
+
+local function json_encode(value)
+    local kind = type(value)
+    if kind == 'nil' then return 'null' end
+    if kind == 'boolean' then return value and 'true' or 'false' end
+    if kind == 'number' then return tostring(value) end
+    if kind == 'string' then return '"' .. json_escape(value) .. '"' end
+    if kind ~= 'table' then return 'null' end
+
+    local is_array, maximum = true, 0
+    for key in pairs(value) do
+        if type(key) ~= 'number' or key < 1 or key % 1 ~= 0 then
+            is_array = false
+            break
+        end
+        maximum = math.max(maximum, key)
+    end
+    local output = {}
+    if is_array then
+        for index = 1, maximum do output[#output + 1] = json_encode(value[index]) end
+        return '[' .. table.concat(output, ',') .. ']'
+    end
+    for key, item in pairs(value) do
+        output[#output + 1] = '"' .. json_escape(key) .. '":' .. json_encode(item)
+    end
+    table.sort(output)
+    return '{' .. table.concat(output, ',') .. '}'
+end
+
+local function post_json(path, payload)
+    local body = json_encode(payload)
+    local response = {}
+    local ok, request_ok, code = pcall(http.request, {
+        url = api_root .. path,
+        method = 'POST',
+        headers = {
+            ['Content-Type'] = 'application/json',
+            ['Content-Length'] = tostring(#body),
+        },
+        source = ltn12.source.string(body),
+        sink = ltn12.sink.table(response),
+    })
+    if not ok or not request_ok or tonumber(code) ~= 200 then
+        local now = os.time()
+        if now - telemetry_warning_at >= 60 then
+            telemetry_warning_at = now
+            windower.add_to_chat(123, '[LA] InventoryCore telemetry is unavailable; retrying silently.')
+        end
+        return false
+    end
+    return true
+end
+
+local function player_name()
+    local player = windower.ffxi.get_player()
+    return player and player.name or nil
+end
+
+local function collect_key_items()
+    local output, owned = {}, windower.ffxi.get_key_items() or {}
+    local seen_ids = {}
+    for key, value in pairs(owned) do
+        local id = type(value) == 'number' and value
+            or (value and type(key) == 'number' and key or nil)
+        if id and not seen_ids[id] then
+            local item = res.key_items[id]
+            if item and item.en then
+                output[#output + 1] = {id = id, name = item.en}
+                seen_ids[id] = true
+            end
+        end
+    end
+    table.sort(output, function(left, right) return left.name < right.name end)
+    return output
+end
+
+local function send_telemetry()
+    local name = player_name()
+    if not name then return end
+    local items = windower.ffxi.get_items() or {}
+    post_json('/api/telemetry', {
+        character = name,
+        gil = items.gil or 0,
+        key_items = collect_key_items(),
+        currencies = currencies,
+    })
+    last_telemetry = os.time()
+end
+
+local function request_currencies()
+    pcall(function() packets.inject(packets.new('outgoing', 0x10F, {})) end)
+    pcall(function() packets.inject(packets.new('outgoing', 0x115, {})) end)
+    last_currency_request = os.time()
+end
+
+local function filtered_currency_packet(packet)
+    local output = {}
+    for name, amount in pairs(packet or {}) do
+        if type(name) == 'string' and name:sub(1, 1) ~= '_' and type(amount) == 'number' then
+            output[name] = amount
+        end
+    end
+    return output
+end
+
+local function sector_for_item(item_id)
+    if item_id >= 9956 and item_id <= 9962 then return 'Temenos', 'North' end
+    if item_id >= 9963 and item_id <= 9969 then return 'Temenos', 'West' end
+    if item_id >= 9970 and item_id <= 9976 then return 'Temenos', 'East' end
+    if item_id >= 9977 and item_id <= 9980 then return 'Temenos', 'Central' end
+    if item_id >= 9981 and item_id <= 9985 then return 'Apollyon', 'NW' end
+    if item_id >= 9986 and item_id <= 9989 then return 'Apollyon', 'SW' end
+    if item_id >= 9990 and item_id <= 9994 then return 'Apollyon', 'NE' end
+    if item_id >= 9995 and item_id <= 9998 then return 'Apollyon', 'SE' end
+    return nil, nil
+end
+
+local function scan_limbus_data()
+    local temporary = windower.ffxi.get_items('temporary') or {}
+    for _, slot in pairs(temporary) do
+        if type(slot) == 'table' and tonumber(slot.id or slot.item_id) then
+            local area, sector = sector_for_item(tonumber(slot.id or slot.item_id))
+            if area then current_sector[area] = sector end
+        end
+    end
+end
+
+local function current_area()
+    local player = windower.ffxi.get_player()
+    local zone = player and res.zones[player.zone]
+    local name = zone and zone.en or ''
+    if name:lower():find('temenos', 1, true) then return 'Temenos' end
+    if name:lower():find('apollyon', 1, true) then return 'Apollyon' end
+    return nil
+end
+
+local function begin_chest(target_id)
+    local area = current_area()
+    if not area then return end
+    local mob = windower.ffxi.get_mob_by_id(target_id)
+    if not mob or not mob.name or mob.name:lower() ~= 'treasure chest' then return end
+    pending_chest = {
+        area = area,
+        chest = current_sector[area],
+        target_id = target_id,
+        started = os.time(),
+    }
+    coroutine.schedule(request_currencies, 0.5)
+    coroutine.schedule(request_currencies, 2.0)
+end
+
+local function finish_chest_if_ready(packet)
+    local name = player_name()
+    if not pending_chest or not name or os.time() - pending_chest.started > 15 then
+        pending_chest = nil
+        return
+    end
+    local field = pending_chest.area .. ' Units'
+    local before = previous_units[field]
+    local after = packet[field]
+    local gained = before and after and (after - before) or nil
+    if gained == 3000 or gained == 5000 then
+        post_json('/api/limbus/chest', {
+            character = name,
+            area = pending_chest.area,
+            chest = pending_chest.chest,
+            target_id = pending_chest.target_id,
+            units = gained,
+            signature = table.concat({
+                name, pending_chest.area, pending_chest.target_id,
+                before, after, pending_chest.started
+            }, ':'),
+        })
+        pending_chest = nil
+    end
+end
+windower.register_event('load', function()
+    load_cache()
+    scan_limbus_data()
+    send_telemetry()
+    coroutine.schedule(request_currencies, 1)
+end)
 windower.register_event('prerender', function()
     local now = os.clock()
     if now - last_scan >= 1 then
         last_scan = now
         scan_pool(false)
     end
+    local wall_time = os.time()
+    if wall_time - last_temp_scan >= 1 then
+        last_temp_scan = wall_time
+        scan_limbus_data()
+    end
+    if wall_time - last_telemetry >= 60 then
+        send_telemetry()
+    end
+    if wall_time - last_currency_request >= 300 then
+        request_currencies()
+    end
 end)
+windower.register_event('outgoing chunk', function(id, original)
+    if id ~= 0x01A then return end
+    local ok, packet = pcall(packets.parse, 'outgoing', original)
+    if ok and packet and packet.Target then begin_chest(packet.Target) end
+end)
+
+windower.register_event('incoming chunk', function(id, original, modified)
+    if id ~= 0x113 and id ~= 0x118 then return end
+    local ok, packet = pcall(packets.parse, 'incoming', modified or original)
+    if not ok or not packet then return end
+    if id == 0x113 then
+        currencies['1'] = filtered_currency_packet(packet)
+    else
+        finish_chest_if_ready(packet)
+        currencies['2'] = filtered_currency_packet(packet)
+        previous_units['Temenos Units'] = packet['Temenos Units']
+        previous_units['Apollyon Units'] = packet['Apollyon Units']
+    end
+    coroutine.schedule(send_telemetry, 0.1)
+end)
+
+local function refresh_character_telemetry()
+    pending_chest = nil
+    current_sector = {Temenos = nil, Apollyon = nil}
+    scan_limbus_data()
+    coroutine.schedule(request_currencies, 1)
+    coroutine.schedule(send_telemetry, 2)
+end
+
+windower.register_event('login', refresh_character_telemetry)
+windower.register_event('zone change', refresh_character_telemetry)
+windower.register_event('logout', function() pending_chest = nil end)
 
 windower.register_event('addon command', function(command, ...)
     command = command and command:lower() or 'help'
     if command == 'pool' then
         scan_pool(true)
     elseif command == 'reload' or command == 'refresh' then
+    elseif command == 'telemetry' then
+        scan_limbus_data()
+        request_currencies()
+        send_telemetry()
+        windower.add_to_chat(158, '[LA] Character telemetry sent to InventoryCore.')
         load_cache()
     elseif command == 'item' then
         local query = table.concat({...}, ' '):lower()
@@ -163,6 +410,6 @@ windower.register_event('addon command', function(command, ...)
         end
         windower.add_to_chat(167, 'LootAdvisor: item not found: ' .. query)
     else
-        windower.add_to_chat(207, 'LootAdvisor commands: //la pool | //la item <name> | //la reload')
+        windower.add_to_chat(207, 'LootAdvisor: //la pool | //la item <name> | //la reload | //la telemetry')
     end
 end)

@@ -109,6 +109,94 @@ async function loadStatus() {
   $('#status').innerHTML = rows.map((row) => `<span class="source ${row.ok ? '' : 'bad'}">${row.ok ? 'â—' : 'â—‹'} ${escapeHtml(row.source)}</span>`).join('');
 }
 
+let keyItemData = { characters, rows: [] };
+let currencyData = { characters, rows: [] };
+
+function formatNumber(value) {
+  return value === null || value === undefined ? '--' : Number(value).toLocaleString();
+}
+
+function shortTime(value) {
+  if (!value) return 'Waiting for telemetry';
+  return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function renderRotation(area, rotation) {
+  const next = rotation.next || `Learning ${rotation.learned}/${rotation.total}`;
+  const bonus = rotation.last_bonus?.chest || '--';
+  const recent = rotation.recent.length
+    ? rotation.recent.map((event) => `<span class="history-chip ${event.units === 5000 ? 'bonus' : ''}" title="${escapeHtml(shortTime(event.opened_at))}">${escapeHtml(event.chest || 'Learning')} <b>${event.units === 5000 ? '&#9733; 5000' : '3000'}</b></span>`).join('')
+    : '<span class="muted">No chests recorded yet.</span>';
+  return `<div class="rotation">
+    <div class="rotation-name">${escapeHtml(area)}</div>
+    <div class="rotation-fact"><span>Next</span><strong>${escapeHtml(next)}</strong></div>
+    <div class="rotation-fact"><span>Last bonus</span><strong class="bonus-text">${escapeHtml(bonus)}</strong></div>
+    <div class="history">${recent}</div>
+  </div>`;
+}
+
+async function loadDashboard() {
+  const data = await fetch('/api/dashboard').then((response) => response.json());
+  $('#dashboard-time').textContent = `Updated ${shortTime(data.generated_at)}`;
+  $('#gil-board').innerHTML = data.characters.map((row) => `<div class="gil-card">
+    <span>${escapeHtml(row.character)}</span>
+    <strong>${formatNumber(row.gil)}</strong>
+    <small>gil &middot; ${escapeHtml(shortTime(row.observed_at))}</small>
+  </div>`).join('');
+  $('#limbus-board').innerHTML = data.characters.map((row) => `<article class="limbus-card">
+    <header><strong>${escapeHtml(row.character)}</strong></header>
+    ${renderRotation('Temenos', row.areas.Temenos)}
+    ${renderRotation('Apollyon', row.areas.Apollyon)}
+  </article>`).join('');
+}
+
+function pivotRows(data, value) {
+  const roster = data.characters?.length ? data.characters : characters;
+  const grouped = new Map();
+  for (const row of data.rows || []) {
+    const key = value === 'amount' ? `${row.page}\0${row.name}` : `${row.id}\0${row.name}`;
+    if (!grouped.has(key)) grouped.set(key, { name: row.name, page: row.page, values: new Map() });
+    grouped.get(key).values.set(row.character, value === 'amount' ? row.amount : true);
+  }
+  return { roster, groups: [...grouped.values()] };
+}
+
+function renderMatrix(target, data, search, value) {
+  const { roster, groups } = pivotRows(data, value);
+  const filtered = groups.filter((row) => !search || row.name.toLowerCase().includes(search));
+  const headings = roster.map((name) => `<span title="${escapeHtml(name)}">${escapeHtml(name.slice(0, 5))}</span>`).join('');
+  const rows = filtered.map((row) => `<div class="matrix-row">
+    <span class="matrix-name">${row.page ? `<small>C${row.page}</small> ` : ''}${escapeHtml(row.name)}</span>
+    ${roster.map((name) => {
+      const found = row.values.get(name);
+      if (value === 'amount') return `<span class="matrix-value ${found ? 'owned' : ''}">${formatNumber(found ?? 0)}</span>`;
+      return `<span class="matrix-value ${found ? 'owned' : ''}">${found ? '&#10003;' : '&middot;'}</span>`;
+    }).join('')}
+  </div>`).join('');
+  $(target).innerHTML = `<section class="matrix-card">
+    <div class="matrix-head"><span>Item</span>${headings}</div>
+    ${rows || '<p class="empty">No matching entries.</p>'}
+  </section>`;
+}
+
+async function loadKeyItems() {
+  keyItemData = await fetch('/api/key-items').then((response) => response.json());
+  renderMatrix('#key-items-board', keyItemData, $('#key-search').value.trim().toLowerCase(), 'owned');
+}
+
+async function loadCurrencies() {
+  currencyData = await fetch('/api/currencies').then((response) => response.json());
+  renderMatrix('#currencies-board', currencyData, $('#currency-search').value.trim().toLowerCase(), 'amount');
+}
+
+function activateTab(id) {
+  document.querySelectorAll('.tab-panel').forEach((panel) => {
+    panel.hidden = panel.id !== id;
+    panel.classList.toggle('active', panel.id === id);
+  });
+  document.querySelectorAll('.tab').forEach((button) => button.classList.toggle('active', button.dataset.tab === id));
+}
+
 let timer;
 function debounceRender() {
   clearTimeout(timer);
@@ -118,5 +206,14 @@ $('#search').addEventListener('input', debounceRender);
 $('#character').addEventListener('change', renderBags);
 $('#action').addEventListener('change', renderBags);
 document.querySelectorAll('input[name="status-mode"]').forEach((radio) => radio.addEventListener('change', renderBags));
-$('#refresh').addEventListener('click', () => Promise.all([loadSummary(), loadItems(), loadStatus()]));
-Promise.all([loadSummary(), loadItems(), loadStatus()]);
+$('#key-search').addEventListener('input', () => renderMatrix('#key-items-board', keyItemData, $('#key-search').value.trim().toLowerCase(), 'owned'));
+$('#currency-search').addEventListener('input', () => renderMatrix('#currencies-board', currencyData, $('#currency-search').value.trim().toLowerCase(), 'amount'));
+document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
+const loadAll = () => Promise.all([loadDashboard(), loadSummary(), loadItems(), loadStatus(), loadKeyItems(), loadCurrencies()]);
+$('#refresh').addEventListener('click', loadAll);
+loadAll();
+setInterval(() => {
+  loadDashboard().catch(() => {});
+  loadKeyItems().catch(() => {});
+  loadCurrencies().catch(() => {});
+}, 3000);

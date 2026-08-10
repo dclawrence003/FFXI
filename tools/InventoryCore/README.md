@@ -74,6 +74,7 @@ LootAdvisor commands:
 //la pool
 //la item <exact English item name>
 //la reload
+//la telemetry
 ```
 
 Owned items use the generated recommendation cache. Unowned items query the
@@ -145,6 +146,39 @@ npm start
 - Wiki classification depends on the layout and freshness of the local mirror.
 - AH recommendations are estimates from public history, not guarantees.
 - There is no authentication because the service is localhost-only.
+
+## Dashboard and character telemetry
+
+The browser has three views:
+
+- **Inventory** starts with current gil and two Limbus rotation panels, then
+  shows the existing dense bag inventory.
+- **Key Items** is a searchable roster matrix populated from each active
+  Windower client.
+- **Currencies** is a searchable roster matrix for every numeric field in the
+  game's Currencies and Currencies 2 packets, including Nyzul tokens and
+  Temenos/Apollyon units.
+
+LootAdvisor is also the small Windower-to-InventoryCore telemetry bridge. Load
+it on every tracked character. It posts only to the localhost service, sends a
+full character snapshot once per minute, refreshes currency packets every five
+minutes, and refreshes after login or zoning. `//la telemetry` forces an
+immediate snapshot and currency request.
+
+Limbus chest tracking is automatic. LootAdvisor identifies the active sector
+from the area's temporary floor-data item, notices interaction with the final
+Treasure Chest, and confirms the opening from the resulting 3,000- or
+5,000-unit currency increase. InventoryCore retains a continuous per-character
+history rather than resetting it weekly.
+
+Each area displays the five most recent chest openings, marks the last 5,000
+bonus in gold, and lists **Next** as the least recently opened of the four
+sectors. Until all four sectors have been observed, it displays learning
+progress instead. "Next" is a rotation recommendation, not a prediction of the
+next bonus: the game may select the same bonus chest again.
+
+Key items and currencies require LootAdvisor to be loaded on each tracked
+character and InventoryCore to be running locally.
 
 ## Authorship
 
