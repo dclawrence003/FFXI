@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.2'
+_addon.version = '0.2.3'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -201,6 +201,14 @@ local function claim_combat_movement()
     windower.send_command('ffo stop')
     windower.ffxi.run(false)
     running = false
+end
+
+local function face_target(self, target)
+    if not self or not target then return end
+    local dx = target.x - self.x
+    local dy = target.y - self.y
+    if dx * dx + dy * dy <= 0.01 then return end
+    windower.ffxi.turn(-math.atan2(dy, dx))
 end
 
 local function disengage_if_needed()
@@ -439,6 +447,7 @@ windower.register_event('prerender', function()
     end
 
     inject_combat_target(target)
+    face_target(self, target)
 
     if distance > engage_distance then
         local dx = target.x - self.x

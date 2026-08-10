@@ -29,6 +29,9 @@ PartyCombat follows combat actions, not cursor movement:
 - `force` explicitly targets, approaches, and engages Dolomedes' current enemy
   up to the configured 30-yalm safety limit.
 - The attacker stops moving at 2.8 yalms.
+- While it owns a valid combat target, PartyCombat explicitly faces the
+  attacker toward that enemy, including when the attacker begins inside the
+  2.8-yalm movement threshold.
 - A dead, despawned, or invalid target ends the pursuit.
 - Zoning disarms the addon.
 - Only configured attackers respond. Other characters are observers.
@@ -127,6 +130,8 @@ enabled.
 - This is a live-test prototype. Begin on harmless enemies in an open area.
 - Movement is a straight line. It does not path around walls, hazards, or
   additional enemy groups.
+- Facing is maintained only while PartyCombat owns a valid combat target; it
+  does not rotate characters merely because the addon is armed.
 - The automatic leash is measured from the attacker to the enemy, not from the
   leader.
 - Damaging area-of-effect actions select the first valid enemy reported in the

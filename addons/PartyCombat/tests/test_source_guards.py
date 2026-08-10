@@ -60,6 +60,23 @@ def test_fastfollow_is_claimed_only_after_a_target_is_accepted():
     assert "ffo stop" in movement_claim
 
 
+def test_active_attackers_face_their_combat_target():
+    assert "local function face_target(self, target)" in SOURCE
+    assert "windower.ffxi.turn(-math.atan2(dy, dx))" in SOURCE
+
+    movement = SOURCE.split(
+        "windower.register_event('prerender'", 1
+    )[1]
+    movement = movement.split(
+        "windower.register_event('addon command'", 1
+    )[0]
+    assert "inject_combat_target(target)" in movement
+    assert "face_target(self, target)" in movement
+    assert movement.index("face_target(self, target)") < movement.index(
+        "if distance > engage_distance"
+    )
+
+
 def test_no_all_character_attack_command():
     assert "send @all" not in SOURCE
     assert "allattack" not in SOURCE
