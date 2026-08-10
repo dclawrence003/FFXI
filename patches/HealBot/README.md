@@ -6,7 +6,7 @@ Lorand's work; the complete addon is deliberately not redistributed here.
 
 ## Changes
 
-The patch contains six focused corrections:
+The patch contains seven focused corrections:
 
 1. `HealBot_packetHandling.lua` ignores login packets received before
    HealBot's load callback has initialized its Actor and text boxes. This
@@ -24,6 +24,10 @@ The patch contains six focused corrections:
    status until a live buff snapshot confirms that it disappeared. This stops
    Erase/na-spell retry storms caused by an active status being incorrectly
    classified as removable, while allowing it to be reconsidered if it returns.
+7. `HealBot_packetHandling.lua` safely ignores an individual action effect when
+   Windower has not yet resolved its target entity, and uses ID fallbacks in
+   packet-debug output. This prevents nil-target error storms during zoning and
+   entity-table updates without disabling later action processing.
 
 The third and fourth changes address old monitored-character/status boxes
 remaining visible after refreshes or unloads. The fifth and sixth address
@@ -63,6 +67,6 @@ git apply -R C:\path\to\codex-ffxi\patches\HealBot\codex-fixes.patch
 [HealBot is authored by Lorand](https://github.com/lorand-ffxi/HealBot).
 The upstream repository does not advertise a repository-level license through
 GitHub, so this directory contains only a focused patch and does not
-redistribute the complete addon. The six changes in this patch were generated
+redistribute the complete addon. The seven changes in this patch were generated
 by OpenAI Codex while diagnosing runtime spam and orphaned UI boxes. Lorand
 has not endorsed or reviewed the patch.

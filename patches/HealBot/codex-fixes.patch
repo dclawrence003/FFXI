@@ -206,7 +206,50 @@ index f5504e7..872e96b 100644
      if S{0x28,0x29}:contains(id) then   --Action / Action Message
          local monitored_ids = hb.getMonitoredIds()
          local ai = get_action_info(id, data)
-@@ -172,6 +172,7 @@ function registerEffect(ai, tact, actor, target, monitored_ids)
+@@ -59,12 +66,16 @@ function processMessage(ai, monitored_ids)
+     if monitored_ids[ai.actor_id] or monitored_ids[ai.target_id] then
+         if not (messages_blacklist:contains(ai.message_id)) then
+             local target = windower.ffxi.get_mob_by_id(ai.target_id)
++            if target == nil then
++                return
++            end
+             
+             if hb.modes.showPacketInfo then
+                 local actor = windower.ffxi.get_mob_by_id(ai.actor_id)
+                 local msg = res.action_messages[ai.message_id] or {en='???'}
+                 local params = (', '):join(tostring(ai.param_1), tostring(ai.param_2), tostring(ai.param_3))
+-                atcfs('[0x29]Message(%s): %s { %s } %s %s | %s', ai.message_id, actor.name, params, rarr, target.name, msg.en)
++                local actor_name = (actor and actor.name) or tostring(ai.actor_id)
++                atcfs('[0x29]Message(%s): %s { %s } %s %s | %s', ai.message_id, actor_name, params, rarr, target.name, msg.en)
+             end
+             
+             if messages_wearOff:contains(ai.message_id) then
+@@ -113,7 +124,9 @@ function processAction(ai, monitored_ids)
+                 
+                     if hb.modes.showPacketInfo then
+                         local msg = res.action_messages[tact.message_id] or {en='???'}
+-                        atcfs('[0x28]Action(%s): %s { %s } %s %s { %s } | %s', tact.message_id, actor.name, ai.param, rarr, target.name, tact.param, msg.en)
++                        local actor_name = (actor and actor.name) or tostring(ai.actor_id)
++                        local target_name = (target and target.name) or tostring(targ.id)
++                        atcfs('[0x28]Action(%s): %s { %s } %s %s { %s } | %s', tact.message_id, actor_name, ai.param, rarr, target_name, tact.param, msg.en)
+                     end
+                     
+                     registerEffect(ai, tact, actor, target, monitored_ids)
+@@ -133,6 +146,13 @@ end
+     :param set monitored_ids: the IDs of PCs that are being monitored
+ --]]
+ function registerEffect(ai, tact, actor, target, monitored_ids)
++    -- Action packets can briefly arrive before Windower has an entity-table
++    -- entry for their target (commonly while zoning or loading nearby mobs).
++    -- Ignore only that unresolved effect; a later packet will carry fresh state.
++    if target == nil then
++        return
++    end
++
+     local targ_is_enemy = (target.spawn_type == 16)
+     if messages_magicDamage:contains(tact.message_id) then      --ai.param: spell; tact.param: damage
+         local spell = res.spells[ai.param]
+@@ -172,6 +192,7 @@ function registerEffect(ai, tact, actor, target, monitored_ids)
          if (spell ~= nil) then
              if spells_statusRemoval:contains(spell.id) then
                  --The debuff must have worn off or have been removed already
@@ -214,3 +257,12 @@ index f5504e7..872e96b 100644
                  local debuffs = removal_map[spell.en]
                  if (debuffs ~= nil) then
                      for _,debuff in pairs(debuffs) do
+@@ -216,7 +237,7 @@ function registerEffect(ai, tact, actor, target, monitored_ids)
+         end
+     elseif S{655}:contains(tact.message_id) and targ_is_enemy then    --${actor} casts ${spell}.${lb}${target} completely resists the spell.
+         offense.register_immunity(target, res.buffs[tact.param])
+-    elseif messages_paralyzed:contains(tact.message_id) then
++    elseif messages_paralyzed:contains(tact.message_id) and actor ~= nil then
+         buffs.register_debuff(actor, 'paralysis', true)
+     end--/message ID checks
+ end
