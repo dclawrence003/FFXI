@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.5'
+_addon.version = '0.2.6'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -41,6 +41,9 @@ local PREFIX = 'PARTYCOMBAT1'
 local AUTHORITY_INTERVAL = 2
 local ENGAGE_RETRY_INTERVAL = 1.5
 local MOVEMENT_INTERVAL = 0.08
+local POST_ZONE_FOLLOW_DELAY = 3.5
+local POST_ZONE_FOLLOW_ATTEMPTS = 3
+local RECENT_FOLLOW_CLAIM_WINDOW = 60
 
 local defaults = {
     leader = 'Dolomedes',
@@ -107,6 +110,8 @@ local last_ignore_target = nil
 local last_ignore_at = 0
 local fastfollow_claimed = false
 local zone_follow_restore_at = nil
+local zone_follow_restore_remaining = 0
+local last_fastfollow_claim_at = nil
 
 local function chat(color, message)
     windower.add_to_chat(color or 207, '[PartyCombat] '..message)
@@ -204,6 +209,7 @@ local function claim_combat_movement()
         windower.send_command('ffo stop')
         fastfollow_claimed = true
     end
+    last_fastfollow_claim_at = os.clock()
     windower.ffxi.run(false)
     running = false
 end
@@ -310,6 +316,7 @@ local function accept_target(id, mode)
     -- it only when this attacker has accepted a real combat target and
     -- PartyCombat is about to take movement control.
     zone_follow_restore_at = nil
+    zone_follow_restore_remaining = 0
     claim_combat_movement()
     active_target_id = target.id
     active_mode = force and 'force' or 'auto'
@@ -423,6 +430,9 @@ windower.register_event('ipc message', function(message)
     elseif kind == 'target' and authorized then
         accept_target(fields[4], fields[5])
     elseif kind == 'stop' and is_attacker() then
+        zone_follow_restore_at = nil
+        zone_follow_restore_remaining = 0
+        last_fastfollow_claim_at = nil
         stop_local(nil, true)
     end
 end)
@@ -430,13 +440,20 @@ end)
 windower.register_event('prerender', function()
     local now = os.clock()
 
-    -- The immediate ownership handoff can occur while a battlefield exit is
-    -- still rebuilding client state. Reinforce it once after the zone settles.
-    -- A newly accepted combat target cancels this pending recovery.
+    -- Battlefield exits rebuild each local client at different speeds. Retry
+    -- the ownership handoff a few times so one slow client cannot miss the
+    -- only FastFollow restore. A new combat target or explicit stop cancels
+    -- the bounded recovery sequence.
     if zone_follow_restore_at and now >= zone_follow_restore_at then
-        zone_follow_restore_at = nil
         if not active_target_id and valid_name(settings.leader) then
             windower.send_command('ffo follow '..settings.leader)
+        end
+        zone_follow_restore_remaining = zone_follow_restore_remaining - 1
+        if zone_follow_restore_remaining > 0 and not active_target_id then
+            zone_follow_restore_at = now + POST_ZONE_FOLLOW_DELAY
+        else
+            zone_follow_restore_at = nil
+            zone_follow_restore_remaining = 0
         end
     end
 
@@ -519,6 +536,9 @@ windower.register_event('addon command', function(command)
         end
         force_current_target()
     elseif command == 'off' or command == 'stop' then
+        zone_follow_restore_at = nil
+        zone_follow_restore_remaining = 0
+        last_fastfollow_claim_at = nil
         if not is_leader() then
             stop_local('Local attacker stopped.', true)
             return
@@ -533,7 +553,10 @@ windower.register_event('addon command', function(command)
 end)
 
 windower.register_event('zone change', function()
-    local restore_after_zone = fastfollow_claimed
+    local now = os.clock()
+    local recently_claimed = last_fastfollow_claim_at
+        and now - last_fastfollow_claim_at <= RECENT_FOLLOW_CLAIM_WINDOW
+    local restore_after_zone = fastfollow_claimed or recently_claimed
     if armed and is_leader() then
         broadcast_authority(false)
     end
@@ -541,7 +564,11 @@ windower.register_event('zone change', function()
     authorized = false
     stop_local(nil, true)
     if restore_after_zone then
-        zone_follow_restore_at = os.clock() + 3.5
+        zone_follow_restore_remaining = POST_ZONE_FOLLOW_ATTEMPTS
+        zone_follow_restore_at = now + POST_ZONE_FOLLOW_DELAY
+    else
+        zone_follow_restore_at = nil
+        zone_follow_restore_remaining = 0
     end
 end)
 

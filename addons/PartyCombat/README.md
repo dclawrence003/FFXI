@@ -34,10 +34,13 @@ PartyCombat follows combat actions, not cursor movement:
   2.8-yalm movement threshold.
 - A dead, despawned, or invalid target ends the pursuit.
 - Ending pursuit hands movement back to FastFollow for followers whose follow
-  state PartyCombat previously claimed. This includes battlefield exits and
-  other zone transitions. Battlefield exits receive one additional guarded
-  follow command after 3.5 seconds, once client state has settled; accepting a
-  new combat target cancels that delayed recovery.
+  state PartyCombat previously claimed. After a zone transition, PartyCombat
+  reinforces that handoff three times at 3.5-second intervals. This covers a
+  client that finishes rebuilding later than the others after a battlefield
+  exit. A claim made during the preceding 60 seconds remains eligible, so
+  killing the final target immediately before zoning cannot erase the recovery
+  signal. Accepting a new combat target or explicitly stopping PartyCombat
+  cancels every pending recovery attempt.
 - Zoning disarms the addon.
 - Only configured attackers respond. Other characters are observers.
 
