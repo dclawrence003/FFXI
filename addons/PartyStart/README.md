@@ -104,7 +104,9 @@ uses the physical buffs below but omits routine RDM and BRD enemy debuffs to
 preserve Smalls' MP and reduce cast downtime on short-lived Apex targets.
 It also Entrusts Indi-Regen to the PLD instead of duplicating RDM Refresh.
 If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
-only while at or above 70% HP; HealBot then handles the resulting HP deficit.
+only while at or above 70% HP. His GearSwap controller then casts Cure on
+himself until he reaches 90% HP; this dedicated recovery remains active even
+though Smalls' general HealBot curing is disabled.
 In this profile Tackleberry's PLD HealBot owns all routine Cure casting while
 Majesty is maintained. Smalls keeps HealBot status removal active but has Cure
 disabled, preventing duplicate Cure decisions between two HealBot instances.

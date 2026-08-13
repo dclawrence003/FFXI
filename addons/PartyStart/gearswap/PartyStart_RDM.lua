@@ -72,6 +72,7 @@ local pstart_rdm = {
     buff_timers = {},
     debuff_timers = {},
     pending = nil,
+    convert_recovery_until = 0,
 }
 
 local function pstart_rdm_valid_name(name)
@@ -185,8 +186,39 @@ local function pstart_rdm_convert()
     local recasts = windower.ffxi.get_ability_recasts() or {}
     if (recasts[49] or 999) < 1 then
         windower.chat.input('/ja "Convert" <me>')
+        pstart_rdm.convert_recovery_until = os.clock() + 20
         tickdelay = os.clock() + 2
         add_to_chat(122, 'PartyStart RDM: low MP; using guarded Convert.')
+        return true
+    end
+    return false
+end
+
+local function pstart_rdm_convert_recovery()
+    if pstart_rdm.profile ~= 'master'
+        or os.clock() > (pstart_rdm.convert_recovery_until or 0)
+    then
+        return false
+    end
+    if player.hpp >= 90 then
+        pstart_rdm.convert_recovery_until = 0
+        return false
+    end
+
+    local choices
+    if player.hpp < 45 then
+        choices = {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
+    elseif player.hpp < 70 then
+        choices = {'Cure III', 'Cure IV', 'Cure II', 'Cure'}
+    else
+        choices = {'Cure II', 'Cure III', 'Cure IV', 'Cure'}
+    end
+    local spell = pstart_rdm_spell(choices)
+    if pstart_rdm_ready(spell) then
+        windower.chat.input('/ma "'..spell.en..'" <me>')
+        tickdelay = os.clock() + 3
+        add_to_chat(122,
+            'PartyStart RDM: healing self after Convert with '..spell.en..'.')
         return true
     end
     return false
@@ -370,6 +402,7 @@ local function pstart_rdm_action()
         return false
     end
     if pstart_rdm_cast_composure() then return true end
+    if pstart_rdm_convert_recovery() then return true end
     if pstart_rdm_convert() then return true end
     if pstart_rdm_cast_party_buffs() then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
@@ -407,6 +440,7 @@ function user_job_self_command(commandArgs, eventArgs)
     elseif requested == 'off' then
         pstart_rdm.active = false
         pstart_rdm.pending = nil
+        pstart_rdm.convert_recovery_until = 0
         state.AutoBuffMode:set('Off')
         add_to_chat(122, 'PartyStart RDM buff and debuff maintenance is Off.')
         return
@@ -422,6 +456,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.refresh = pstart_rdm_names(commandArgs[5])
         pstart_rdm.phalanx = pstart_rdm_names(commandArgs[6])
         pstart_rdm.pending = nil
+        pstart_rdm.convert_recovery_until = 0
         state.AutoBuffMode:set('Off')
         tickdelay = 0
         add_to_chat(122, ('PartyStart RDM: %s / leader %s / GearSwap owns magic.')
