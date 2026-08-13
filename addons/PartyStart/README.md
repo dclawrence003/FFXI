@@ -143,7 +143,7 @@ If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
 only while at or above 70% HP. His GearSwap controller then casts Cure on
 himself until he reaches 90% HP. Tackleberry begins routine healing below 82%
 at healthy MP, below 72% while conserving, and below 65% at low MP. The
-incidental AoE trigger now requires three members below 80% and is disabled
+incidental AoE trigger now requires three members below 90% and is disabled
 below 50% MP. Cure cadence expands from three to five to eight seconds as MP
 falls (measured from one cure start to the next); emergencies below 55% bypass
 the routine reserve. When Chivalry is
