@@ -93,6 +93,9 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("gs c pstartpld master", master_pld)
         self.assertIn("PSTART_PLD_ROUTINE_HPP = 82", PLD)
         self.assertIn("PSTART_PLD_EMERGENCY_HPP = 55", PLD)
+        self.assertIn("PSTART_PLD_CONSERVE_ROUTINE_HPP = 72", PLD)
+        self.assertIn("PSTART_PLD_LOW_MP_ROUTINE_HPP = 65", PLD)
+        self.assertIn("PSTART_PLD_CLUSTER_COUNT = 3", PLD)
         self.assertIn("pstart_pld_action()", PLD)
 
     def test_pld_healing_precedes_native_tank_tick(self):
@@ -103,7 +106,26 @@ class PartyStartSourceGuards(unittest.TestCase):
         native = hook.index("pstart_pld_original_user_job_tick()")
         self.assertLess(heal, native)
         self.assertIn("PSTART_PLD_CHIVALRY_TP = 1000", PLD)
+        self.assertIn("PSTART_PLD_CHIVALRY_HPP = 45", PLD)
         self.assertIn("reserving 1000 TP for Chivalry", PLD)
+
+    def test_pld_mp_policy_throttles_without_delaying_emergencies(self):
+        self.assertIn("PSTART_PLD_CURE_INTERVAL_HIGH = 3", PLD)
+        self.assertIn("PSTART_PLD_CURE_INTERVAL_MID = 5", PLD)
+        self.assertIn("PSTART_PLD_CURE_INTERVAL_LOW = 8", PLD)
+        action = PLD.split("local function pstart_pld_action()", 1)[1]
+        action = action.split("local function pstart_pld_status()", 1)[0]
+        emergency = action.index(
+            "local emergency = lowest.hpp < PSTART_PLD_EMERGENCY_HPP"
+        )
+        reserve = action.index(
+            "player.mpp < PSTART_PLD_ROUTINE_MP_FLOOR and not emergency"
+        )
+        self.assertLess(emergency, reserve)
+        self.assertIn(
+            "not emergency and player.mpp < PSTART_PLD_CHIVALRY_HPP",
+            action,
+        )
 
     def test_dnc_never_depends_on_unlearned_merit_actions(self):
         apply_dnc = ADDON.split(
@@ -137,6 +159,19 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("Carnage Elegy", master)
         self.assertIn("Dia III", master)
         self.assertIn("geo = {indi='Fury', geo='Frailty'", master)
+        self.assertIn("Mage's Ballad III", master)
+        self.assertIn("entrust='Refresh'", master)
+
+    def test_rdm_refreshes_tanks_before_other_mp_jobs(self):
+        self.assertIn("pstart_rdm_refresh_priority", RDM)
+        apply_rdm = ADDON.split("local function apply_rdm", 1)[1]
+        apply_rdm = apply_rdm.split("local function apply_brd", 1)[0]
+        self.assertIn("job == 'PLD' or job == 'RUN'", apply_rdm)
+        self.assertLess(
+            apply_rdm.index("ipairs(refresh_tanks)"),
+            apply_rdm.index("ipairs(refresh_others)"),
+        )
+        self.assertIn("table.insert(refresh_targets, 1, name)", apply_rdm)
 
     def test_geo_lean_mode_preserves_colure_automation(self):
         self.assertIn("buff_spell_lists.Auto = {}", GEO)

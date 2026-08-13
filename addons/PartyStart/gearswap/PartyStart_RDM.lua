@@ -418,7 +418,7 @@ local function pstart_rdm_emergency_heal()
     return false
 end
 
-local function pstart_rdm_self_first(names)
+local function pstart_rdm_refresh_priority(names)
     local ordered = {}
     for _, name in ipairs(names or {}) do
         if name:lower() == player.name:lower() then
@@ -447,7 +447,7 @@ end
 local function pstart_rdm_cast_party_buffs()
     -- Refresh the RDM first so offensive work cannot consume the reserve
     -- before MP recovery is established.
-    local refresh = pstart_rdm_self_first(pstart_rdm.refresh)
+    local refresh = pstart_rdm_refresh_priority(pstart_rdm.refresh)
     local defense = pstart_rdm_union_names(
         pstart_rdm.haste, pstart_rdm.refresh, pstart_rdm.phalanx)
     for _, name in ipairs(refresh) do

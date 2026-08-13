@@ -12,10 +12,10 @@
 
 local pstart_brd_profiles = {
     master = {
-        song_mode = 'Melee',
+        song_mode = 'Sustain',
         songs = {
             {spell='Victory March', buff='march'},
-            {spell='Valor Minuet V', buff='minuet'},
+            {spell="Mage's Ballad III", buff='ballad'},
             {spell='Blade Madrigal', buff='madrigal'},
         },
         debuffs = {

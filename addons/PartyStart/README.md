@@ -29,7 +29,7 @@ PartyStart establishes clear ownership:
   moves with Reverse Flourish, and supplies a TP-funded emergency Waltz path.
   Saber Dance stays off because it disables Waltzes.
 - The character's native BRD GearSwap controller is the sole owner of party
-  songs. PartyStart selects its Melee, Tank, or Mage preset and separately
+  songs. PartyStart selects its Melee, Sustain, Tank, or Mage preset and separately
   maintains only hostile songs.
 - GEO supplies the selected Indi/Geo bubbles and Entrust effect. In `master`,
   its redundant native Haste/Refresh/Aurorastorm/Reraise loop is suppressed
@@ -129,8 +129,8 @@ during that window. PartyStart enables it only when a profile is applied, and
 currently tuned for Apex Efts: their AoE damage and buff dispel favor clustered
 Majesty curing plus continuously maintained, non-redundant support.
 
-The active stack is Chaos/Samurai Roll, Victory March/Valor Minuet V/Blade
-Madrigal, Indi-Fury/Geo-Frailty, Entrusted Indi-Regen on PLD, Haste II,
+The active stack is Chaos/Samurai Roll, Victory March/Mage's Ballad III/Blade
+Madrigal, Indi-Fury/Geo-Frailty, Entrusted Indi-Refresh on PLD, Haste II,
 Refresh III, party Shell, Phalanx II on PLD, Haste Samba, Box Step, Dia III
 (with learned fallback), and Carnage Elegy (with learned fallback). Haste II
 plus Victory March reaches the magic-haste cap; Haste Samba is separate
@@ -142,11 +142,15 @@ and the richer profiles retain the omitted RDM work.
 If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
 only while at or above 70% HP. His GearSwap controller then casts Cure on
 himself until he reaches 90% HP. Tackleberry begins routine healing below 82%
-or when at least two in-range members are below 90%, prefers Cure III for
-ordinary AoE attrition, escalates to Cure IV, and preserves routine casts below
-20% MP. When Chivalry is learned and ready, he reserves 1000 TP below 25% MP,
-converts it, and resumes AutoWS2; Flash and `/WAR` enmity upkeep continue while
-TP is building. Kickpuncher pauses AutoWS2 below 42% party HP so he can build TP
+at healthy MP, below 72% while conserving, and below 65% at low MP. The
+incidental AoE trigger now requires three members below 80% and is disabled
+below 50% MP. Cure cadence expands from three to five to eight seconds as MP
+falls (measured from one cure start to the next); emergencies below 55% bypass
+the routine reserve. When Chivalry is
+learned and ready, he begins reserving 1000 TP below 45% MP, converts it before
+the next non-emergency cure, and resumes AutoWS2; Flash and `/WAR` enmity upkeep
+continue while TP is building. Kickpuncher pauses AutoWS2 below 42% party HP
+so he can build TP
 and Waltz, then resumes it after stabilization. Smalls is the final safeguard
 only: he casts on the lowest member below 25% when above 20% MP.
 
@@ -156,8 +160,8 @@ worth their time and MP cost.
 - PLD: AutoBuff and AutoTank modes; Naegling + Savage Blade
 - COR driver: Chaos Roll + Samurai Roll; DualSavage + Savage Blade
 - DNC: Haste Samba, Box Step, Tauret + Evisceration
-- BRD: Victory March + Valor Minuet V + Blade Madrigal
-- GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Regen to the PLD
+- BRD (`master`): Victory March + Mage's Ballad III + Blade Madrigal
+- GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the PLD
 - RDM GearSwap: best learned Refresh tiers for MP jobs, Haste for physical
   participants, Shell for the party, self Temper/Gain-STR, Phalanx II on PLD,
   MP-aware enfeebles, final-resort curing, and HealBot status removal
@@ -176,7 +180,7 @@ They prefer higher tiers and fall back where configured.
 
 | Profile | BRD | GEO |
 | --- | --- | --- |
-| `master` | March / Minuet / Madrigal; Carnage Elegy | Fury / Frailty; Entrust Regen |
+| `master` | March / Ballad / Madrigal; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `physical` | March / Minuet / Madrigal | Fury / Frailty |
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
@@ -226,7 +230,7 @@ RDM enfeebles by profile:
   move, engage, or disengage any character, and never sends FastFollow
   commands. PartyCombat is the sole owner of physical engagement and combat
   movement, avoiding competing combat controllers.
-- RDM prioritizes party Refresh (self first), then Haste, Phalanx, and Shell,
+- RDM prioritizes party Refresh (self first, then PLD/RUN), then Haste, Phalanx, and Shell,
   then offensive enfeebles. Routine `physical` mode conserves MP by omitting
   Frazzle, refusing new enfeebles below 45% MP, and ignoring targets already
   below 50% HP. The heavier profiles retain Frazzle and use a 35% MP floor.
@@ -255,8 +259,8 @@ RDM enfeebles by profile:
   this lets TP rise beyond the normal 1000-TP weapon-skill threshold. It
   resumes AutoWS2 when no in-range member remains below 42% HP.
 - PLD similarly pauses only its own AutoWS2 when Chivalry is ready and MP falls
-  below 25%; it resumes after Chivalry, if Chivalry ceases to be available, or
-  when MP has already recovered above 35%. `//pstart off` never re-enables it.
+  below 45%; it resumes after Chivalry, if Chivalry ceases to be available, or
+  when MP has already recovered above 55%. `//pstart off` never re-enables it.
 - PLD and DNC controllers report chosen actions in chat. Use
   `//gs c pstartpld status` or `//gs c pstartdnc status` in the relevant window
   for the lowest observed HP and last decision.

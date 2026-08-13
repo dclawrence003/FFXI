@@ -21,13 +21,21 @@ local pstart_pld = {
 }
 
 local PSTART_PLD_ROUTINE_HPP = 82
-local PSTART_PLD_CLUSTER_HPP = 90
+local PSTART_PLD_CLUSTER_HPP = 80
+local PSTART_PLD_CLUSTER_COUNT = 3
 local PSTART_PLD_EMERGENCY_HPP = 55
-local PSTART_PLD_ROUTINE_MP_FLOOR = 20
+local PSTART_PLD_ROUTINE_MP_FLOOR = 30
+local PSTART_PLD_CONSERVE_MP_HPP = 50
+local PSTART_PLD_LOW_MP_HPP = 35
+local PSTART_PLD_CONSERVE_ROUTINE_HPP = 72
+local PSTART_PLD_LOW_MP_ROUTINE_HPP = 65
+local PSTART_PLD_CURE_INTERVAL_HIGH = 3
+local PSTART_PLD_CURE_INTERVAL_MID = 5
+local PSTART_PLD_CURE_INTERVAL_LOW = 8
 local PSTART_PLD_MAJESTY_ACTION_ID = 394
 local PSTART_PLD_CHIVALRY_ACTION_ID = 158
-local PSTART_PLD_CHIVALRY_HPP = 25
-local PSTART_PLD_CHIVALRY_RELEASE_HPP = 35
+local PSTART_PLD_CHIVALRY_HPP = 45
+local PSTART_PLD_CHIVALRY_RELEASE_HPP = 55
 local PSTART_PLD_CHIVALRY_TP = 1000
 
 local function pstart_pld_valid_name(name)
@@ -99,13 +107,29 @@ local function pstart_pld_scan_party()
     return lowest, cluster_injured
 end
 
+local function pstart_pld_mp_policy()
+    if player.mpp < PSTART_PLD_LOW_MP_HPP then
+        return PSTART_PLD_LOW_MP_ROUTINE_HPP,
+            PSTART_PLD_CURE_INTERVAL_LOW, 'low'
+    elseif player.mpp < PSTART_PLD_CONSERVE_MP_HPP then
+        return PSTART_PLD_CONSERVE_ROUTINE_HPP,
+            PSTART_PLD_CURE_INTERVAL_MID, 'conserve'
+    end
+    return PSTART_PLD_ROUTINE_HPP, PSTART_PLD_CURE_INTERVAL_HIGH, 'normal'
+end
+
 local function pstart_pld_needs_cure(lowest, cluster_injured)
     if not lowest then return false, 'no in-range party member' end
-    if lowest.hpp < PSTART_PLD_ROUTINE_HPP then
+    local routine_hpp = pstart_pld_mp_policy()
+    if lowest.hpp < routine_hpp then
         return true, lowest.hpp < PSTART_PLD_EMERGENCY_HPP
             and 'emergency' or 'routine'
     end
-    if cluster_injured >= 2 then return true, 'cluster' end
+    if cluster_injured >= PSTART_PLD_CLUSTER_COUNT
+        and player.mpp >= PSTART_PLD_CONSERVE_MP_HPP
+    then
+        return true, 'cluster'
+    end
     return false, 'party healthy'
 end
 
@@ -158,6 +182,11 @@ local function pstart_pld_cast_cure(lowest, cluster_injured, reason)
         :format(spell.en, lowest.name, lowest.hpp, reason)
     add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
     return true
+end
+
+local function pstart_pld_cure_interval()
+    local _, interval = pstart_pld_mp_policy()
+    return interval
 end
 
 local function pstart_pld_chivalry_ready()
@@ -257,8 +286,9 @@ local function pstart_pld_action()
         then
             add_to_chat(207,
                 ('[PartyStart PLD] Holding: lowest %s %d%%; '
-                    ..'routine threshold %d%%.')
-                    :format(lowest.name, lowest.hpp, PSTART_PLD_ROUTINE_HPP))
+                    ..'routine threshold %d%% at %d%% MP.')
+                    :format(lowest.name, lowest.hpp,
+                        pstart_pld_mp_policy(), player.mpp))
             pstart_pld.last_health_report = lowest.hpp
             pstart_pld.last_health_report_at = os.clock()
         end
@@ -266,6 +296,15 @@ local function pstart_pld_action()
     end
 
     local emergency = lowest.hpp < PSTART_PLD_EMERGENCY_HPP
+
+    -- Chivalry has a ten-minute recast. When it is ready, use it before the
+    -- next non-emergency cure so an uninterrupted stream of routine damage
+    -- cannot permanently starve the MP recovery branch.
+    if not emergency and player.mpp < PSTART_PLD_CHIVALRY_HPP then
+        if pstart_pld_sustain_mp() then return true end
+        if pstart_pld.autows_paused then return false end
+    end
+
     if player.mpp < PSTART_PLD_ROUTINE_MP_FLOOR and not emergency then
         pstart_pld.last_action = 'routine cure held for MP reserve'
         return pstart_pld_sustain_mp()
@@ -287,10 +326,14 @@ local function pstart_pld_status()
     local target = lowest and ('%s %d%%'):format(lowest.name, lowest.hpp)
         or 'none'
     add_to_chat(122,
-        ('PartyStart PLD: %s / profile %s / lowest %s / injured %d / last %s')
+        ('PartyStart PLD: %s / profile %s / MP %d%% (%s, cure <%d%%) '
+            ..'/ lowest %s / injured %d / last %s')
         :format(
             pstart_pld.active and 'On' or 'Off',
             tostring(pstart_pld.profile or 'none'),
+            player.mpp,
+            select(3, pstart_pld_mp_policy()),
+            pstart_pld_mp_policy(),
             target,
             cluster_injured,
             pstart_pld.last_action))
@@ -375,7 +418,8 @@ function job_aftercast(spell, spellMap, eventArgs)
             pstart_pld.last_action = pending.spell_name..' interrupted; retry armed'
         else
             pstart_pld.cure_count = pstart_pld.cure_count + 1
-            pstart_pld.retry_at = os.clock() + 1
+            pstart_pld.retry_at = os.clock()
+                + math.max(1, pstart_pld_cure_interval() - 2.5)
         end
         pstart_pld.pending = nil
     end

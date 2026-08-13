@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.7.1'
+_addon.version = '0.8.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -32,11 +32,11 @@ local zone_epoch = 0
 local profiles = {
     master = {
         cor = {'chaos', 'samurai'},
-        brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
+        brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
         brd_debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
         },
-        geo = {indi='Fury', geo='Frailty', entrust='Regen',
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh',
             entrust_jobs={'PLD','RUN','RDM','COR'}},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
@@ -327,6 +327,8 @@ local function apply_rdm(player, profile_name, roster, leader)
     local phalanx_ii = first_known{'Phalanx II'}
     local haste_targets = {}
     local refresh_targets = {}
+    local refresh_tanks = {}
+    local refresh_others = {}
     local phalanx_targets = {}
 
     for _,name in ipairs(sorted_roster(roster)) do
@@ -336,7 +338,9 @@ local function apply_rdm(player, profile_name, roster, leader)
             issue(('hb cancelbuff %s %s'):format(name, haste))
         end
         if refresh and mp_jobs:contains(job) then
-            refresh_targets[#refresh_targets + 1] = name
+            local destination = (job == 'PLD' or job == 'RUN')
+                and refresh_tanks or refresh_others
+            destination[#destination + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, refresh))
         end
         local phalanx_wanted = profile_name == 'master'
@@ -347,6 +351,24 @@ local function apply_rdm(player, profile_name, roster, leader)
         if phalanx_ii and phalanx_wanted then
             phalanx_targets[#phalanx_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, phalanx_ii))
+        end
+    end
+
+    -- RDM's controller moves itself to the front. Place tanks ahead of the
+    -- remaining MP jobs so the main healer gets Refresh immediately after it.
+    for _, name in ipairs(refresh_tanks) do
+        refresh_targets[#refresh_targets + 1] = name
+    end
+    for _, name in ipairs(refresh_others) do
+        refresh_targets[#refresh_targets + 1] = name
+    end
+    if player.main_job == 'RDM' then
+        for index, name in ipairs(refresh_targets) do
+            if name:lower() == player.name:lower() then
+                table.remove(refresh_targets, index)
+                table.insert(refresh_targets, 1, name)
+                break
+            end
         end
     end
 
