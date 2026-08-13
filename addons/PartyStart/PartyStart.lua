@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.4'
+_addon.version = '0.6.5'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -422,7 +422,7 @@ local function apply_pld(profile_name)
     issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
         ..'gs c unset AutoWSMode')
     if profile_name == 'master' then
-        issue('hb enable cure; hb disable na; hb disable buff; hb mincure 2; '
+        issue('hb enable cure; hb disable na; hb disable buff; hb mincure 1; '
             ..'hb db off; hb as off; hb as attack off; hb on')
     else
         issue('hb disable cure; hb disable na; '

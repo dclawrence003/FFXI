@@ -70,7 +70,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("player.hpp >= 90", self.rdm)
         self.assertIn("hb disable cure; hb enable na", self.addon)
         self.assertIn(
-            "hb enable cure; hb disable na; hb disable buff; hb mincure 2",
+            "hb enable cure; hb disable na; hb disable buff; hb mincure 1",
             self.addon,
         )
         self.assertIn("apply_pld(session.profile)", self.addon)

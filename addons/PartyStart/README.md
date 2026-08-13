@@ -113,8 +113,8 @@ though Smalls' general HealBot curing is disabled.
 In this profile Tackleberry's PLD HealBot owns all routine Cure casting while
 Majesty is maintained. Smalls keeps HealBot status removal active but has Cure
 disabled, preventing duplicate Cure decisions between two HealBot instances.
-Tackleberry's minimum tier is Cure II so his available MP is used before
-Smalls' pool is exhausted.
+Tackleberry's minimum tier is Cure I, allowing early, inexpensive Majesty
+heals instead of ignoring damage that falls below HealBot's Cure II threshold.
 
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.
