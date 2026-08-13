@@ -143,6 +143,16 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertNotIn("AutoBuffMode:set('Off')", GEO)
         self.assertIn("gs c pstartgeo lean", ADDON)
 
+    def test_geo_is_inert_until_partystart_activates_it(self):
+        self.assertIn("wait 2; gs c pstartgeo bootidle", GEO)
+        boot = GEO.split("requested == 'bootidle'", 1)[1]
+        boot = boot.split("elseif requested", 1)[0]
+        self.assertIn("if not pstart_geo_active then", boot)
+        self.assertIn("pstart_geo_set_autobuff('Off')", GEO)
+        stop = ADDON.split("local function stop_local()", 1)[1]
+        stop = stop.split("\nend", 1)[0]
+        self.assertIn("gs c pstartgeo idle", stop)
+
 
 if __name__ == "__main__":
     unittest.main()

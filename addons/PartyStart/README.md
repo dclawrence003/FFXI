@@ -81,6 +81,16 @@ include('Common/PartyStart_DNC.lua')
 include('Common/PartyStart_GEO.lua')
 ```
 
+For GEO, also change any shared or character startup command resembling:
+
+```lua
+send_command('wait 1; gs c set AutoBuffMode Auto')
+```
+
+to default to `AutoBuffMode Off`, or remove the automatic mode change. The
+PartyStart GEO include is an additional guard, but avoiding an unnecessary
+one-second Auto race prevents a brief login or job-change cast.
+
 HealBot remains loaded, but `master` uses it only for RDM status removal (or
 normal WHM operation on a WHM lineup). PLD and DNC healing are GearSwap-owned,
 and PartyStart always disables HealBot assist, engage, buff, and hostile-magic
@@ -108,6 +118,12 @@ selected profile (defaulting to `master` after an addon reload). `off` and
 AutoBuff modes. They also disable AutoWS2 only on a character instance that
 the current PartyStart instance enabled.
 Loading PartyStart itself is inert.
+GEO GearSwap must likewise have an inert startup state: do not enable
+`AutoBuffMode Auto` from `GEO_UserSetup_Common.lua` or a character GEO file.
+The supplied `PartyStart_GEO.lua` include defensively forces AutoBuff off two
+seconds after GearSwap loads unless a PartyStart profile has already activated
+during that window. PartyStart enables it only when a profile is applied, and
+`//pstart off` returns GEO to the same idle state.
 
 `master` is the default for sustained COR/PLD/DNC/BRD/RDM/GEO grinding. It is
 currently tuned for Apex Efts: their AoE damage and buff dispel favor clustered

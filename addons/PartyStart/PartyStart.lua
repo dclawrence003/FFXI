@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.7.0'
+_addon.version = '0.7.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -573,7 +573,7 @@ local function stop_local()
     if player.main_job == 'WHM' then issue('gs c pstartwhm off') end
     if player.main_job == 'PLD' then issue('gs c pstartpld off') end
     if player.main_job == 'DNC' then issue('gs c pstartdnc off') end
-    if player.main_job == 'GEO' then issue('gs c pstartgeo restore') end
+    if player.main_job == 'GEO' then issue('gs c pstartgeo idle') end
     if player.main_job == 'GEO' or player.main_job == 'RDM'
         or player.main_job == 'BLU' or player.main_job == 'PLD'
         or player.main_job == 'DNC' then
