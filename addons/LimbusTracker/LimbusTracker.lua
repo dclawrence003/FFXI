@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'LimbusTracker'
 _addon.author = 'OpenAI Codex at the direction of Dolomedes'
-_addon.version = '0.2.0'
+_addon.version = '0.3.0'
 _addon.commands = {'limbustracker', 'lt'}
 
 local config = require('config')
@@ -92,6 +92,11 @@ local last_sync_attempt = 0
 local sectors = {
     Temenos = {'North', 'West', 'East', 'Central'},
     Apollyon = {'NW', 'SW', 'NE', 'SE'},
+}
+
+local synthetic_target_ids = {
+    Temenos = {North = 910001, West = 910002, East = 910003, Central = 910004},
+    Apollyon = {NW = 920001, SW = 920002, NE = 920003, SE = 920004},
 }
 
 local function chat(color, message)
@@ -459,13 +464,13 @@ local function backfill_target(area, target_id, chest)
 end
 
 local function record_chest(area, target_id, chest, units, signature)
-    if not initialize_character() then return end
+    if not initialize_character() then return false end
     local target_key = 'id_' .. tostring(target_id)
     chest = chest or state.targets[area][target_key]
     if chest then backfill_target(area, target_id, chest) end
 
     for _, event in ipairs(state.events[area]) do
-        if event.signature == signature then return end
+        if event.signature == signature then return false end
     end
     local event = {
         chest = chest,
@@ -481,13 +486,12 @@ local function record_chest(area, target_id, chest, units, signature)
     render()
     chat(158, ('Recorded %s %s: %d units.'):format(
         area, chest or 'unknown chest', units))
+    return true
 end
 
 local function begin_chest(target_id)
     local area = current_area()
     if not area then return end
-    local mob = windower.ffxi.get_mob_by_id(target_id)
-    if not mob or not mob.name or mob.name:lower() ~= 'treasure chest' then return end
     initialize_character()
     local target_key = 'id_' .. tostring(target_id)
     pending_chest = {
@@ -504,7 +508,7 @@ end
 local function finish_chest_if_ready(packet)
     if not pending_chest or os.time() - pending_chest.started > 15 then
         pending_chest = nil
-        return
+        return false
     end
     local field = pending_chest.area .. ' Units'
     local before = previous_units[field]
@@ -516,10 +520,63 @@ local function finish_chest_if_ready(packet)
             name, pending_chest.area, pending_chest.target_id,
             before, after, pending_chest.started,
         }, ':')
-        record_chest(pending_chest.area, pending_chest.target_id,
+        local recorded = record_chest(pending_chest.area, pending_chest.target_id,
             pending_chest.chest, gained, signature)
         pending_chest = nil
+        return recorded
     end
+    return false
+end
+
+local function record_currency_delta(packet)
+    local area = current_area()
+    local chest = area and current_sector[area] or nil
+    if not area or not chest then return false end
+    local field = area .. ' Units'
+    local before = previous_units[field]
+    local after = tonumber(packet[field])
+    local gained = before and after and (after - before) or nil
+    if gained ~= 3000 and gained ~= 5000 then return false end
+
+    local target_id = pending_chest and pending_chest.area == area
+        and pending_chest.target_id or synthetic_target_ids[area][chest]
+    local name = player_name() or 'Unknown'
+    local signature = table.concat({
+        name, area, chest, before, after, 'currency',
+    }, ':')
+    pending_chest = nil
+    return record_chest(area, target_id, chest, gained, signature)
+end
+
+local function normalize_area(value)
+    value = tostring(value or ''):lower()
+    if value == 'temenos' or value == 't' then return 'Temenos' end
+    if value == 'apollyon' or value == 'a' then return 'Apollyon' end
+    return nil
+end
+
+local function normalize_chest(area, value)
+    value = tostring(value or ''):lower()
+    for _, chest in ipairs(sectors[area] or {}) do
+        if chest:lower() == value then return chest end
+    end
+    return nil
+end
+
+local function record_manual(area_arg, chest_arg, units_arg)
+    local area = normalize_area(area_arg)
+    local chest = area and normalize_chest(area, chest_arg) or nil
+    local units = tonumber(units_arg)
+    if not area or not chest or (units ~= 3000 and units ~= 5000) then
+        chat(123, 'Usage: //lt record apollyon|temenos <sector> 3000|5000')
+        return
+    end
+    local name = player_name() or 'Unknown'
+    local signature = table.concat({
+        name, area, chest, units, os.time(), 'manual',
+    }, ':')
+    record_chest(area, synthetic_target_ids[area][chest], chest, units,
+        signature)
 end
 
 local function set_mode(mode)
@@ -542,12 +599,18 @@ local function print_status()
     chat(207, ('saved openings: Temenos=%d, Apollyon=%d | InventoryCore sync=%s')
         :format(temenos, apollyon,
             settings.sync_inventorycore and 'on' or 'off'))
+    chat(207, ('detected sector: Temenos=%s, Apollyon=%s | units: T=%s, A=%s')
+        :format(tostring(current_sector.Temenos or '--'),
+            tostring(current_sector.Apollyon or '--'),
+            tostring(previous_units['Temenos Units'] or '--'),
+            tostring(previous_units['Apollyon Units'] or '--')))
 end
 
 local function print_help()
     chat(207, '//lt status | refresh | toggle')
     chat(207, '//lt mode limbus|always|off | view self|roster')
     chat(207, '//lt pos <x> <y> | sync on|off|now')
+    chat(207, '//lt record apollyon|temenos <sector> 3000|5000')
 end
 
 windower.register_event('load', function()
@@ -576,17 +639,20 @@ windower.register_event('zone change', function()
     end, 1)
 end)
 
-windower.register_event('outgoing chunk', function(id, original)
+windower.register_event('outgoing chunk', function(id, original, modified)
     if id ~= 0x01A then return end
-    local ok, packet = pcall(packets.parse, 'outgoing', original)
-    if ok and packet and packet.Target then begin_chest(packet.Target) end
+    local ok, packet = pcall(packets.parse, 'outgoing', modified or original)
+    if ok and packet and packet.Target and packet.Category == 0 then
+        begin_chest(packet.Target)
+    end
 end)
 
 windower.register_event('incoming chunk', function(id, original, modified)
     if id ~= 0x118 then return end
     local ok, packet = pcall(packets.parse, 'incoming', modified or original)
     if not ok or not packet then return end
-    finish_chest_if_ready(packet)
+    local recorded = finish_chest_if_ready(packet)
+    if not recorded then record_currency_delta(packet) end
     previous_units['Temenos Units'] = packet['Temenos Units']
     previous_units['Apollyon Units'] = packet['Apollyon Units']
 end)
@@ -654,6 +720,8 @@ windower.register_event('addon command', function(command, ...)
         else
             chat(123, 'Usage: //lt sync on|off|now')
         end
+    elseif command == 'record' then
+        record_manual(args[1], args[2], args[3])
     elseif command == 'help' or command == '--help' then
         print_help()
     else

@@ -69,6 +69,9 @@ class AttributionAudit(unittest.TestCase):
         self.assertIn("save_history", text)
         self.assertIn("0x118", text)
         self.assertIn("packets.inject", text)
+        self.assertIn("record_currency_delta", text)
+        self.assertIn("record_manual", text)
+        self.assertNotIn("mob.name:lower() ~= 'treasure chest'", text)
         self.assertNotIn("/api/telemetry", text)
         self.assertNotIn("/api/dashboard", text)
 

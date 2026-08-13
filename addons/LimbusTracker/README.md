@@ -10,7 +10,8 @@ For each local character, the addon:
 
 1. Identifies the active Temenos/Apollyon sector from its temporary floor-data
    item.
-2. Detects interaction with the sector's final `Treasure Chest`.
+2. Detects an NPC interaction while inside the active Limbus area without
+   depending on one exact English chest-object name.
 3. Confirms the result from the subsequent Currencies 2 packet increase.
 4. Records only exact 3,000- or 5,000-unit gains.
 5. Saves the event immediately under its own `data` directory.
@@ -76,6 +77,7 @@ game can choose the same 5,000-unit bonus chest again.
 //lt view roster
 //lt pos <x> <y>
 //lt sync on|off|now
+//lt record apollyon|temenos <sector> 3000|5000
 ```
 
 - `limbus` shows the panel only inside Temenos or Apollyon.
@@ -85,6 +87,8 @@ game can choose the same 5,000-unit bonus chest again.
 - `roster` reads all saved character files and shows each character's next
   Temenos and Apollyon sector.
 - `refresh` reloads the local character's history from disk.
+- `record` repairs a missed opening when its sector and award are known. For
+  example: `//lt record apollyon sw 5000`.
 
 Collection remains active while the display is hidden.
 
@@ -109,6 +113,8 @@ Disable this optional integration without affecting tracking:
   five minutes.
 - An event is intentionally not recorded unless the observed increase is
   exactly 3,000 or 5,000 units.
+- If the interaction packet is absent or altered by another addon, an exact
+  3,000/5,000 increase is still recorded from the active floor-data item.
 - Load it before opening the chest. Loading it for the first time after the
   reward cannot reconstruct an earlier event.
 
