@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.7'
+_addon.version = '0.6.8'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -25,6 +25,7 @@ local autows2_owned = false
 local last_profile = 'master'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
+local healbot_rearm_at = nil
 
 local profiles = {
     master = {
@@ -310,7 +311,8 @@ local function apply_whm(player)
             player.name, table.concat(known, ',')))
     end
     issue('gs c pstartwhm on')
-    issue('hb db off; hb as off; hb as attack off; hb on')
+    issue('hb deactivateindoors off; hb db off; hb as off; '
+        ..'hb as attack off; hb on')
 end
 
 local function apply_rdm(player, profile_name, roster, leader)
@@ -369,12 +371,16 @@ local function apply_rdm(player, profile_name, roster, leader)
         profile_name, leader, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets)))
     if profile_name == 'master' then
-        -- HealBot does not arbitrate Cure ownership between active healers.
-        -- In the sustained profile PLD owns cures; RDM retains status removal.
-        issue('hb disable cure; hb enable na; hb disable buff; hb db off; '
+        -- PLD owns inexpensive routine curing. RDM's tier-III floor supplies a
+        -- second path for serious damage if the PLD is busy, disabled, or out
+        -- of range. This also avoids depending solely on a freshly reloaded
+        -- GearSwap emergency controller.
+        issue('hb deactivateindoors off; hb enable cure; hb mincure 3; '
+            ..'hb enable na; hb disable buff; hb db off; '
             ..'hb as off; hb as attack off; hb on')
     else
-        issue('hb enable cure; hb enable na; hb disable buff; hb db off; '
+        issue('hb deactivateindoors off; hb enable cure; hb mincure 1; '
+            ..'hb enable na; hb disable buff; hb db off; '
             ..'hb as off; hb as attack off; hb on')
     end
 end
@@ -422,11 +428,34 @@ local function apply_pld(profile_name)
     issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
         ..'gs c unset AutoWSMode')
     if profile_name == 'master' then
-        issue('hb enable cure; hb disable na; hb disable buff; hb mincure 1; '
+        issue('hb deactivateindoors off; hb enable cure; '
+            ..'hb disable na; hb disable buff; hb mincure 1; '
             ..'hb db off; hb as off; hb as attack off; hb on')
     else
         issue('hb disable cure; hb disable na; '
             ..'hb db off; hb as off; hb as attack off; hb off')
+    end
+end
+
+local function rearm_healing_after_zone()
+    if not current_profile then return end
+    local player = windower.ffxi.get_player()
+    if not player then return end
+    if player.main_job == 'PLD' then
+        apply_pld(current_profile)
+    elseif player.main_job == 'RDM' then
+        if current_profile == 'master' then
+            issue('hb deactivateindoors off; hb enable cure; hb mincure 3; '
+                ..'hb enable na; hb disable buff; hb db off; '
+                ..'hb as off; hb as attack off; hb on')
+        else
+            issue('hb deactivateindoors off; hb enable cure; hb mincure 1; '
+                ..'hb enable na; hb disable buff; hb db off; '
+                ..'hb as off; hb as attack off; hb on')
+        end
+    elseif player.main_job == 'WHM' then
+        issue('hb deactivateindoors off; hb db off; hb as off; '
+            ..'hb as attack off; hb on')
     end
 end
 
@@ -608,6 +637,10 @@ end)
 
 windower.register_event('prerender', function()
     local now = os.clock()
+    if healbot_rearm_at and now >= healbot_rearm_at then
+        healbot_rearm_at = nil
+        rearm_healing_after_zone()
+    end
     for nonce,session in pairs(sessions) do
         if not session.applied and now >= session.apply_at then
             session.applied = true
@@ -632,6 +665,14 @@ windower.register_event('prerender', function()
                 issue('gs c pstartbrd tick')
             end
         end
+    end
+end)
+
+windower.register_event('zone change', function()
+    -- HealBot clears or recomputes active state during zoning. Reassert the
+    -- selected support policy once the new zone and party tables have settled.
+    if current_profile then
+        healbot_rearm_at = os.clock() + 8
     end
 end)
 

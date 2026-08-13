@@ -17,7 +17,8 @@ PartyStart establishes clear ownership:
 
 - RDM GearSwap maintains Haste, Refresh, Protect, Shell, self-offense buffs,
   available Phalanx, and profile-specific enfeebles. HealBot remains enabled
-  on RDM for status removal and, outside `master`, curing and raises.
+  on RDM for status removal and healing; `master` uses a Cure III floor so PLD
+  retains routine-healing ownership while RDM covers serious damage.
 - PLD GearSwap maintains its tank/self-buff automation. Its native AutoWS mode
   stays off so AutoWS2 remains the only weapon-skill owner.
 - DNC GearSwap maintains Haste Samba, Box Step/Presto, Saber Dance, and its
@@ -70,8 +71,8 @@ include('Common/PartyStart_RDM.lua')
 include('Common/PartyStart_WHM.lua')
 ```
 
-HealBot remains loaded, but PartyStart enables it only on the current RDM
-healer and always disables its assist, engage, and offensive-debuff modes.
+HealBot remains loaded, but PartyStart enables it only on designated healing
+jobs and always disables its assist, engage, and offensive-debuff modes.
 BRD and RDM no
 longer use HealBot for spell automation. COR requires Roller2. GEO, RDM, BRD,
 WHM, and BLU profiles use their GearSwap command interfaces. The physical
@@ -109,15 +110,17 @@ Aquaveil, self-Phalanx, and Reraise loop. The richer profiles retain them.
 If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
 only while at or above 70% HP. His GearSwap controller then casts Cure on
 himself until he reaches 90% HP; this dedicated recovery remains active even
-though Smalls' general HealBot curing is disabled.
-In this profile Tackleberry's PLD HealBot owns all routine Cure casting while
-Majesty is maintained. Smalls keeps HealBot status removal active but has Cure
-disabled, preventing duplicate Cure decisions between two HealBot instances.
+when Smalls' HealBot is restricted to its Cure III fallback floor.
+In this profile Tackleberry's PLD HealBot owns inexpensive routine Cure casting
+while Majesty is maintained. Smalls keeps HealBot status removal active and a
+Cure III minimum tier as a serious-damage fallback. This permits a second
+healing path when the PLD is busy, disabled, or out of range without having the
+RDM compete over every small HP deficit.
 Tackleberry's minimum tier is Cure I, allowing early, inexpensive Majesty
 heals instead of ignoring damage that falls below HealBot's Cure II threshold.
 Smalls' GearSwap acts as the emergency backup: it targets the lowest-HP living
 party member in casting range once that member falls below 50% HP. This bypasses
-Smalls' disabled HealBot Cure mode without competing over routine damage.
+the normal routine-healing path and remains an additional safeguard.
 
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.
@@ -182,8 +185,9 @@ RDM enfeebles by profile:
   every client before applying job-specific support settings. FastFollow is
   user-owned: neither profile activation nor `off` changes its state.
 - Buffs, songs, rolls, healing, and GEO automation begin when a profile or
-  `on` is issued, and continue until `off`, an addon/job reset, or an
-  addon-specific zone rule deactivates them.
+  `on` is issued and continue until `off` or a job/addon reset. PartyStart
+  disables HealBot's indoor-zone auto-deactivation for designated healing jobs
+  and rearms their healing policy eight seconds after zoning.
 - PartyStart supplies its own maintenance heartbeat for WHM, RDM, and BRD so
   support does not stall when Sel-Include suppresses normal ticks during
   Sneak or Invisible.

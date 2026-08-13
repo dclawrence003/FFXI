@@ -73,11 +73,10 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("local function pstart_rdm_emergency_heal()", self.rdm)
         self.assertIn("member.hpp > 0 and member.hpp < 50", self.rdm)
         self.assertIn("if pstart_rdm_emergency_heal() then return true end", self.rdm)
-        self.assertIn("hb disable cure; hb enable na", self.addon)
-        self.assertIn(
-            "hb enable cure; hb disable na; hb disable buff; hb mincure 1",
-            self.addon,
-        )
+        self.assertIn("hb deactivateindoors off", self.addon)
+        self.assertIn("hb enable cure; hb mincure 3", self.addon)
+        self.assertIn("hb enable cure; '", self.addon)
+        self.assertIn("hb disable na; hb disable buff; hb mincure 1", self.addon)
         self.assertIn("apply_pld(session.profile)", self.addon)
 
     def test_rdm_defenses_use_the_full_target_union(self):
