@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.4.1'
+_addon.version = '0.5.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -33,7 +33,8 @@ local profiles = {
         brd_debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
         },
-        geo = {indi='Fury', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh',
+            entrust_jobs={'PLD','RUN','DRK','BLU'}},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
             {'Distract III', 'Distract II', 'Distract'},
@@ -45,7 +46,8 @@ local profiles = {
         brd_debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
         },
-        geo = {indi='Torpor', geo='Frailty', entrust='Fury', entrust_job='BLU'},
+        geo = {indi='Torpor', geo='Frailty', entrust='Fury',
+            entrust_jobs={'BLU','PLD','RUN','DNC'}},
         rdm_debuffs = {
             {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
@@ -59,7 +61,8 @@ local profiles = {
             {'Carnage Elegy', 'Battlefield Elegy'},
             {'Pining Nocturne'},
         },
-        geo = {indi='Acumen', geo='Malaise', entrust='Refresh', entrust_job='WHM'},
+        geo = {indi='Acumen', geo='Malaise', entrust='Refresh',
+            entrust_jobs={'PLD','RUN','RDM','BLU'}},
         rdm_debuffs = {
             {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
@@ -73,7 +76,8 @@ local profiles = {
             {'Carnage Elegy', 'Battlefield Elegy'},
             {'Pining Nocturne'},
         },
-        geo = {indi='Barrier', geo='Frailty', entrust='Refresh', entrust_job='WHM'},
+        geo = {indi='Barrier', geo='Frailty', entrust='Refresh',
+            entrust_jobs={'PLD','RUN','DRK','BLU'}},
         rdm_debuffs = {
             {'Frazzle III', 'Frazzle II', 'Frazzle'},
             {'Dia III', 'Dia II', 'Dia'},
@@ -96,11 +100,11 @@ local frontline_jobs = S{
 }
 
 -- Routine Haste is reserved for jobs expected to contribute physical TP.
--- Back-line WHM/GEO/BRD support remains covered by Refresh without making the
--- RDM maintain three unnecessary Haste II timers.
+-- BRD and GEO are included because the current physical profile arms their
+-- AutoWS2 offense along with the dedicated melee jobs.
 local haste_jobs = S{
-    'WAR','MNK','RDM','THF','PLD','DRK','BST','RNG','SAM','NIN','DRG',
-    'BLU','COR','PUP','DNC','RUN'
+    'WAR','MNK','RDM','THF','PLD','DRK','BST','BRD','RNG','SAM','NIN','DRG',
+    'BLU','COR','PUP','DNC','GEO','RUN'
 }
 
 -- Current roster offense assignments. PartyStart only applies these during
@@ -108,19 +112,24 @@ local haste_jobs = S{
 -- the weapon; AutoWS2 remains the sole weapon-skill decision maker.
 local physical_offense = {
     Tackleberry = {
-        weapon_mode = 'Naegling', ws = 'Savage Blade', tp = 1000,
+        jobs = S{'PLD'}, weapon_mode = 'Naegling',
+        ws = 'Savage Blade', tp = 1000,
     },
     Kickpuncher = {
-        weapon_mode = 'Tauret', ws = 'Evisceration', tp = 1000,
+        jobs = S{'DNC'}, weapon_mode = 'Tauret',
+        ws = 'Evisceration', tp = 1000,
     },
     Barneystinson = {
-        weapon_mode = 'DualSavage', ws = 'Savage Blade', tp = 1000,
+        jobs = S{'BRD'}, weapon_mode = 'DualSavage',
+        ws = 'Savage Blade', tp = 1000,
     },
     Smalls = {
-        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 1000,
+        jobs = S{'RDM'}, weapon_mode = 'Maxentius',
+        ws = 'Black Halo', tp = 1000,
     },
     Achoo = {
-        weapon_mode = 'Maxentius', ws = 'Black Halo', tp = 1000,
+        jobs = S{'GEO'}, weapon_mode = 'Maxentius',
+        ws = 'Black Halo', tp = 1000,
     },
 }
 
@@ -222,8 +231,13 @@ end
 
 local function apply_physical_offense(player)
     local offense = physical_offense[player.name]
-    if not offense or player.name == 'Dolomedes' then
+    if not offense or player.name == 'Dolomedes'
+        or not offense.jobs:contains(player.main_job) then
         stop_owned_autows2()
+        if offense then
+            chat(123, ('No offense policy for %s on %s; AutoWS2 unchanged.')
+                :format(player.name, player.main_job))
+        end
         return
     end
 
@@ -259,6 +273,14 @@ local function first_job(roster, wanted)
         if roster[name].main_job == wanted then
             return name
         end
+    end
+    return nil
+end
+
+local function first_jobs(roster, wanted)
+    for _, job in ipairs(wanted or {}) do
+        local name = first_job(roster, job)
+        if name then return name end
     end
     return nil
 end
@@ -306,8 +328,6 @@ local function apply_rdm(player, profile_name, roster, leader)
 
     local old_self = {
         'Temper II', 'Temper', 'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise',
-        'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect',
-        'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell',
     }
     for _, spell in ipairs(old_self) do
         if knows_spell(spell) then
@@ -357,19 +377,31 @@ local function apply_brd(player, profile_name, leader)
     } do
         if knows_spell(spell) then issue('hb db rm '..spell) end
     end
-    issue('hb db off; hb as off; hb as attack off')
+    issue('hb db off; hb as off; hb as attack off; hb off')
     issue(('gs c pstartbrd %s %s'):format(profile_name, leader))
 end
 
 local function apply_geo(player, profile, roster)
     local geo = profile.geo
-    local entrustee = first_job(roster, geo.entrust_job)
-        or first_job(roster, 'WHM')
+    local entrustee = first_jobs(roster, geo.entrust_jobs)
         or player.name
     issue(('gs c autoindi %s; gs c autogeo %s; gs c autoentrust %s; '
         ..'gs c autoentrustee %s; gs c set AutoBuffMode Auto')
         :format(geo.indi, geo.geo, geo.entrust, entrustee))
-    issue('hb db off; hb as off; hb as attack off; hb on')
+    issue('hb db off; hb as off; hb as attack off; hb off')
+end
+
+
+local function apply_pld()
+    issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode true; '
+        ..'gs c set AutoWSMode false')
+    issue('hb db off; hb as off; hb as attack off; hb off')
+end
+
+local function apply_dnc()
+    issue('gs c set AutoBuffMode Auto; gs c set AutoSambaMode Haste; '
+        ..'gs c set MainStep Box Step')
+    issue('hb db off; hb as off; hb as attack off; hb off')
 end
 
 local function apply_cor(profile)
@@ -396,11 +428,16 @@ local function apply_profile(session)
         apply_brd(player, session.profile, session.leader)
     elseif player.main_job == 'GEO' then
         apply_geo(player, profile, session.roster)
+    elseif player.main_job == 'PLD' then
+        apply_pld()
+    elseif player.main_job == 'DNC' then
+        apply_dnc()
     elseif player.main_job == 'COR' then
         apply_cor(profile)
     elseif player.main_job == 'BLU' then
         -- Uses the existing BLU GearSwap command surface; no BLU file is changed.
         issue('gs c set AutoBuffMode Auto')
+        issue('hb db off; hb as off; hb as attack off; hb off')
     end
 
     if session.profile == 'physical' then
@@ -463,9 +500,14 @@ local function stop_local()
     if player.main_job == 'RDM' then issue('gs c pstartrdm off') end
     if player.main_job == 'WHM' then issue('gs c pstartwhm off') end
     if player.main_job == 'GEO' or player.main_job == 'RDM'
-        or player.main_job == 'BLU' then
+        or player.main_job == 'BLU' or player.main_job == 'PLD'
+        or player.main_job == 'DNC' then
         issue('gs c set AutoBuffMode Off')
     end
+    if player.main_job == 'PLD' then
+        issue('gs c set AutoTankMode false; gs c set AutoWSMode false')
+    end
+    if player.main_job == 'DNC' then issue('gs c set AutoSambaMode Off') end
     current_profile = nil
     next_maintenance = 0
     chat(207, 'Support automation stopped; no combat commands were issued.')
@@ -561,4 +603,4 @@ windower.register_event('addon command', function(command)
     end
 end)
 
-chat(158, 'Loaded. Use //pstart physical for the current six-character party.')
+chat(158, 'Loaded. Use //pstart physical for the BLU/PLD/DNC/BRD/RDM/GEO party.')

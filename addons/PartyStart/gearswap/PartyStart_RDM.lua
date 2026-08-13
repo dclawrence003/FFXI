@@ -168,17 +168,38 @@ local function pstart_rdm_cast_buff(name, choices, buff, duration)
     return false
 end
 
+local function pstart_rdm_self_first(names)
+    local ordered = {}
+    for _, name in ipairs(names or {}) do
+        if name:lower() == player.name:lower() then
+            table.insert(ordered, 1, name)
+        else
+            ordered[#ordered + 1] = name
+        end
+    end
+    return ordered
+end
+
+local function pstart_rdm_union_names(...)
+    local names, seen = {}, {}
+    for _, list in ipairs({...}) do
+        for _, name in ipairs(list or {}) do
+            local key = name:lower()
+            if not seen[key] then
+                seen[key] = true
+                names[#names + 1] = name
+            end
+        end
+    end
+    return names
+end
+
 local function pstart_rdm_cast_party_buffs()
     -- Refresh the RDM first so offensive work cannot consume the reserve
     -- before MP recovery is established.
-    local refresh = {}
-    for _, name in ipairs(pstart_rdm.refresh) do
-        if name:lower() == player.name:lower() then
-            table.insert(refresh, 1, name)
-        else
-            refresh[#refresh + 1] = name
-        end
-    end
+    local refresh = pstart_rdm_self_first(pstart_rdm.refresh)
+    local defense = pstart_rdm_union_names(
+        pstart_rdm.haste, pstart_rdm.refresh, pstart_rdm.phalanx)
     for _, name in ipairs(refresh) do
         if pstart_rdm_cast_buff(
             name, {'Refresh III', 'Refresh II', 'Refresh'}, 'Refresh', 135)
@@ -196,6 +217,24 @@ local function pstart_rdm_cast_party_buffs()
     for _, name in ipairs(pstart_rdm.phalanx) do
         if pstart_rdm_cast_buff(
             name, {'Phalanx II'}, 'Phalanx', 165)
+        then
+            return true
+        end
+    end
+    -- The union covers melee characters, MP users, and any explicit frontline
+    -- target. This keeps Protect/Shell on the whole six-character roster.
+    for _, name in ipairs(defense) do
+        if pstart_rdm_cast_buff(name,
+            {'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect'},
+            'Protect', 1800)
+        then
+            return true
+        end
+    end
+    for _, name in ipairs(defense) do
+        if pstart_rdm_cast_buff(name,
+            {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
+            'Shell', 1800)
         then
             return true
         end

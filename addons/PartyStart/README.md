@@ -15,14 +15,16 @@ that party and require further live testing.
 Separate character macros tend to drift and duplicate responsibilities.
 PartyStart establishes clear ownership:
 
-- RDM GearSwap maintains Haste, Refresh, self-offense buffs, available
-  Phalanx, and profile-specific enfeebles.
-- WHM GearSwap maintains core party defenses and Afflatus Solace; HealBot is
-  retained only for curing, status removal, and raises.
+- RDM GearSwap maintains Haste, Refresh, Protect, Shell, self-offense buffs,
+  available Phalanx, and profile-specific enfeebles. HealBot remains enabled
+  only on RDM for curing, status removal, and raises in the current lineup.
+- PLD GearSwap maintains its tank/self-buff automation. Its native AutoWS mode
+  stays off so AutoWS2 remains the only weapon-skill owner.
+- DNC GearSwap maintains Haste Samba, Box Step, and its normal job abilities.
 - The character's native BRD GearSwap controller is the sole owner of party
   songs. PartyStart selects its Melee, Tank, or Mage preset and separately
   maintains only hostile songs.
-- GEO supplies bubbles instead of duplicating RDM Refresh.
+- GEO supplies bubbles and Entrust Refresh to the primary MP frontline job.
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
 - AutoWS2 owns follower weapon skills in the `physical` profile.
@@ -66,8 +68,9 @@ include('Common/PartyStart_RDM.lua')
 include('Common/PartyStart_WHM.lua')
 ```
 
-HealBot remains loaded for defensive healing and status removal, but PartyStart
-always disables its assist, engage, and offensive-debuff modes. BRD and RDM no
+HealBot remains loaded, but PartyStart enables it only on the current RDM
+healer and always disables its assist, engage, and offensive-debuff modes.
+BRD and RDM no
 longer use HealBot for spell automation. COR requires Roller2. GEO, RDM, BRD,
 WHM, and BLU profiles use their GearSwap command interfaces. The physical
 offense layer requires AutoWS2 on each follower.
@@ -93,16 +96,16 @@ AutoBuff modes. They also disable AutoWS2 only on a follower instance that the
 current PartyStart instance enabled; Dolomedes' AutoWS2 state is never changed.
 Loading PartyStart itself is inert.
 
-`physical` is the default for the current BLU/COR/RDM/BRD/WHM/GEO party:
+`physical` is the default for the current BLU/PLD/DNC/BRD/RDM/GEO party:
 
-- COR: Chaos Roll + Samurai Roll
+- PLD: AutoBuff and AutoTank modes; Naegling + Savage Blade
+- DNC: Haste Samba, Box Step, Tauret + Evisceration
 - BRD: Victory March + Valor Minuet V + Blade Madrigal
-- GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the WHM
+- GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the PLD
 - RDM GearSwap: best learned Refresh tiers for MP jobs, Haste for physical
-  participants, self Temper/Gain-STR/Phalanx, and MP-aware Dia + Distract
-  maintenance on the driver's target
-- WHM GearSwap: Protectra V, Shellra V, Auspice, Afflatus Solace, Aquaveil,
-  and Reraise; HealBot continues curing and status removal
+  participants, Protect/Shell for the party, self
+  Temper/Gain-STR/Phalanx, MP-aware Dia + Distract maintenance on the driver's
+  target, and HealBot curing/status removal
 - Follower offense: Tackleberry and Barneystinson use Savage Blade,
   Kickpuncher uses Evisceration, and Smalls and Achoo use Black Halo. All five
   fire at 1000 TP. GearSwap selects Naegling, Tauret, and Maxentius
@@ -113,12 +116,12 @@ They prefer higher tiers and fall back where configured.
 
 ## Profile intent
 
-| Profile | COR | BRD | GEO |
-| --- | --- | --- | --- |
-| `physical` | Chaos / Samurai | March / Minuet / Madrigal | Fury / Frailty |
-| `accuracy` | Chaos / Hunter | March / Madrigal / Minuet | Torpor / Frailty |
-| `magic` | Wizard / Warlock | Ballad / March / Madrigal | Acumen / Malaise |
-| `safe` | Chaos / Gallant | March / Scherzo / Madrigal | Barrier / Frailty |
+| Profile | BRD | GEO |
+| --- | --- | --- |
+| `physical` | March / Minuet / Madrigal | Fury / Frailty |
+| `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
+| `magic` | Ballad / March / Madrigal | Acumen / Malaise |
+| `safe` | March / Scherzo / Madrigal | Barrier / Frailty |
 
 RDM enfeebles by profile:
 
@@ -132,6 +135,9 @@ RDM enfeebles by profile:
 ## Safety and limitations
 
 - Run startup while out of combat and with all intended clients online.
+- Job discovery is dynamic, but physical offense is character-and-job guarded.
+  If a configured character is on an unexpected job, PartyStart leaves that
+  client's AutoWS2 off and reports that no policy matched.
 - PartyStart configures support and follower AutoWS2 automation; it does not
   select targets, move, or engage. PartyCombat exclusively owns those actions.
 - Every profile clears inherited HealBot follow, assist, and engage state on
