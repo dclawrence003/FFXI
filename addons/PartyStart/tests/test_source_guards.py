@@ -30,12 +30,15 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("debuff_mp_floor = 45", physical)
         self.assertIn("debuff_min_target_hpp = 50", physical)
 
-    def test_rdm_refreshes_and_shells_before_offensive_magic(self):
+    def test_rdm_support_precedes_offensive_magic(self):
         action = RDM.split("local function pstart_rdm_action()", 1)[1]
         party = action.index("pstart_rdm_cast_party_buffs()")
         debuff = action.index("pstart_rdm_cast_debuff(profile)")
         self.assertLess(party, debuff)
-        self.assertIn("party_shell = true", RDM)
+        master = RDM.split("master = {", 1)[1].split("physical = {", 1)[0]
+        self.assertIn("party_shell = false", master)
+        self.assertIn("routine_buff_mp_floor = 35", master)
+        self.assertIn("tank_buff_mp_floor = 20", master)
         self.assertIn("{'Dia III', 'Dia II', 'Dia'}", RDM)
         self.assertIn("PSTART_RDM_LOSE_EFFECT_MESSAGES", RDM)
         self.assertIn("pstart_rdm_register_remote_buff_loss", RDM)
@@ -175,6 +178,21 @@ class PartyStartSourceGuards(unittest.TestCase):
             apply_rdm.index("ipairs(refresh_others)"),
         )
         self.assertIn("table.insert(refresh_targets, 1, name)", apply_rdm)
+
+    def test_master_rdm_refresh_scope_is_sustainable(self):
+        apply_rdm = ADDON.split("local function apply_rdm", 1)[1]
+        apply_rdm = apply_rdm.split("local function apply_brd", 1)[0]
+        self.assertIn("local master_refresh = profile_name == 'master'", apply_rdm)
+        self.assertIn("name:lower() == player.name:lower()", apply_rdm)
+        self.assertIn("or job == 'PLD' or job == 'RUN'", apply_rdm)
+        self.assertIn("if profile_name ~= 'master' or master_refresh", apply_rdm)
+        self.assertIn("local function haste_rank", apply_rdm)
+        self.assertIn("{'Gain-MND', 'Gain-STR'}", RDM)
+        self.assertIn("local function pstart_rdm_can_spend", RDM)
+        self.assertIn("local post_cast_mpp", RDM)
+        self.assertIn("return post_cast_mpp >= mp_floor", RDM)
+        self.assertIn("Phalanx=225", RDM)
+        self.assertIn("'Phalanx', 225, tank_floor", RDM)
 
     def test_geo_lean_mode_preserves_colure_automation(self):
         self.assertIn("buff_spell_lists.Auto = {}", GEO)

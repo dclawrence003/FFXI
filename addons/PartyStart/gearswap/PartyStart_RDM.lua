@@ -7,10 +7,20 @@
 
 local pstart_rdm_profiles = {
     master = {
-        gain = {spells={'Gain-STR'}, buff='STR Boost'},
+        -- Black Halo is 70% MND / 30% STR, so MND is the stronger equal-cost
+        -- Gain spell for Smalls's Maxentius offense.
+        gain = {
+            spells={'Gain-MND', 'Gain-STR'},
+            buff='MND Boost',
+            buffs={['Gain-MND']='MND Boost', ['Gain-STR']='STR Boost'},
+        },
         temper = true,
         lean = true,
-        party_shell = true,
+        -- Apex Efts do not cast spells. Their magical TP effects apply status
+        -- ailments without listed magic damage, which Shell does not prevent.
+        party_shell = false,
+        routine_buff_mp_floor = 35,
+        tank_buff_mp_floor = 20,
         debuff_mp_floor = 55,
         debuff_min_target_hpp = 65,
         debuffs = {
@@ -206,8 +216,9 @@ local function pstart_rdm_owns_buff(name, buff)
     if buff == 'Shell' then
         return profile.party_shell or not profile.lean
     elseif buff == 'Protect' then
-        -- Majesty supplies the initial Protect in master. RDM repairs only an
-        -- individual copy that an action packet confirms was dispelled.
+        -- Majesty supplies initial Protect in master. RDM repairs only an
+        -- individual copy that a loss packet confirms was dispelled, subject
+        -- to the sustained profile's routine MP reserve.
         return pstart_rdm.profile == 'master' or not profile.lean
     end
     return false
@@ -245,7 +256,7 @@ local function pstart_rdm_register_remote_buff_loss(
         choices = choices,
         buff = buff.en,
         duration = ({
-            Haste=165, Refresh=135, Phalanx=165,
+            Haste=165, Refresh=135, Phalanx=225,
             Shell=1650, Protect=1800,
         })[buff.en] or 165,
     }
@@ -272,7 +283,26 @@ windower.raw_register_event('action message', function(
     pstart_rdm_register_remote_buff_loss(target_id, message_id, param_1)
 end)
 
-local function pstart_rdm_cast_buff(name, choices, buff, duration)
+local function pstart_rdm_can_spend(spell, mp_floor)
+    if not mp_floor or mp_floor <= 0 then
+        return true
+    end
+    -- GearSwap's packet parser exposes max_mp directly. Retain a derived
+    -- fallback for startup frames before that field has populated.
+    local max_mp = player.max_mp or 0
+    if max_mp <= 0 and player.mp > 0 and player.mpp > 0 then
+        max_mp = player.mp * 100 / player.mpp
+    end
+    if max_mp <= 0 then
+        return false
+    end
+    local post_cast_mpp = (player.mp - spell.mp_cost)
+        * 100 / max_mp
+    return post_cast_mpp >= mp_floor
+end
+
+local function pstart_rdm_cast_buff(
+    name, choices, buff, duration, mp_floor)
     local spell = pstart_rdm_spell(choices)
     local token = pstart_rdm_party_token(name)
     if not spell or not token or not pstart_rdm_in_range(name) then
@@ -290,7 +320,9 @@ local function pstart_rdm_cast_buff(name, choices, buff, duration)
         return false
     end
 
-    if pstart_rdm_ready(spell) then
+    if pstart_rdm_can_spend(spell, mp_floor)
+        and pstart_rdm_ready(spell)
+    then
         pstart_rdm.pending = {
             kind = 'buff',
             spell_id = spell.id,
@@ -305,12 +337,21 @@ local function pstart_rdm_cast_buff(name, choices, buff, duration)
 end
 
 local function pstart_rdm_cast_reactive_repair()
+    local profile = pstart_rdm_profiles[pstart_rdm.profile]
     for key, task in pairs(pstart_rdm.reactive_repairs) do
+        local mp_floor = 0
+        if profile and profile.lean and task.buff ~= 'Refresh' then
+            if task.buff == 'Phalanx' then
+                mp_floor = profile.tank_buff_mp_floor or 0
+            else
+                mp_floor = profile.routine_buff_mp_floor or 0
+            end
+        end
         if not pstart_rdm_party_token(task.name) then
             pstart_rdm.reactive_repairs[key] = nil
         elseif pstart_rdm_in_range(task.name)
             and pstart_rdm_cast_buff(
-                task.name, task.choices, task.buff, task.duration)
+                task.name, task.choices, task.buff, task.duration, mp_floor)
         then
             -- pstart_rdm_cast_buff created the pending cast record. Retain the
             -- repair on interruption and retire it only after a completed cast.
@@ -448,6 +489,9 @@ local function pstart_rdm_cast_party_buffs()
     -- Refresh the RDM first so offensive work cannot consume the reserve
     -- before MP recovery is established.
     local refresh = pstart_rdm_refresh_priority(pstart_rdm.refresh)
+    local profile = pstart_rdm_profiles[pstart_rdm.profile]
+    local routine_floor = profile.routine_buff_mp_floor or 0
+    local tank_floor = profile.tank_buff_mp_floor or routine_floor
     local defense = pstart_rdm_union_names(
         pstart_rdm.haste, pstart_rdm.refresh, pstart_rdm.phalanx)
     for _, name in ipairs(refresh) do
@@ -459,22 +503,21 @@ local function pstart_rdm_cast_party_buffs()
     end
     for _, name in ipairs(pstart_rdm.haste) do
         if pstart_rdm_cast_buff(
-            name, {'Haste II', 'Haste'}, 'Haste', 165)
+            name, {'Haste II', 'Haste'}, 'Haste', 165, routine_floor)
         then
             return true
         end
     end
     for _, name in ipairs(pstart_rdm.phalanx) do
         if pstart_rdm_cast_buff(
-            name, {'Phalanx II'}, 'Phalanx', 165)
+            name, {'Phalanx II'}, 'Phalanx', 225, tank_floor)
         then
             return true
         end
     end
-    if pstart_rdm_profiles[pstart_rdm.profile].party_shell then
-        -- One long-duration Shell pass is worth its MP against Apex Eft magic
-        -- and TP moves. Protect is intentionally left to Majesty PLD so the
-        -- sustained RDM does not maintain two six-character rotations.
+    if profile.party_shell then
+        -- General-purpose profiles retain one long-duration Shell pass.
+        -- Protect is kept separate so profiles can choose their defense cost.
         for _, name in ipairs(defense) do
             if pstart_rdm_cast_buff(name,
                 {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
@@ -484,7 +527,7 @@ local function pstart_rdm_cast_party_buffs()
             end
         end
     end
-    if not pstart_rdm_profiles[pstart_rdm.profile].lean then
+    if not profile.lean then
         -- Richer profiles retain individual party defenses. The sustained
         -- master profile omits this twelve-cast rotation to preserve MP.
         for _, name in ipairs(defense) do
@@ -508,9 +551,18 @@ local function pstart_rdm_cast_party_buffs()
 end
 
 local function pstart_rdm_cast_self_buffs(profile)
-    local self_buffs = {
-        {spells=profile.gain.spells, buff=profile.gain.buff},
-    }
+    local routine_floor = profile.routine_buff_mp_floor or 0
+    local self_buffs = {}
+    local gain_spell = pstart_rdm_spell(profile.gain.spells)
+    if gain_spell then
+        local gain_buff = profile.gain.buffs
+            and profile.gain.buffs[gain_spell.en]
+            or profile.gain.buff
+        self_buffs[#self_buffs + 1] = {
+            spells=profile.gain.spells,
+            buff=gain_buff,
+        }
+    end
     if not profile.lean then
         self_buffs[#self_buffs + 1] =
             {spells={'Aquaveil'}, buff='Aquaveil'}
@@ -522,7 +574,7 @@ local function pstart_rdm_cast_self_buffs(profile)
     for _, task in ipairs(self_buffs) do
         if not buffactive[task.buff]
             and pstart_rdm_cast_buff(
-                player.name, task.spells, task.buff, 0)
+                player.name, task.spells, task.buff, 0, routine_floor)
         then
             return true
         end
@@ -531,7 +583,8 @@ local function pstart_rdm_cast_self_buffs(profile)
     if profile.temper and player.status == 'Engaged'
         and not buffactive['Multi Strikes']
         and pstart_rdm_cast_buff(
-            player.name, {'Temper II', 'Temper'}, 'Multi Strikes', 0)
+            player.name, {'Temper II', 'Temper'}, 'Multi Strikes', 0,
+            routine_floor)
     then
         return true
     end
@@ -659,6 +712,13 @@ function user_job_self_command(commandArgs, eventArgs)
             ('PartyStart RDM reactive buff repairs: %d / last %s')
             :format(pstart_rdm.remote_loss_count,
                 tostring(pstart_rdm.last_remote_loss)))
+        local profile = pstart_rdm_profiles[pstart_rdm.profile] or {}
+        add_to_chat(122,
+            ('PartyStart RDM MP %d%% / targets H:%d R:%d P:%d / reserve %d%% / Shell %s')
+            :format(player.mpp or 0, #pstart_rdm.haste,
+                #pstart_rdm.refresh, #pstart_rdm.phalanx,
+                profile.routine_buff_mp_floor or 0,
+                profile.party_shell and 'On' or 'Off'))
         return
     elseif requested == 'off' then
         pstart_rdm.active = false

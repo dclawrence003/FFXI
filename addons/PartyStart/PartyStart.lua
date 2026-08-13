@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.8.0'
+_addon.version = '0.8.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -338,10 +338,18 @@ local function apply_rdm(player, profile_name, roster, leader)
             issue(('hb cancelbuff %s %s'):format(name, haste))
         end
         if refresh and mp_jobs:contains(job) then
-            local destination = (job == 'PLD' or job == 'RUN')
-                and refresh_tanks or refresh_others
-            destination[#destination + 1] = name
+            -- Always clear any HealBot registration inherited from an older
+            -- PartyStart profile, even when GearSwap will not maintain this
+            -- target in the sustained profile.
             issue(('hb cancelbuff %s %s'):format(name, refresh))
+            local master_refresh = profile_name == 'master'
+                and (name:lower() == player.name:lower()
+                    or job == 'PLD' or job == 'RUN')
+            if profile_name ~= 'master' or master_refresh then
+                local destination = (job == 'PLD' or job == 'RUN')
+                    and refresh_tanks or refresh_others
+                destination[#destination + 1] = name
+            end
         end
         local phalanx_wanted = profile_name == 'master'
             and job == 'PLD'
@@ -354,8 +362,29 @@ local function apply_rdm(player, profile_name, roster, leader)
         end
     end
 
-    -- RDM's controller moves itself to the front. Place tanks ahead of the
-    -- remaining MP jobs so the main healer gets Refresh immediately after it.
+    if profile_name == 'master' then
+        -- The MP reserve can intentionally pause the tail of this list. Keep
+        -- the tank/healer and primary physical contributors at the front so
+        -- low-priority support melee never delays the core party.
+        local function haste_rank(name)
+            local job = roster[name].main_job
+            if job == 'PLD' or job == 'RUN' then return 1 end
+            if name:lower() == leader:lower() then return 2 end
+            if job == 'DNC' then return 3 end
+            if job == 'COR' or job == 'RDM' or job == 'BRD' then return 4 end
+            if job == 'GEO' then return 5 end
+            return 6
+        end
+        table.sort(haste_targets, function(left, right)
+            local left_rank, right_rank = haste_rank(left), haste_rank(right)
+            return left_rank == right_rank and left < right
+                or left_rank < right_rank
+        end)
+    end
+
+    -- RDM's controller moves itself to the front. In master this leaves only
+    -- the RDM and PLD/RUN on the Refresh rotation; Ballad supplies the other
+    -- MP jobs. Richer profiles still append every MP job after the tanks.
     for _, name in ipairs(refresh_tanks) do
         refresh_targets[#refresh_targets + 1] = name
     end
@@ -373,7 +402,8 @@ local function apply_rdm(player, profile_name, roster, leader)
     end
 
     local old_self = {
-        'Temper II', 'Temper', 'Gain-STR', 'Aquaveil', 'Phalanx', 'Reraise',
+        'Temper II', 'Temper', 'Gain-STR', 'Gain-MND',
+        'Aquaveil', 'Phalanx', 'Reraise',
     }
     for _, spell in ipairs(old_self) do
         if knows_spell(spell) then

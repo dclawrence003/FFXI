@@ -16,8 +16,10 @@ job, gear, or spell-access changes.
 Separate character macros tend to drift and duplicate responsibilities.
 PartyStart establishes clear ownership:
 
-- RDM GearSwap maintains Haste II, Refresh III, party Shell, self-offense
-  buffs, Phalanx II on PLD, low-cost Dia, and final-resort emergency healing.
+- RDM GearSwap maintains Haste II, the best learned Refresh tier on itself and
+  PLD/RUN, self-offense buffs, Phalanx II on PLD, low-cost Dia, and
+  final-resort emergency healing. `master` omits party Shell at the current
+  Apex Eft camp; richer profiles retain it.
   HealBot remains enabled on RDM only for packet-backed status removal in
   `master`; its cure queue is disabled.
 - PLD GearSwap is the primary healer in `master`. It evaluates HP before the
@@ -131,14 +133,28 @@ Majesty curing plus continuously maintained, non-redundant support.
 
 The active stack is Chaos/Samurai Roll, Victory March/Mage's Ballad III/Blade
 Madrigal, Indi-Fury/Geo-Frailty, Entrusted Indi-Refresh on PLD, Haste II,
-Refresh III, party Shell, Phalanx II on PLD, Haste Samba, Box Step, Dia III
-(with learned fallback), and Carnage Elegy (with learned fallback). Haste II
-plus Victory March reaches the magic-haste cap; Haste Samba is separate
-job-ability haste. Dia, Box Step, and Geo-Frailty stack, so all three are kept.
+the best learned Refresh tier on Smalls and the PLD, Phalanx II on PLD, Haste
+Samba, Box Step, Dia III (with learned fallback), and Carnage Elegy (with
+learned fallback). Ballad supplies the BRD and GEO instead of spending another
+two single-target Refresh casts. Haste II plus Victory March reaches the
+magic-haste cap; Haste Samba is separate job-ability haste. Dia, Box Step, and
+Geo-Frailty stack, so all three are kept.
 
 Smalls skips the six-character Protect rotation and routine Aquaveil,
-self-Phalanx, and Reraise loop. Tackleberry's Majesty Protect supplies Protect,
+self-Phalanx, Reraise, and six-character Shell loop. The local Eft family page
+classifies Numbing Noise and Toxic Spit as magical status effects, but lists no
+damage for either; Shell reduces magic damage and does not prevent their Stun,
+Poison, or Geist Wall's dispel. Its 558 MP six-character pass therefore has no
+useful return at this camp. Tackleberry's Majesty Protect supplies Protect,
 and the richer profiles retain the omitted RDM work.
+Smalls reserves the last 35% of his MP from Haste, self Gain/Temper, and routine
+post-dispel repairs; Phalanx II on the PLD may spend down to 20%, while Refresh
+on Smalls and the PLD remains exempt so MP recovery cannot deadlock. Core Haste
+targets are ordered ahead of lower-priority BRD/GEO melee. His stat spell is
+Gain-MND (falling back to Gain-STR if necessary) because Black Halo is 70% MND
+and 30% STR; both spells cost 36 MP. Phalanx II's controller timer is 225
+seconds against its 240-second base duration, avoiding the former 75-second
+early recast.
 If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
 only while at or above 70% HP. His GearSwap controller then casts Cure on
 himself until he reaches 90% HP. Tackleberry begins routine healing below 82%
@@ -162,8 +178,8 @@ worth their time and MP cost.
 - DNC: Haste Samba, Box Step, Tauret + Evisceration
 - BRD (`master`): Victory March + Mage's Ballad III + Blade Madrigal
 - GEO: Indi-Fury + Geo-Frailty; Entrust Indi-Refresh to the PLD
-- RDM GearSwap: best learned Refresh tiers for MP jobs, Haste for physical
-  participants, Shell for the party, self Temper/Gain-STR, Phalanx II on PLD,
+- RDM GearSwap (`master`): best learned Refresh tier on itself and PLD/RUN,
+  Haste for physical participants, self Temper/Gain-MND, Phalanx II on PLD,
   MP-aware enfeebles, final-resort curing, and HealBot status removal
 - Follower offense: Tackleberry and Barneystinson use Savage Blade,
   Kickpuncher uses Evisceration, and Smalls and Achoo use Black Halo. All five
@@ -195,6 +211,9 @@ RDM enfeebles by profile:
 | `accuracy` | Frazzle, Dia, Distract |
 | `magic` | Frazzle, Dia, Addle |
 | `safe` | Frazzle, Dia, Distract, Slow, Paralyze, Blind, Addle |
+
+On Smalls, `//gs c pstartrdm status` reports current MP, Haste/Refresh/Phalanx
+target counts, the routine MP reserve, and whether party Shell is enabled.
 
 ## Safety and limitations
 
@@ -230,10 +249,12 @@ RDM enfeebles by profile:
   move, engage, or disengage any character, and never sends FastFollow
   commands. PartyCombat is the sole owner of physical engagement and combat
   movement, avoiding competing combat controllers.
-- RDM prioritizes party Refresh (self first, then PLD/RUN), then Haste, Phalanx, and Shell,
-  then offensive enfeebles. Routine `physical` mode conserves MP by omitting
-  Frazzle, refusing new enfeebles below 45% MP, and ignoring targets already
-  below 50% HP. The heavier profiles retain Frazzle and use a 35% MP floor.
+- RDM prioritizes Refresh (self first, then PLD/RUN), then Haste and Phalanx,
+  then offensive enfeebles. `master` omits party Shell, limits Refresh to the
+  RDM and PLD/RUN, and guards routine buff spending with a 35% MP reserve.
+  Routine `physical` mode conserves MP by omitting Frazzle, refusing new
+  enfeebles below 45% MP, and ignoring targets already below 50% HP. The
+  heavier profiles retain party Shell, Frazzle, and a 35% enfeeble floor.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy
