@@ -6,6 +6,13 @@
 --     include('Common/PartyStart_RDM.lua')
 
 local pstart_rdm_profiles = {
+    master = {
+        gain = {spells={'Gain-STR'}, buff='STR Boost'},
+        temper = true,
+        debuff_mp_floor = 100,
+        debuff_min_target_hpp = 100,
+        debuffs = {},
+    },
     physical = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,
@@ -163,6 +170,23 @@ local function pstart_rdm_cast_buff(name, choices, buff, duration)
         }
         windower.chat.input('/ma "'..spell.en..'" '..token)
         tickdelay = os.clock() + 3
+        return true
+    end
+    return false
+end
+
+local function pstart_rdm_convert()
+    if player.mpp >= 15 or player.hpp < 70 or not player.in_combat
+        or midaction() or moving or silent_check_disable()
+        or (tickdelay and os.clock() < tickdelay)
+    then
+        return false
+    end
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    if (recasts[49] or 999) < 1 then
+        windower.chat.input('/ja "Convert" <me>')
+        tickdelay = os.clock() + 2
+        add_to_chat(122, 'PartyStart RDM: low MP; using guarded Convert.')
         return true
     end
     return false
@@ -346,6 +370,7 @@ local function pstart_rdm_action()
         return false
     end
     if pstart_rdm_cast_composure() then return true end
+    if pstart_rdm_convert() then return true end
     if pstart_rdm_cast_party_buffs() then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
     return pstart_rdm_cast_debuff(profile)

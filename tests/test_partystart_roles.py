@@ -15,8 +15,9 @@ class PartyStartRolePolicy(unittest.TestCase):
             ROOT / "addons/PartyStart/gearswap/PartyStart_RDM.lua"
         ).read_text(encoding="utf-8")
 
-    def test_current_follower_jobs_are_guarded(self):
+    def test_current_offense_jobs_are_guarded(self):
         for character, job, weapon, weaponskill in (
+            ("Dolomedes", "COR", "DualSavage", "Savage Blade"),
             ("Tackleberry", "PLD", "Naegling", "Savage Blade"),
             ("Kickpuncher", "DNC", "Tauret", "Evisceration"),
             ("Barneystinson", "BRD", "DualSavage", "Savage Blade"),
@@ -40,6 +41,22 @@ class PartyStartRolePolicy(unittest.TestCase):
     def test_geo_entrust_prefers_the_pld(self):
         self.assertIn("entrust_jobs={'PLD','RUN','DRK','BLU'}", self.addon)
         self.assertNotIn("entrust_job='WHM'", self.addon)
+
+    def test_master_profile_is_mp_conservative(self):
+        self.assertIn("local last_profile = 'master'", self.addon)
+        master = self.addon[
+            self.addon.index("    master = {") : self.addon.index(
+                "    physical = {"
+            )
+        ]
+        self.assertIn("brd_debuffs = {}", master)
+        self.assertIn("rdm_debuffs = {}", master)
+        self.assertIn("entrust='Regen'", master)
+        self.assertIn("session.profile == 'master'", self.addon)
+        self.assertIn("master = {", self.rdm)
+        self.assertIn("local function pstart_rdm_convert()", self.rdm)
+        self.assertIn("player.mpp >= 15 or player.hpp < 70", self.rdm)
+        self.assertIn("if pstart_rdm_convert() then return true end", self.rdm)
 
     def test_rdm_defenses_use_the_full_target_union(self):
         self.assertIn("local defense = pstart_rdm_union_names(", self.rdm)

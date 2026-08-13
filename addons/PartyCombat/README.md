@@ -128,7 +128,7 @@ version 0.2.1 and may be retained as a historical backup.
 
 ## PartyStart and AutoWS2 integration
 
-PartyStart does not police engagement. Its `physical` profile configures and
+PartyStart does not police engagement. Its `physical` and `master` profiles configure and
 enables AutoWS2 only when a follower matches its configured character/job
 policy, while PartyCombat remains the only
 owner of target selection, approach movement, engagement, disengagement, and

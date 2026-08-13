@@ -7,10 +7,19 @@
 --     include('Common/PartyStart_BRD.lua')
 --
 -- PartyStart drives it with:
---     gs c pstartbrd <physical|accuracy|magic|safe> <leader>
+--     gs c pstartbrd <master|physical|accuracy|magic|safe> <leader>
 --     gs c pstartbrd off
 
 local pstart_brd_profiles = {
+    master = {
+        song_mode = 'Melee',
+        songs = {
+            {spell='Victory March', buff='march'},
+            {spell='Valor Minuet V', buff='minuet'},
+            {spell='Blade Madrigal', buff='madrigal'},
+        },
+        debuffs = {},
+    },
     physical = {
         song_mode = 'Melee',
         songs = {
@@ -302,7 +311,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
-            ..'<physical|accuracy|magic|safe|off> <leader>')
+            ..'<master|physical|accuracy|magic|safe|off> <leader>')
     end
 
     if state.DisplayMode and state.DisplayMode.value then

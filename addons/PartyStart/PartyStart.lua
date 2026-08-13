@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.5.0'
+_addon.version = '0.6.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -22,11 +22,19 @@ local APPLY_DELAY = 1.5
 local sessions = {}
 local current_profile = nil
 local autows2_owned = false
-local last_profile = 'physical'
+local last_profile = 'master'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
 
 local profiles = {
+    master = {
+        cor = {'chaos', 'samurai'},
+        brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
+        brd_debuffs = {},
+        geo = {indi='Fury', geo='Frailty', entrust='Regen',
+            entrust_jobs={'PLD','RUN','RDM','COR'}},
+        rdm_debuffs = {},
+    },
     physical = {
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
@@ -107,10 +115,14 @@ local haste_jobs = S{
     'BLU','COR','PUP','DNC','GEO','RUN'
 }
 
--- Current roster offense assignments. PartyStart only applies these during
--- the physical profile and never applies one to Dolomedes. GearSwap selects
--- the weapon; AutoWS2 remains the sole weapon-skill decision maker.
+-- Current roster offense assignments. PartyStart applies these during the
+-- physical and master profiles. GearSwap selects the weapon; AutoWS2 remains
+-- the sole weapon-skill decision maker.
 local physical_offense = {
+    Dolomedes = {
+        jobs = S{'COR'}, weapon_mode = 'DualSavage',
+        ws = 'Savage Blade', tp = 1000,
+    },
     Tackleberry = {
         jobs = S{'PLD'}, weapon_mode = 'Naegling',
         ws = 'Savage Blade', tp = 1000,
@@ -231,8 +243,7 @@ end
 
 local function apply_physical_offense(player)
     local offense = physical_offense[player.name]
-    if not offense or player.name == 'Dolomedes'
-        or not offense.jobs:contains(player.main_job) then
+    if not offense or not offense.jobs:contains(player.main_job) then
         stop_owned_autows2()
         if offense then
             chat(123, ('No offense policy for %s on %s; AutoWS2 unchanged.')
@@ -407,6 +418,8 @@ end
 local function apply_cor(profile)
     issue(('r2 policy conservative; r2 engaged off; r2 roll1 %s; '
         ..'r2 roll2 %s; r2 on'):format(profile.cor[1], profile.cor[2]))
+    issue('gs c set AutoWSMode false')
+    issue('hb db off; hb as off; hb as attack off; hb off')
 end
 
 local function apply_profile(session)
@@ -440,14 +453,14 @@ local function apply_profile(session)
         issue('hb db off; hb as off; hb as attack off; hb off')
     end
 
-    if session.profile == 'physical' then
+    if session.profile == 'physical' or session.profile == 'master' then
         apply_physical_offense(player)
     else
         stop_owned_autows2()
     end
 
     current_profile = session.profile
-    chat(158, ('%s ready as %s/%s; follower AutoWS2 %s; combat ownership unchanged.')
+    chat(158, ('%s ready as %s/%s; AutoWS2 %s; combat ownership unchanged.')
         :format(session.profile, player.main_job, player.sub_job,
             autows2_owned and 'on' or 'unchanged'))
 end
@@ -599,8 +612,8 @@ windower.register_event('addon command', function(command)
         chat(207, ('Active: %s | Selected: %s')
             :format(current_profile or 'off', last_profile))
     else
-        chat(207, 'Commands: on | off | physical | accuracy | magic | safe | status')
+        chat(207, 'Commands: on | off | master | physical | accuracy | magic | safe | status')
     end
 end)
 
-chat(158, 'Loaded. Use //pstart physical for the BLU/PLD/DNC/BRD/RDM/GEO party.')
+chat(158, 'Loaded. Use //pstart master for sustained COR/PLD/DNC/BRD/RDM/GEO grinding.')
