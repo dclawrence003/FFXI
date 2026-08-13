@@ -80,6 +80,7 @@ local pstart_rdm = {
     remote_loss_count = 0,
     last_remote_loss = 'none',
     last_loss_events = {},
+    reactive_repairs = {},
 }
 
 local PSTART_RDM_LOSE_EFFECT_MESSAGES = {
@@ -177,6 +178,41 @@ local function pstart_rdm_buff_key(name, spell)
     return name:lower()..':'..tostring(spell.id)
 end
 
+local function pstart_rdm_name_in(names, wanted)
+    for _, name in ipairs(names or {}) do
+        if name:lower() == wanted:lower() then
+            return true
+        end
+    end
+    return false
+end
+
+local function pstart_rdm_owns_buff(name, buff)
+    if buff == 'Haste' then
+        return pstart_rdm_name_in(pstart_rdm.haste, name)
+    elseif buff == 'Refresh' then
+        return pstart_rdm_name_in(pstart_rdm.refresh, name)
+    elseif buff == 'Phalanx' then
+        return pstart_rdm_name_in(pstart_rdm.phalanx, name)
+    end
+
+    local profile = pstart_rdm_profiles[pstart_rdm.profile]
+    local defensive_target = pstart_rdm_name_in(pstart_rdm.haste, name)
+        or pstart_rdm_name_in(pstart_rdm.refresh, name)
+        or pstart_rdm_name_in(pstart_rdm.phalanx, name)
+    if not profile or not defensive_target then
+        return false
+    end
+    if buff == 'Shell' then
+        return profile.party_shell or not profile.lean
+    elseif buff == 'Protect' then
+        -- Majesty supplies the initial Protect in master. RDM repairs only an
+        -- individual copy that an action packet confirms was dispelled.
+        return pstart_rdm.profile == 'master' or not profile.lean
+    end
+    return false
+end
+
 local function pstart_rdm_register_remote_buff_loss(
     target_id, message_id, buff_id)
     if not pstart_rdm.active
@@ -192,6 +228,7 @@ local function pstart_rdm_register_remote_buff_loss(
     local target = windower.ffxi.get_mob_by_id(target_id)
     if not target or not pstart_rdm_valid_name(target.name) then return end
     if not pstart_rdm_party_token(target.name) then return end
+    if not pstart_rdm_owns_buff(target.name, buff.en) then return end
     local spell = pstart_rdm_spell(choices)
     if not spell then return end
 
@@ -201,7 +238,17 @@ local function pstart_rdm_register_remote_buff_loss(
         return
     end
     pstart_rdm.last_loss_events[event_key] = now
-    pstart_rdm.buff_timers[pstart_rdm_buff_key(target.name, spell)] = 0
+    local repair_key = pstart_rdm_buff_key(target.name, spell)
+    pstart_rdm.buff_timers[repair_key] = 0
+    pstart_rdm.reactive_repairs[repair_key] = {
+        name = target.name,
+        choices = choices,
+        buff = buff.en,
+        duration = ({
+            Haste=165, Refresh=135, Phalanx=165,
+            Shell=1650, Protect=1800,
+        })[buff.en] or 165,
+    }
     pstart_rdm.remote_loss_count = pstart_rdm.remote_loss_count + 1
     pstart_rdm.last_remote_loss = buff.en..' -> '..target.name
 end
@@ -253,6 +300,23 @@ local function pstart_rdm_cast_buff(name, choices, buff, duration)
         windower.chat.input('/ma "'..spell.en..'" '..token)
         tickdelay = os.clock() + 3
         return true
+    end
+    return false
+end
+
+local function pstart_rdm_cast_reactive_repair()
+    for key, task in pairs(pstart_rdm.reactive_repairs) do
+        if not pstart_rdm_party_token(task.name) then
+            pstart_rdm.reactive_repairs[key] = nil
+        elseif pstart_rdm_in_range(task.name)
+            and pstart_rdm_cast_buff(
+                task.name, task.choices, task.buff, task.duration)
+        then
+            -- pstart_rdm_cast_buff created the pending cast record. Retain the
+            -- repair on interruption and retire it only after a completed cast.
+            pstart_rdm.pending.repair_key = key
+            return true
+        end
     end
     return false
 end
@@ -558,6 +622,7 @@ local function pstart_rdm_action()
     if pstart_rdm_emergency_heal() then return true end
     if pstart_rdm_convert_recovery() then return true end
     if pstart_rdm_convert() then return true end
+    if pstart_rdm_cast_reactive_repair() then return true end
     if pstart_rdm_cast_party_buffs() then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
     return pstart_rdm_cast_debuff(profile)
@@ -600,6 +665,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.pending = nil
         pstart_rdm.convert_recovery_until = 0
         pstart_rdm.last_loss_events = {}
+        pstart_rdm.reactive_repairs = {}
         state.AutoBuffMode:set('Off')
         add_to_chat(122, 'PartyStart RDM buff and debuff maintenance is Off.')
         return
@@ -619,6 +685,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.remote_loss_count = 0
         pstart_rdm.last_remote_loss = 'none'
         pstart_rdm.last_loss_events = {}
+        pstart_rdm.reactive_repairs = {}
         state.AutoBuffMode:set('Off')
         tickdelay = 0
         add_to_chat(122, ('PartyStart RDM: %s / leader %s / GearSwap owns magic.')
@@ -649,6 +716,9 @@ function job_aftercast(spell, spellMap, eventArgs)
         local retry = spell.interrupted and 3 or pending.duration
         if pending.kind == 'buff' then
             pstart_rdm.buff_timers[pending.key] = os.clock() + retry
+            if pending.repair_key and not spell.interrupted then
+                pstart_rdm.reactive_repairs[pending.repair_key] = nil
+            end
         else
             pstart_rdm.debuff_timers[pending.key] = os.clock() + retry
         end

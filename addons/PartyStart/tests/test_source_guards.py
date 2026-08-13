@@ -40,6 +40,9 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("PSTART_RDM_LOSE_EFFECT_MESSAGES", RDM)
         self.assertIn("pstart_rdm_register_remote_buff_loss", RDM)
         self.assertIn("remote_loss_count", RDM)
+        self.assertIn("pstart_rdm_cast_reactive_repair", RDM)
+        self.assertIn("pstart_rdm_owns_buff", RDM)
+        self.assertIn("pending.repair_key and not spell.interrupted", RDM)
 
     def test_debuffs_respect_mp_and_target_hp_reserves(self):
         self.assertIn(
