@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.8'
+_addon.version = '0.6.9'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -473,8 +473,16 @@ local function apply_dnc()
         chat(207, 'No Foot Rise unavailable; skipping the dependent '
             ..'No Foot Rise/Presto/Box Step loop.')
     end
-    issue('gs c set AutoSambaMode Haste; gs c set DanceStance Saber Dance; '
-        ..'gs c unset AutoWSMode')
+    if job_abilities:contains(237) then
+        issue('gs c set DanceStance Saber Dance')
+    else
+        -- Saber Dance is merit ability 237. The shared DNC controller checks
+        -- only recast bucket 219, which exists even when the JA is not learned,
+        -- so selecting the stance would retry an unavailable ability forever.
+        issue('gs c set DanceStance None')
+        chat(207, 'Saber Dance unavailable; Dance Stance set to None.')
+    end
+    issue('gs c set AutoSambaMode Haste; gs c unset AutoWSMode')
     issue('hb db off; hb as off; hb as attack off; hb off')
 end
 

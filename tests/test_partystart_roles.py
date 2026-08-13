@@ -40,7 +40,9 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("gs c set AutoPrestoMode", self.addon)
         self.assertIn("gs c set DanceStance Saber Dance", self.addon)
         self.assertIn("job_abilities:contains(239)", self.addon)
+        self.assertIn("job_abilities:contains(237)", self.addon)
         self.assertIn("gs c set AutoBuffMode Off; gs c unset AutoPrestoMode", self.addon)
+        self.assertIn("gs c set DanceStance None", self.addon)
         self.assertNotIn("gs c set AutoTankMode true", self.addon)
         self.assertNotIn("gs c set AutoWSMode false", self.addon)
 
