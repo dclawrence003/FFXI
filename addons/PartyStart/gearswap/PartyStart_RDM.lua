@@ -10,9 +10,12 @@ local pstart_rdm_profiles = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,
         lean = true,
-        debuff_mp_floor = 100,
-        debuff_min_target_hpp = 100,
-        debuffs = {},
+        party_shell = true,
+        debuff_mp_floor = 55,
+        debuff_min_target_hpp = 65,
+        debuffs = {
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
+        },
     },
     physical = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
@@ -74,6 +77,24 @@ local pstart_rdm = {
     debuff_timers = {},
     pending = nil,
     convert_recovery_until = 0,
+    remote_loss_count = 0,
+    last_remote_loss = 'none',
+    last_loss_events = {},
+}
+
+local PSTART_RDM_LOSE_EFFECT_MESSAGES = {
+    [64]=true, [74]=true, [83]=true, [123]=true, [159]=true,
+    [168]=true, [204]=true, [206]=true, [322]=true, [341]=true,
+    [342]=true, [343]=true, [344]=true, [350]=true, [378]=true,
+    [453]=true, [531]=true, [647]=true,
+}
+
+local PSTART_RDM_MAINTAINED_BUFFS = {
+    Haste = {'Haste II', 'Haste'},
+    Refresh = {'Refresh III', 'Refresh II', 'Refresh'},
+    Phalanx = {'Phalanx II'},
+    Shell = {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
+    Protect = {'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect'},
 }
 
 local function pstart_rdm_valid_name(name)
@@ -155,6 +176,54 @@ end
 local function pstart_rdm_buff_key(name, spell)
     return name:lower()..':'..tostring(spell.id)
 end
+
+local function pstart_rdm_register_remote_buff_loss(
+    target_id, message_id, buff_id)
+    if not pstart_rdm.active
+        or not PSTART_RDM_LOSE_EFFECT_MESSAGES[message_id]
+    then
+        return
+    end
+    local buff = res.buffs[buff_id]
+    local choices = buff and PSTART_RDM_MAINTAINED_BUFFS[buff.en]
+        or nil
+    if not choices then return end
+
+    local target = windower.ffxi.get_mob_by_id(target_id)
+    if not target or not pstart_rdm_valid_name(target.name) then return end
+    if not pstart_rdm_party_token(target.name) then return end
+    local spell = pstart_rdm_spell(choices)
+    if not spell then return end
+
+    local event_key = tostring(target_id)..':'..tostring(buff_id)
+    local now = os.clock()
+    if now - (pstart_rdm.last_loss_events[event_key] or 0) < 0.5 then
+        return
+    end
+    pstart_rdm.last_loss_events[event_key] = now
+    pstart_rdm.buff_timers[pstart_rdm_buff_key(target.name, spell)] = 0
+    pstart_rdm.remote_loss_count = pstart_rdm.remote_loss_count + 1
+    pstart_rdm.last_remote_loss = buff.en..' -> '..target.name
+end
+
+-- Apex Eft's Geist Wall can remove a maintained buff long before its normal
+-- duration expires. Invalidate only that target's GearSwap timer from the
+-- authoritative action packet so it is recast without giving HealBot buff
+-- ownership or restarting the whole six-character rotation.
+windower.raw_register_event('action', function(action)
+    for _, target in ipairs((action and action.targets) or {}) do
+        for _, result in ipairs(target.actions or {}) do
+            pstart_rdm_register_remote_buff_loss(
+                target.id, result.message, result.param)
+        end
+    end
+end)
+
+windower.raw_register_event('action message', function(
+    actor_id, target_id, actor_index, target_index,
+    message_id, param_1, param_2, param_3)
+    pstart_rdm_register_remote_buff_loss(target_id, message_id, param_1)
+end)
 
 local function pstart_rdm_cast_buff(name, choices, buff, duration)
     local spell = pstart_rdm_spell(choices)
@@ -241,12 +310,18 @@ local function pstart_rdm_emergency_heal()
         return false
     end
 
+    -- PLD owns routine healing and DNC owns TP-funded emergency healing.
+    -- RDM is the final low-HP/low-complexity safety net only.
+    if player.mpp < 20 then
+        return false
+    end
+
     local target_name, target_token, target_hpp
     for key, member in pairs(windower.ffxi.get_party() or {}) do
         if type(key) == 'string' and key:match('^p[0-5]$')
             and type(member) == 'table' and member.name
             and type(member.hpp) == 'number'
-            and member.hpp > 0 and member.hpp < 50
+            and member.hpp > 0 and member.hpp < 25
             and pstart_rdm_in_range(member.name)
             and (not target_hpp or member.hpp < target_hpp)
         then
@@ -330,6 +405,19 @@ local function pstart_rdm_cast_party_buffs()
             name, {'Phalanx II'}, 'Phalanx', 165)
         then
             return true
+        end
+    end
+    if pstart_rdm_profiles[pstart_rdm.profile].party_shell then
+        -- One long-duration Shell pass is worth its MP against Apex Eft magic
+        -- and TP moves. Protect is intentionally left to Majesty PLD so the
+        -- sustained RDM does not maintain two six-character rotations.
+        for _, name in ipairs(defense) do
+            if pstart_rdm_cast_buff(name,
+                {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
+                'Shell', 1650)
+            then
+                return true
+            end
         end
     end
     if not pstart_rdm_profiles[pstart_rdm.profile].lean then
@@ -423,6 +511,13 @@ local function pstart_rdm_cast_debuff(profile)
     if not target or not leader then
         return false
     end
+    -- PartyCombat owns target synchronization. Use FFXI's valid <t> token
+    -- only after this client is looking at the same mob as the leader; a raw
+    -- numeric server ID is not a valid /ma target argument.
+    local local_target = windower.ffxi.get_mob_by_target('t')
+    if not local_target or local_target.id ~= target.id then
+        return false
+    end
     if player.mpp < (profile.debuff_mp_floor or 0)
         or target.hpp < (profile.debuff_min_target_hpp or 0)
     then
@@ -441,11 +536,7 @@ local function pstart_rdm_cast_debuff(profile)
                         key = key,
                         duration = task.duration,
                     }
-                    -- Cast by mob ID. Acquiring the leader's target with
-                    -- /assist can interact with legacy attack-assist modes and
-                    -- is unnecessary for magical support.
-                    windower.chat.input(
-                        '/ma "'..spell.en..'" '..tostring(target.id))
+                    windower.chat.input('/ma "'..spell.en..'" <t>')
                     tickdelay = os.clock() + 3
                     return true
                 end
@@ -499,11 +590,16 @@ function user_job_self_command(commandArgs, eventArgs)
                 tostring(pstart_rdm.profile or 'none'),
                 tostring(pstart_rdm.leader or 'none'),
                 target_text))
+        add_to_chat(122,
+            ('PartyStart RDM reactive buff repairs: %d / last %s')
+            :format(pstart_rdm.remote_loss_count,
+                tostring(pstart_rdm.last_remote_loss)))
         return
     elseif requested == 'off' then
         pstart_rdm.active = false
         pstart_rdm.pending = nil
         pstart_rdm.convert_recovery_until = 0
+        pstart_rdm.last_loss_events = {}
         state.AutoBuffMode:set('Off')
         add_to_chat(122, 'PartyStart RDM buff and debuff maintenance is Off.')
         return
@@ -520,6 +616,9 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.phalanx = pstart_rdm_names(commandArgs[6])
         pstart_rdm.pending = nil
         pstart_rdm.convert_recovery_until = 0
+        pstart_rdm.remote_loss_count = 0
+        pstart_rdm.last_remote_loss = 'none'
+        pstart_rdm.last_loss_events = {}
         state.AutoBuffMode:set('Off')
         tickdelay = 0
         add_to_chat(122, ('PartyStart RDM: %s / leader %s / GearSwap owns magic.')

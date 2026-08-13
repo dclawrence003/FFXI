@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.9'
+_addon.version = '0.7.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -25,16 +25,22 @@ local autows2_owned = false
 local last_profile = 'master'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
-local healbot_rearm_at = nil
+local zone_rearm_at = nil
+local active_session = nil
+local zone_epoch = 0
 
 local profiles = {
     master = {
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
-        brd_debuffs = {},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
         geo = {indi='Fury', geo='Frailty', entrust='Regen',
             entrust_jobs={'PLD','RUN','RDM','COR'}},
-        rdm_debuffs = {},
+        rdm_debuffs = {
+            {'Dia III', 'Dia II', 'Dia'},
+        },
     },
     physical = {
         cor = {'chaos', 'samurai'},
@@ -371,11 +377,10 @@ local function apply_rdm(player, profile_name, roster, leader)
         profile_name, leader, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets)))
     if profile_name == 'master' then
-        -- PLD owns inexpensive routine curing. RDM's tier-III floor supplies a
-        -- second path for serious damage if the PLD is busy, disabled, or out
-        -- of range. This also avoids depending solely on a freshly reloaded
-        -- GearSwap emergency controller.
-        issue('hb deactivateindoors off; hb enable cure; hb mincure 3; '
+        -- GearSwap owns all HP decisions in the sustained profile. HealBot is
+        -- retained on RDM only for packet-backed status removal; letting it
+        -- also cure creates a race with PLD and drains the RDM first.
+        issue('hb deactivateindoors off; hb disable cure; '
             ..'hb enable na; hb disable buff; hb db off; '
             ..'hb as off; hb as attack off; hb on')
     else
@@ -411,10 +416,15 @@ local function apply_brd(player, profile_name, leader)
     issue(('gs c pstartbrd %s %s'):format(profile_name, leader))
 end
 
-local function apply_geo(player, profile, roster)
+local function apply_geo(player, profile_name, profile, roster)
     local geo = profile.geo
     local entrustee = first_jobs(roster, geo.entrust_jobs)
         or player.name
+    if profile_name == 'master' then
+        issue('gs c pstartgeo lean')
+    else
+        issue('gs c pstartgeo restore')
+    end
     issue(('gs c autoindi %s; gs c autogeo %s; gs c autoentrust %s; '
         ..'gs c autoentrustee %s; gs c set AutoBuffMode Auto')
         :format(geo.indi, geo.geo, geo.entrust, entrustee))
@@ -422,67 +432,35 @@ local function apply_geo(player, profile, roster)
 end
 
 
-local function apply_pld(profile_name)
+local function apply_pld(profile_name, leader)
     -- AutoTankMode and AutoWSMode are boolean Mote states. Boolean states use
     -- `set`/`unset`; appending true/false does not reliably change them.
     issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
+        ..'gs c set HybridMode Tank; '
         ..'gs c unset AutoWSMode')
     if profile_name == 'master' then
-        issue('hb deactivateindoors off; hb enable cure; '
-            ..'hb disable na; hb disable buff; hb mincure 1; '
-            ..'hb db off; hb as off; hb as attack off; hb on')
+        -- HealBot's optional PartyOps gate can reject a newer PartyOps phase
+        -- before action selection. The PLD controller therefore lives in
+        -- GearSwap and runs before native Flash/Provoke upkeep.
+        issue('hb disable cure; hb disable na; hb db off; '
+            ..'hb as off; hb as attack off; hb off')
+        issue(('gs c pstartpld master %s'):format(leader))
     else
+        issue('gs c pstartpld off')
         issue('hb disable cure; hb disable na; '
             ..'hb db off; hb as off; hb as attack off; hb off')
     end
 end
 
-local function rearm_healing_after_zone()
-    if not current_profile then return end
-    local player = windower.ffxi.get_player()
-    if not player then return end
-    if player.main_job == 'PLD' then
-        apply_pld(current_profile)
-    elseif player.main_job == 'RDM' then
-        if current_profile == 'master' then
-            issue('hb deactivateindoors off; hb enable cure; hb mincure 3; '
-                ..'hb enable na; hb disable buff; hb db off; '
-                ..'hb as off; hb as attack off; hb on')
-        else
-            issue('hb deactivateindoors off; hb enable cure; hb mincure 1; '
-                ..'hb enable na; hb disable buff; hb db off; '
-                ..'hb as off; hb as attack off; hb on')
-        end
-    elseif player.main_job == 'WHM' then
-        issue('hb deactivateindoors off; hb db off; hb as off; '
-            ..'hb as attack off; hb on')
-    end
-end
-
-local function apply_dnc()
-    local abilities = windower.ffxi.get_abilities() or {}
-    local job_abilities = S(abilities.job_abilities or {})
-    if job_abilities:contains(239) then
-        issue('gs c set AutoBuffMode Auto; gs c set MainStep Box Step; '
-            ..'gs c set AutoPrestoMode')
-    else
-        -- Stock DNC check_buff treats recast bucket 223 as proof that the
-        -- merit ability No Foot Rise (ability 239) is available. It is not.
-        -- Keep that loop off until the character actually unlocks the JA.
-        issue('gs c set AutoBuffMode Off; gs c unset AutoPrestoMode')
-        chat(207, 'No Foot Rise unavailable; skipping the dependent '
-            ..'No Foot Rise/Presto/Box Step loop.')
-    end
-    if job_abilities:contains(237) then
-        issue('gs c set DanceStance Saber Dance')
-    else
-        -- Saber Dance is merit ability 237. The shared DNC controller checks
-        -- only recast bucket 219, which exists even when the JA is not learned,
-        -- so selecting the stance would retry an unavailable ability forever.
-        issue('gs c set DanceStance None')
-        chat(207, 'Saber Dance unavailable; Dance Stance set to None.')
-    end
-    issue('gs c set AutoSambaMode Haste; gs c unset AutoWSMode')
+local function apply_dnc(profile_name, leader)
+    -- PartyStart_DNC is the sole DNC action owner. Native AutoBuff is kept off
+    -- because its No Foot Rise check treats a recast bucket as proof that the
+    -- merit ability is learned. Dance stance stays None so emergency Waltzes
+    -- remain usable.
+    issue('gs c set AutoBuffMode Off; gs c unset AutoPrestoMode; '
+        ..'gs c set AutoSambaMode Off; gs c set DanceStance None; '
+        ..'gs c unset AutoWSMode; cancel 410')
+    issue(('gs c pstartdnc %s %s'):format(profile_name, leader))
     issue('hb db off; hb as off; hb as attack off; hb off')
 end
 
@@ -511,11 +489,11 @@ local function apply_profile(session)
     elseif player.main_job == 'BRD' then
         apply_brd(player, session.profile, session.leader)
     elseif player.main_job == 'GEO' then
-        apply_geo(player, profile, session.roster)
+        apply_geo(player, session.profile, profile, session.roster)
     elseif player.main_job == 'PLD' then
-        apply_pld(session.profile)
+        apply_pld(session.profile, session.leader)
     elseif player.main_job == 'DNC' then
-        apply_dnc()
+        apply_dnc(session.profile, session.leader)
     elseif player.main_job == 'COR' then
         apply_cor(profile)
     elseif player.main_job == 'BLU' then
@@ -531,9 +509,19 @@ local function apply_profile(session)
     end
 
     current_profile = session.profile
+    active_session = session
     chat(158, ('%s ready as %s/%s; AutoWS2 %s; combat ownership unchanged.')
         :format(session.profile, player.main_job, player.sub_job,
             autows2_owned and 'on' or 'unchanged'))
+end
+
+local function schedule_zone_rearm(delay)
+    if not current_profile or not active_session then return end
+    zone_epoch = zone_epoch + 1
+    local armed_epoch = zone_epoch
+    zone_rearm_at = os.clock() + delay
+    windower.send_command(('wait %d; lua i PartyStart __zonerearm %d')
+        :format(delay, armed_epoch))
 end
 
 local function begin(profile_name)
@@ -583,6 +571,9 @@ local function stop_local()
     if player.main_job == 'BRD' then issue('gs c pstartbrd off') end
     if player.main_job == 'RDM' then issue('gs c pstartrdm off') end
     if player.main_job == 'WHM' then issue('gs c pstartwhm off') end
+    if player.main_job == 'PLD' then issue('gs c pstartpld off') end
+    if player.main_job == 'DNC' then issue('gs c pstartdnc off') end
+    if player.main_job == 'GEO' then issue('gs c pstartgeo restore') end
     if player.main_job == 'GEO' or player.main_job == 'RDM'
         or player.main_job == 'BLU' or player.main_job == 'PLD'
         or player.main_job == 'DNC' then
@@ -596,6 +587,9 @@ local function stop_local()
             ..'gs c set DanceStance None; gs c unset AutoWSMode')
     end
     current_profile = nil
+    active_session = nil
+    zone_rearm_at = nil
+    zone_epoch = zone_epoch + 1
     next_maintenance = 0
     chat(207, 'Support automation stopped; no combat commands were issued.')
 end
@@ -645,9 +639,14 @@ end)
 
 windower.register_event('prerender', function()
     local now = os.clock()
-    if healbot_rearm_at and now >= healbot_rearm_at then
-        healbot_rearm_at = nil
-        rearm_healing_after_zone()
+    if zone_rearm_at and now >= zone_rearm_at then
+        zone_rearm_at = nil
+        if active_session then
+            -- Sel-Include resets AutoBuff, AutoTank, and related states while
+            -- zoning. Reapply the complete policy, not just HealBot, after the
+            -- party and resource tables have settled.
+            apply_profile(active_session)
+        end
     end
     for nonce,session in pairs(sessions) do
         if not session.applied and now >= session.apply_at then
@@ -671,21 +670,37 @@ windower.register_event('prerender', function()
                 issue('gs c pstartrdm tick')
             elseif player.main_job == 'BRD' then
                 issue('gs c pstartbrd tick')
+            elseif player.main_job == 'PLD' then
+                issue('gs c pstartpld tick')
+            elseif player.main_job == 'DNC' then
+                issue('gs c pstartdnc tick')
             end
         end
     end
 end)
 
 windower.register_event('zone change', function()
-    -- HealBot clears or recomputes active state during zoning. Reassert the
-    -- selected support policy once the new zone and party tables have settled.
+    -- HealBot and Sel-Include both reset state during zoning. Reassert the
+    -- complete support policy once the new zone and party tables have settled.
     if current_profile then
-        healbot_rearm_at = os.clock() + 8
+        -- Keep both the normal prerender timer and a Windower command-queue
+        -- wakeup. Some clients spend most of a battlefield exit without
+        -- yielding useful prerender ticks; either path may safely win.
+        schedule_zone_rearm(8)
     end
 end)
 
 windower.register_event('addon command', function(command)
-    command = command and command:lower() or 'physical'
+    local raw_command = command or 'physical'
+    local rearm_epoch = raw_command:match('^__zonerearm%s+(%d+)$')
+    if rearm_epoch then
+        if tonumber(rearm_epoch) == zone_epoch and active_session then
+            zone_rearm_at = nil
+            apply_profile(active_session)
+        end
+        return
+    end
+    command = raw_command:lower()
     if profiles[command] then
         begin(command)
     elseif command == 'on' or command == 'start' then

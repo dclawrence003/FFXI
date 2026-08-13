@@ -1,0 +1,385 @@
+-- PartyStart PLD controller for Selindrile-style GearSwap files.
+-- Integration target: https://github.com/Selindrile/GearSwap
+--
+-- This controller intentionally owns HP decisions only. Selindrile's native
+-- PLD controller continues to own Majesty upkeep, self buffs, Flash, and
+-- subjob enmity after this higher-priority healing pass returns false.
+-- Load at the end of a participating character's PLD gear file:
+--     include('Common/PartyStart_PLD.lua')
+
+local pstart_pld = {
+    active = false,
+    profile = nil,
+    leader = nil,
+    pending = nil,
+    retry_at = 0,
+    cure_count = 0,
+    last_action = 'none',
+    last_health_report = nil,
+    last_health_report_at = 0,
+    autows_paused = false,
+}
+
+local PSTART_PLD_ROUTINE_HPP = 82
+local PSTART_PLD_CLUSTER_HPP = 90
+local PSTART_PLD_EMERGENCY_HPP = 55
+local PSTART_PLD_ROUTINE_MP_FLOOR = 20
+local PSTART_PLD_MAJESTY_ACTION_ID = 394
+local PSTART_PLD_CHIVALRY_ACTION_ID = 158
+local PSTART_PLD_CHIVALRY_HPP = 25
+local PSTART_PLD_CHIVALRY_RELEASE_HPP = 35
+local PSTART_PLD_CHIVALRY_TP = 1000
+
+local function pstart_pld_valid_name(name)
+    return type(name) == 'string'
+        and name:match('^[A-Za-z][A-Za-z0-9_-]*$') ~= nil
+        and #name <= 15
+end
+
+local function pstart_pld_known_ability(action_id)
+    local abilities = windower.ffxi.get_abilities() or {}
+    for _, learned_id in ipairs(abilities.job_abilities or {}) do
+        if learned_id == action_id then return true end
+    end
+    return false
+end
+
+local function pstart_pld_spell(choices)
+    local learned = windower.ffxi.get_spells() or {}
+    for _, name in ipairs(choices) do
+        local spell = res.spells:with('en', name)
+        if spell and learned[spell.id] then return spell end
+    end
+    return nil
+end
+
+local function pstart_pld_ready(spell)
+    local recasts = windower.ffxi.get_spell_recasts() or {}
+    return spell
+        and not midaction()
+        and not moving
+        and not silent_check_disable()
+        and (not tickdelay or os.clock() >= tickdelay)
+        and os.clock() >= (pstart_pld.retry_at or 0)
+        and (recasts[spell.id] or 0) < spell_latency
+        and player.mp >= spell.mp_cost
+        and silent_can_use(spell.id)
+end
+
+local function pstart_pld_member_in_range(member)
+    if not member or not member.name then return false end
+    if member.name:lower() == player.name:lower() then return true end
+    local mob = windower.ffxi.get_mob_by_name(member.name)
+    return mob and mob.distance and mob.distance:sqrt() <= 20.5
+end
+
+local function pstart_pld_scan_party()
+    local lowest = nil
+    local cluster_injured = 0
+    for key, member in pairs(windower.ffxi.get_party() or {}) do
+        if type(key) == 'string' and key:match('^p[0-5]$')
+            and type(member) == 'table'
+            and type(member.hpp) == 'number'
+            and member.hpp > 0
+            and pstart_pld_member_in_range(member)
+        then
+            if member.hpp < PSTART_PLD_CLUSTER_HPP then
+                cluster_injured = cluster_injured + 1
+            end
+            if not lowest or member.hpp < lowest.hpp then
+                lowest = {
+                    name = member.name,
+                    token = member.name:lower() == player.name:lower()
+                        and '<me>' or '<'..key..'>',
+                    hpp = member.hpp,
+                }
+            end
+        end
+    end
+    return lowest, cluster_injured
+end
+
+local function pstart_pld_needs_cure(lowest, cluster_injured)
+    if not lowest then return false, 'no in-range party member' end
+    if lowest.hpp < PSTART_PLD_ROUTINE_HPP then
+        return true, lowest.hpp < PSTART_PLD_EMERGENCY_HPP
+            and 'emergency' or 'routine'
+    end
+    if cluster_injured >= 2 then return true, 'cluster' end
+    return false, 'party healthy'
+end
+
+local function pstart_pld_activate_majesty()
+    if buffactive['Majesty'] or midaction() or moving
+        or silent_check_disable()
+        or (tickdelay and os.clock() < tickdelay)
+        or not pstart_pld_known_ability(PSTART_PLD_MAJESTY_ACTION_ID)
+    then
+        return false
+    end
+    local ability = res.job_abilities[PSTART_PLD_MAJESTY_ACTION_ID]
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    if ability and (recasts[ability.recast_id] or 999) < latency then
+        windower.chat.input('/ja "Majesty" <me>')
+        tickdelay = os.clock() + 1.5
+        pstart_pld.last_action = 'Majesty for pending party cure'
+        return true
+    end
+    return false
+end
+
+local function pstart_pld_cure_choices(hpp, reason)
+    if hpp < 35 then
+        return {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
+    elseif hpp < 65 then
+        return {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
+    elseif reason == 'cluster' then
+        return {'Cure III', 'Cure IV', 'Cure II', 'Cure'}
+    end
+    return {'Cure III', 'Cure II', 'Cure IV', 'Cure'}
+end
+
+local function pstart_pld_cast_cure(lowest, cluster_injured, reason)
+    local choices = pstart_pld_cure_choices(lowest.hpp, reason)
+    local spell = pstart_pld_spell(choices)
+    if not pstart_pld_ready(spell) then return false end
+
+    pstart_pld.pending = {
+        spell_id = spell.id,
+        spell_name = spell.en,
+        target_name = lowest.name,
+        target_hpp = lowest.hpp,
+        injured = cluster_injured,
+        reason = reason,
+    }
+    windower.chat.input('/ma "'..spell.en..'" '..lowest.token)
+    tickdelay = os.clock() + 2.5
+    pstart_pld.last_action = ('%s -> %s (%d%%, %s)')
+        :format(spell.en, lowest.name, lowest.hpp, reason)
+    add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+    return true
+end
+
+local function pstart_pld_chivalry_ready()
+    local ability = res.job_abilities[PSTART_PLD_CHIVALRY_ACTION_ID]
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    return ability
+        and pstart_pld_known_ability(PSTART_PLD_CHIVALRY_ACTION_ID)
+        and not midaction()
+        and not moving
+        and not silent_check_disable()
+        and not silent_check_amnesia()
+        and (not tickdelay or os.clock() >= tickdelay)
+        and (recasts[ability.recast_id] or 999) < latency
+end
+
+local function pstart_pld_sustain_mp()
+    if pstart_pld.autows_paused then
+        local chivalry_still_ready = pstart_pld_chivalry_ready()
+        if player.mpp >= PSTART_PLD_CHIVALRY_RELEASE_HPP
+            or not chivalry_still_ready
+        then
+            windower.send_command('aws2 on')
+            pstart_pld.autows_paused = false
+            pstart_pld.last_action = player.mpp
+                >= PSTART_PLD_CHIVALRY_RELEASE_HPP
+                and 'MP recovered; AutoWS2 resumed'
+                or 'Chivalry unavailable; AutoWS2 resumed'
+            return false
+        end
+
+        if player.tp < PSTART_PLD_CHIVALRY_TP then
+            -- Reserving TP must not starve native Flash/Provoke/Warcry upkeep.
+            return false
+        end
+
+        pstart_pld.pending = {
+            kind = 'chivalry',
+            action_id = PSTART_PLD_CHIVALRY_ACTION_ID,
+            spell_name = 'Chivalry',
+        }
+        windower.chat.input('/ja "Chivalry" <me>')
+        tickdelay = os.clock() + 1.5
+        pstart_pld.last_action = 'Chivalry at '..tostring(player.tp)..' TP'
+        add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+        return true
+    end
+
+    if player.mpp >= PSTART_PLD_CHIVALRY_HPP
+        or not pstart_pld_chivalry_ready()
+    then
+        return false
+    end
+
+    -- AutoWS2 normally spends TP at 1000. When Chivalry is ready and MP is
+    -- low, reserve that TP instead; 1000 TP is already a substantial refill
+    -- and avoids needlessly delaying the recovery to the old 1300-TP rule.
+    if not pstart_pld.autows_paused then
+        windower.send_command('aws2 off')
+        pstart_pld.autows_paused = true
+        pstart_pld.last_action = 'low MP; reserving 1000 TP for Chivalry'
+        add_to_chat(207,
+            '[PartyStart PLD] Low MP: pausing AutoWS2 for Chivalry.')
+    end
+    if player.tp < PSTART_PLD_CHIVALRY_TP then
+        -- Reserving TP must not starve native Flash/Provoke/Warcry upkeep.
+        return false
+    end
+
+    pstart_pld.pending = {
+        kind = 'chivalry',
+        action_id = PSTART_PLD_CHIVALRY_ACTION_ID,
+        spell_name = 'Chivalry',
+    }
+    windower.chat.input('/ja "Chivalry" <me>')
+    tickdelay = os.clock() + 1.5
+    pstart_pld.last_action = 'Chivalry at '..tostring(player.tp)..' TP'
+    add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+    return true
+end
+
+local function pstart_pld_action()
+    if not pstart_pld.active or pstart_pld.profile ~= 'master'
+        or player.main_job ~= 'PLD'
+        or midaction() or moving or silent_check_disable()
+        or (tickdelay and os.clock() < tickdelay)
+        or os.clock() < (pstart_pld.retry_at or 0)
+    then
+        return false
+    end
+
+    local lowest, cluster_injured = pstart_pld_scan_party()
+    local needed, reason = pstart_pld_needs_cure(lowest, cluster_injured)
+    if not needed then
+        if lowest and lowest.hpp < 100
+            and (pstart_pld.last_health_report ~= lowest.hpp
+                or os.clock() - pstart_pld.last_health_report_at > 15)
+        then
+            add_to_chat(207,
+                ('[PartyStart PLD] Holding: lowest %s %d%%; '
+                    ..'routine threshold %d%%.')
+                    :format(lowest.name, lowest.hpp, PSTART_PLD_ROUTINE_HPP))
+            pstart_pld.last_health_report = lowest.hpp
+            pstart_pld.last_health_report_at = os.clock()
+        end
+        return pstart_pld_sustain_mp()
+    end
+
+    local emergency = lowest.hpp < PSTART_PLD_EMERGENCY_HPP
+    if player.mpp < PSTART_PLD_ROUTINE_MP_FLOOR and not emergency then
+        pstart_pld.last_action = 'routine cure held for MP reserve'
+        return pstart_pld_sustain_mp()
+    end
+
+    -- Majesty is not a hard prerequisite: if it was stripped and its recast
+    -- is unavailable, a single-target cure is still better than waiting.
+    if not buffactive['Majesty'] and pstart_pld_activate_majesty() then
+        return true
+    end
+    if pstart_pld_cast_cure(lowest, cluster_injured, reason) then
+        return true
+    end
+    return pstart_pld_sustain_mp()
+end
+
+local function pstart_pld_status()
+    local lowest, cluster_injured = pstart_pld_scan_party()
+    local target = lowest and ('%s %d%%'):format(lowest.name, lowest.hpp)
+        or 'none'
+    add_to_chat(122,
+        ('PartyStart PLD: %s / profile %s / lowest %s / injured %d / last %s')
+        :format(
+            pstart_pld.active and 'On' or 'Off',
+            tostring(pstart_pld.profile or 'none'),
+            target,
+            cluster_injured,
+            pstart_pld.last_action))
+end
+
+local pstart_pld_original_self_command = user_job_self_command
+function user_job_self_command(commandArgs, eventArgs)
+    local command = commandArgs[1] and commandArgs[1]:lower() or nil
+    if command ~= 'pstartpld' then
+        if pstart_pld_original_self_command then
+            return pstart_pld_original_self_command(commandArgs, eventArgs)
+        end
+        return
+    end
+
+    eventArgs.handled = true
+    local requested = commandArgs[2] and commandArgs[2]:lower() or nil
+    if requested == 'tick' then
+        pstart_pld_action()
+    elseif not requested or requested == 'status' then
+        pstart_pld_status()
+    elseif requested == 'off' then
+        pstart_pld.active = false
+        pstart_pld.profile = nil
+        pstart_pld.pending = nil
+        -- PartyStart owns AutoWS2's stop state; do not re-enable it here.
+        pstart_pld.autows_paused = false
+        add_to_chat(122, 'PartyStart PLD healing is Off.')
+    elseif requested == 'master' and pstart_pld_valid_name(commandArgs[3]) then
+        pstart_pld.active = true
+        pstart_pld.profile = 'master'
+        pstart_pld.leader = commandArgs[3]
+        pstart_pld.pending = nil
+        pstart_pld.retry_at = 0
+        pstart_pld.last_health_report = nil
+        pstart_pld.last_health_report_at = 0
+        pstart_pld.autows_paused = false
+        tickdelay = 0
+        add_to_chat(122,
+            'PartyStart PLD: primary Majesty healing is On; '
+            ..'GearSwap cures before tank upkeep.')
+        pstart_pld_action()
+    else
+        add_to_chat(123,
+            'PartyStart PLD usage: gs c pstartpld '
+            ..'<master|status|off> <leader>')
+    end
+end
+
+local pstart_pld_original_user_job_tick = user_job_tick
+function user_job_tick()
+    if pstart_pld_action() then return true end
+    if pstart_pld_original_user_job_tick then
+        return pstart_pld_original_user_job_tick()
+    end
+    return false
+end
+
+local pstart_pld_original_job_aftercast = job_aftercast
+function job_aftercast(spell, spellMap, eventArgs)
+    local pending = pstart_pld.pending
+    local completed_chivalry = pending and pending.kind == 'chivalry'
+        and spell
+        and (spell.id == pending.action_id
+            or spell.recast_id == 79)
+    if completed_chivalry then
+        if spell.interrupted then
+            pstart_pld.retry_at = os.clock() + 1.5
+            pstart_pld.last_action = 'Chivalry interrupted; retry armed'
+        else
+            pstart_pld.retry_at = os.clock() + 0.75
+            pstart_pld.last_action = 'Chivalry complete; AutoWS2 resumed'
+        end
+        pstart_pld.pending = nil
+        if pstart_pld.autows_paused then
+            windower.send_command('aws2 on')
+            pstart_pld.autows_paused = false
+        end
+    elseif pending and spell and spell.id == pending.spell_id then
+        if spell.interrupted then
+            pstart_pld.retry_at = os.clock() + 1.5
+            pstart_pld.last_action = pending.spell_name..' interrupted; retry armed'
+        else
+            pstart_pld.cure_count = pstart_pld.cure_count + 1
+            pstart_pld.retry_at = os.clock() + 1
+        end
+        pstart_pld.pending = nil
+    end
+    if pstart_pld_original_job_aftercast then
+        return pstart_pld_original_job_aftercast(spell, spellMap, eventArgs)
+    end
+end

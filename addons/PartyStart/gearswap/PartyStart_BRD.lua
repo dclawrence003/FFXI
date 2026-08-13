@@ -18,7 +18,9 @@ local pstart_brd_profiles = {
             {spell='Valor Minuet V', buff='minuet'},
             {spell='Blade Madrigal', buff='madrigal'},
         },
-        debuffs = {},
+        debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
     },
     physical = {
         song_mode = 'Melee',
@@ -225,6 +227,13 @@ local function pstart_brd_cast_debuff(profile)
     if not target or not leader then
         return false
     end
+    -- PartyCombat owns target synchronization. A server mob ID is not a
+    -- valid text-command target, so cast only once local <t> matches the
+    -- leader's mob.
+    local local_target = windower.ffxi.get_mob_by_target('t')
+    if not local_target or local_target.id ~= target.id then
+        return false
+    end
 
     local now = os.clock()
     for _, choices in ipairs(profile.debuffs) do
@@ -238,10 +247,7 @@ local function pstart_brd_cast_debuff(profile)
                         target_id = target.id,
                         key = key,
                     }
-                    -- Cast by mob ID. Debuff automation should never invoke
-                    -- /assist or inherit an attack/movement target.
-                    windower.chat.input(
-                        '/ma "'..spell.en..'" '..tostring(target.id))
+                    windower.chat.input('/ma "'..spell.en..'" <t>')
                     tickdelay = os.clock() + 3
                     return true
                 end
