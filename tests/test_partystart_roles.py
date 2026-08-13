@@ -68,6 +68,9 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("local function pstart_rdm_convert_recovery()", self.rdm)
         self.assertIn("if pstart_rdm_convert_recovery() then return true end", self.rdm)
         self.assertIn("player.hpp >= 90", self.rdm)
+        self.assertIn("local function pstart_rdm_emergency_heal()", self.rdm)
+        self.assertIn("member.hpp > 0 and member.hpp < 50", self.rdm)
+        self.assertIn("if pstart_rdm_emergency_heal() then return true end", self.rdm)
         self.assertIn("hb disable cure; hb enable na", self.addon)
         self.assertIn(
             "hb enable cure; hb disable na; hb disable buff; hb mincure 1",

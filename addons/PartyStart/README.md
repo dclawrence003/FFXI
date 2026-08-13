@@ -115,6 +115,9 @@ Majesty is maintained. Smalls keeps HealBot status removal active but has Cure
 disabled, preventing duplicate Cure decisions between two HealBot instances.
 Tackleberry's minimum tier is Cure I, allowing early, inexpensive Majesty
 heals instead of ignoring damage that falls below HealBot's Cure II threshold.
+Smalls' GearSwap acts as the emergency backup: it targets the lowest-HP living
+party member in casting range once that member falls below 50% HP. This bypasses
+Smalls' disabled HealBot Cure mode without competing over routine damage.
 
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.

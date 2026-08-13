@@ -118,6 +118,17 @@ local function pstart_rdm_ready(spell)
         and silent_can_use(spell.id)
 end
 
+local function pstart_rdm_ready_spell(choices)
+    local learned = windower.ffxi.get_spells() or {}
+    for _, name in ipairs(choices) do
+        local spell = res.spells:with('en', name)
+        if spell and learned[spell.id] and pstart_rdm_ready(spell) then
+            return spell
+        end
+    end
+    return nil
+end
+
 local function pstart_rdm_party_token(name)
     if name:lower() == player.name:lower() then
         return '<me>'
@@ -214,12 +225,55 @@ local function pstart_rdm_convert_recovery()
     else
         choices = {'Cure II', 'Cure III', 'Cure IV', 'Cure'}
     end
-    local spell = pstart_rdm_spell(choices)
-    if pstart_rdm_ready(spell) then
+    local spell = pstart_rdm_ready_spell(choices)
+    if spell then
         windower.chat.input('/ma "'..spell.en..'" <me>')
         tickdelay = os.clock() + 3
         add_to_chat(122,
             'PartyStart RDM: healing self after Convert with '..spell.en..'.')
+        return true
+    end
+    return false
+end
+
+local function pstart_rdm_emergency_heal()
+    if pstart_rdm.profile ~= 'master' then
+        return false
+    end
+
+    local target_name, target_token, target_hpp
+    for key, member in pairs(windower.ffxi.get_party() or {}) do
+        if type(key) == 'string' and key:match('^p[0-5]$')
+            and type(member) == 'table' and member.name
+            and type(member.hpp) == 'number'
+            and member.hpp > 0 and member.hpp < 50
+            and pstart_rdm_in_range(member.name)
+            and (not target_hpp or member.hpp < target_hpp)
+        then
+            target_name = member.name
+            target_token = member.name:lower() == player.name:lower()
+                and '<me>' or '<'..key..'>'
+            target_hpp = member.hpp
+        end
+    end
+    if not target_name then
+        return false
+    end
+
+    local choices
+    if target_hpp < 25 then
+        choices = {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
+    elseif target_hpp < 40 then
+        choices = {'Cure III', 'Cure IV', 'Cure II', 'Cure'}
+    else
+        choices = {'Cure III', 'Cure II', 'Cure IV', 'Cure'}
+    end
+    local spell = pstart_rdm_ready_spell(choices)
+    if spell then
+        windower.chat.input('/ma "'..spell.en..'" '..target_token)
+        tickdelay = os.clock() + 3
+        add_to_chat(122, ('PartyStart RDM: emergency %s -> %s (%d%%).')
+            :format(spell.en, target_name, target_hpp))
         return true
     end
     return false
@@ -410,6 +464,7 @@ local function pstart_rdm_action()
         return false
     end
     if pstart_rdm_cast_composure() then return true end
+    if pstart_rdm_emergency_heal() then return true end
     if pstart_rdm_convert_recovery() then return true end
     if pstart_rdm_convert() then return true end
     if pstart_rdm_cast_party_buffs() then return true end
