@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.6'
+_addon.version = '0.6.7'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -431,9 +431,21 @@ local function apply_pld(profile_name)
 end
 
 local function apply_dnc()
-    issue('gs c set AutoBuffMode Auto; gs c set AutoSambaMode Haste; '
-        ..'gs c set MainStep Box Step; gs c set AutoPrestoMode; '
-        ..'gs c set DanceStance Saber Dance; gs c unset AutoWSMode')
+    local abilities = windower.ffxi.get_abilities() or {}
+    local job_abilities = S(abilities.job_abilities or {})
+    if job_abilities:contains(239) then
+        issue('gs c set AutoBuffMode Auto; gs c set MainStep Box Step; '
+            ..'gs c set AutoPrestoMode')
+    else
+        -- Stock DNC check_buff treats recast bucket 223 as proof that the
+        -- merit ability No Foot Rise (ability 239) is available. It is not.
+        -- Keep that loop off until the character actually unlocks the JA.
+        issue('gs c set AutoBuffMode Off; gs c unset AutoPrestoMode')
+        chat(207, 'No Foot Rise unavailable; skipping the dependent '
+            ..'No Foot Rise/Presto/Box Step loop.')
+    end
+    issue('gs c set AutoSambaMode Haste; gs c set DanceStance Saber Dance; '
+        ..'gs c unset AutoWSMode')
     issue('hb db off; hb as off; hb as attack off; hb off')
 end
 

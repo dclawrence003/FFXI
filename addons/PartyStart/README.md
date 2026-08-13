@@ -171,6 +171,11 @@ RDM enfeebles by profile:
 - PartyStart uses Mote's `set`/`unset` form for boolean states. In particular,
   PLD AutoTank and DNC AutoPresto are explicitly enabled, while native AutoWS
   is explicitly disabled so AutoWS2 remains the only weapon-skill owner.
+- DNC checks the learned job-ability list for No Foot Rise (ability 239).
+  Until it is unlocked, PartyStart leaves the stock No Foot Rise-dependent
+  AutoBuff/Presto/Box Step loop off, but still maintains Haste Samba and Saber
+  Dance. This avoids repeated “don't have access” attempts from the upstream
+  DNC controller's recast-only availability check.
 - PartyStart configures support and follower AutoWS2 automation; it does not
   select targets, move, or engage. PartyCombat exclusively owns those actions.
 - Every profile clears inherited HealBot follow, assist, and engage state on
