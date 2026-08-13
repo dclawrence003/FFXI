@@ -103,6 +103,9 @@ Loading PartyStart itself is inert.
 uses the physical buffs below but omits routine RDM and BRD enemy debuffs to
 preserve Smalls' MP and reduce cast downtime on short-lived Apex targets.
 It also Entrusts Indi-Regen to the PLD instead of duplicating RDM Refresh.
+Smalls maintains Haste/Refresh, Gain-STR/Temper, and Phalanx II only on the
+PLD. He skips the six-character Protect/Shell rotation and his routine
+Aquaveil, self-Phalanx, and Reraise loop. The richer profiles retain them.
 If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
 only while at or above 70% HP. His GearSwap controller then casts Cure on
 himself until he reaches 90% HP; this dedicated recovery remains active even

@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.3'
+_addon.version = '0.6.4'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -331,7 +331,12 @@ local function apply_rdm(player, profile_name, roster, leader)
             refresh_targets[#refresh_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, refresh))
         end
-        if phalanx_ii and name ~= player.name and frontline_jobs:contains(job) then
+        local phalanx_wanted = profile_name == 'master'
+            and job == 'PLD'
+            or profile_name ~= 'master'
+                and name ~= player.name
+                and frontline_jobs:contains(job)
+        if phalanx_ii and phalanx_wanted then
             phalanx_targets[#phalanx_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, phalanx_ii))
         end

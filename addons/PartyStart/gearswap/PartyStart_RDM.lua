@@ -9,6 +9,7 @@ local pstart_rdm_profiles = {
     master = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,
+        lean = true,
         debuff_mp_floor = 100,
         debuff_min_target_hpp = 100,
         debuffs = {},
@@ -277,22 +278,24 @@ local function pstart_rdm_cast_party_buffs()
             return true
         end
     end
-    -- The union covers melee characters, MP users, and any explicit frontline
-    -- target. This keeps Protect/Shell on the whole six-character roster.
-    for _, name in ipairs(defense) do
-        if pstart_rdm_cast_buff(name,
-            {'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect'},
-            'Protect', 1800)
-        then
-            return true
+    if not pstart_rdm_profiles[pstart_rdm.profile].lean then
+        -- Richer profiles retain individual party defenses. The sustained
+        -- master profile omits this twelve-cast rotation to preserve MP.
+        for _, name in ipairs(defense) do
+            if pstart_rdm_cast_buff(name,
+                {'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect'},
+                'Protect', 1800)
+            then
+                return true
+            end
         end
-    end
-    for _, name in ipairs(defense) do
-        if pstart_rdm_cast_buff(name,
-            {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
-            'Shell', 1800)
-        then
-            return true
+        for _, name in ipairs(defense) do
+            if pstart_rdm_cast_buff(name,
+                {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
+                'Shell', 1800)
+            then
+                return true
+            end
         end
     end
     return false
@@ -301,10 +304,15 @@ end
 local function pstart_rdm_cast_self_buffs(profile)
     local self_buffs = {
         {spells=profile.gain.spells, buff=profile.gain.buff},
-        {spells={'Aquaveil'}, buff='Aquaveil'},
-        {spells={'Phalanx'}, buff='Phalanx'},
-        {spells={'Reraise'}, buff='Reraise'},
     }
+    if not profile.lean then
+        self_buffs[#self_buffs + 1] =
+            {spells={'Aquaveil'}, buff='Aquaveil'}
+        self_buffs[#self_buffs + 1] =
+            {spells={'Phalanx'}, buff='Phalanx'}
+        self_buffs[#self_buffs + 1] =
+            {spells={'Reraise'}, buff='Reraise'}
+    end
     for _, task in ipairs(self_buffs) do
         if not buffactive[task.buff]
             and pstart_rdm_cast_buff(
