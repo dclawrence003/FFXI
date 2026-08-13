@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.1'
+_addon.version = '0.6.2'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -412,8 +412,10 @@ end
 
 
 local function apply_pld(profile_name)
-    issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode true; '
-        ..'gs c set AutoWSMode false')
+    -- AutoTankMode and AutoWSMode are boolean Mote states. Boolean states use
+    -- `set`/`unset`; appending true/false does not reliably change them.
+    issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
+        ..'gs c unset AutoWSMode')
     if profile_name == 'master' then
         issue('hb enable cure; hb disable na; hb disable buff; hb mincure 2; '
             ..'hb db off; hb as off; hb as attack off; hb on')
@@ -425,14 +427,15 @@ end
 
 local function apply_dnc()
     issue('gs c set AutoBuffMode Auto; gs c set AutoSambaMode Haste; '
-        ..'gs c set MainStep Box Step')
+        ..'gs c set MainStep Box Step; gs c set AutoPrestoMode; '
+        ..'gs c set DanceStance Saber Dance; gs c unset AutoWSMode')
     issue('hb db off; hb as off; hb as attack off; hb off')
 end
 
 local function apply_cor(profile)
     issue(('r2 policy conservative; r2 engaged off; r2 roll1 %s; '
         ..'r2 roll2 %s; r2 on'):format(profile.cor[1], profile.cor[2]))
-    issue('gs c set AutoWSMode false')
+    issue('gs c unset AutoWSMode')
     issue('hb db off; hb as off; hb as attack off; hb off')
 end
 
@@ -532,9 +535,12 @@ local function stop_local()
         issue('gs c set AutoBuffMode Off')
     end
     if player.main_job == 'PLD' then
-        issue('gs c set AutoTankMode false; gs c set AutoWSMode false')
+        issue('gs c unset AutoTankMode; gs c unset AutoWSMode')
     end
-    if player.main_job == 'DNC' then issue('gs c set AutoSambaMode Off') end
+    if player.main_job == 'DNC' then
+        issue('gs c set AutoSambaMode Off; gs c unset AutoPrestoMode; '
+            ..'gs c set DanceStance None; gs c unset AutoWSMode')
+    end
     current_profile = nil
     next_maintenance = 0
     chat(207, 'Support automation stopped; no combat commands were issued.')

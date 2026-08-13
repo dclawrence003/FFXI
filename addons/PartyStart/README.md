@@ -20,7 +20,8 @@ PartyStart establishes clear ownership:
   on RDM for status removal and, outside `master`, curing and raises.
 - PLD GearSwap maintains its tank/self-buff automation. Its native AutoWS mode
   stays off so AutoWS2 remains the only weapon-skill owner.
-- DNC GearSwap maintains Haste Samba, Box Step, and its normal job abilities.
+- DNC GearSwap maintains Haste Samba, Box Step/Presto, Saber Dance, and its
+  normal job abilities.
 - The character's native BRD GearSwap controller is the sole owner of party
   songs. PartyStart selects its Melee, Tank, or Mage preset and separately
   maintains only hostile songs.
@@ -159,6 +160,9 @@ RDM enfeebles by profile:
 - Job discovery is dynamic, but physical/master offense is character-and-job guarded.
   If a configured character is on an unexpected job, PartyStart leaves that
   client's AutoWS2 off and reports that no policy matched.
+- PartyStart uses Mote's `set`/`unset` form for boolean states. In particular,
+  PLD AutoTank and DNC AutoPresto are explicitly enabled, while native AutoWS
+  is explicitly disabled so AutoWS2 remains the only weapon-skill owner.
 - PartyStart configures support and follower AutoWS2 automation; it does not
   select targets, move, or engage. PartyCombat exclusively owns those actions.
 - Every profile clears inherited HealBot follow, assist, and engage state on

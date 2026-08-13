@@ -32,11 +32,15 @@ class PartyStartRolePolicy(unittest.TestCase):
 
     def test_new_job_automation_is_enabled(self):
         self.assertIn("local function apply_pld(profile_name)", self.addon)
-        self.assertIn("gs c set AutoTankMode true", self.addon)
-        self.assertIn("gs c set AutoWSMode false", self.addon)
+        self.assertIn("gs c set AutoTankMode", self.addon)
+        self.assertIn("gs c unset AutoWSMode", self.addon)
         self.assertIn("local function apply_dnc()", self.addon)
         self.assertIn("gs c set AutoSambaMode Haste", self.addon)
         self.assertIn("gs c set MainStep Box Step", self.addon)
+        self.assertIn("gs c set AutoPrestoMode", self.addon)
+        self.assertIn("gs c set DanceStance Saber Dance", self.addon)
+        self.assertNotIn("gs c set AutoTankMode true", self.addon)
+        self.assertNotIn("gs c set AutoWSMode false", self.addon)
 
     def test_geo_entrust_prefers_the_pld(self):
         self.assertIn("entrust_jobs={'PLD','RUN','DRK','BLU'}", self.addon)
