@@ -17,7 +17,7 @@ PartyStart establishes clear ownership:
 
 - RDM GearSwap maintains Haste, Refresh, Protect, Shell, self-offense buffs,
   available Phalanx, and profile-specific enfeebles. HealBot remains enabled
-  only on RDM for curing, status removal, and raises in the current lineup.
+  on RDM for status removal and, outside `master`, curing and raises.
 - PLD GearSwap maintains its tank/self-buff automation. Its native AutoWS mode
   stays off so AutoWS2 remains the only weapon-skill owner.
 - DNC GearSwap maintains Haste Samba, Box Step, and its normal job abilities.
@@ -104,6 +104,11 @@ preserve Smalls' MP and reduce cast downtime on short-lived Apex targets.
 It also Entrusts Indi-Regen to the PLD instead of duplicating RDM Refresh.
 If Smalls falls below 15% MP while fighting, his RDM controller uses Convert
 only while at or above 70% HP; HealBot then handles the resulting HP deficit.
+In this profile Tackleberry's PLD HealBot owns all routine Cure casting while
+Majesty is maintained. Smalls keeps HealBot status removal active but has Cure
+disabled, preventing duplicate Cure decisions between two HealBot instances.
+Tackleberry's minimum tier is Cure II so his available MP is used before
+Smalls' pool is exhausted.
 
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.

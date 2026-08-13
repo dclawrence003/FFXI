@@ -31,7 +31,7 @@ class PartyStartRolePolicy(unittest.TestCase):
             self.assertIn("ws = '" + weaponskill + "'", block)
 
     def test_new_job_automation_is_enabled(self):
-        self.assertIn("local function apply_pld()", self.addon)
+        self.assertIn("local function apply_pld(profile_name)", self.addon)
         self.assertIn("gs c set AutoTankMode true", self.addon)
         self.assertIn("gs c set AutoWSMode false", self.addon)
         self.assertIn("local function apply_dnc()", self.addon)
@@ -57,6 +57,12 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("local function pstart_rdm_convert()", self.rdm)
         self.assertIn("player.mpp >= 15 or player.hpp < 70", self.rdm)
         self.assertIn("if pstart_rdm_convert() then return true end", self.rdm)
+        self.assertIn("hb disable cure; hb enable na", self.addon)
+        self.assertIn(
+            "hb enable cure; hb disable na; hb disable buff; hb mincure 2",
+            self.addon,
+        )
+        self.assertIn("apply_pld(session.profile)", self.addon)
 
     def test_rdm_defenses_use_the_full_target_union(self):
         self.assertIn("local defense = pstart_rdm_union_names(", self.rdm)

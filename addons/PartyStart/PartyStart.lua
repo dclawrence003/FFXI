@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.0'
+_addon.version = '0.6.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -363,7 +363,15 @@ local function apply_rdm(player, profile_name, roster, leader)
     issue(('gs c pstartrdm %s %s %s %s %s'):format(
         profile_name, leader, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets)))
-    issue('hb db off; hb as off; hb as attack off; hb on')
+    if profile_name == 'master' then
+        -- HealBot does not arbitrate Cure ownership between active healers.
+        -- In the sustained profile PLD owns cures; RDM retains status removal.
+        issue('hb disable cure; hb enable na; hb disable buff; hb db off; '
+            ..'hb as off; hb as attack off; hb on')
+    else
+        issue('hb enable cure; hb enable na; hb disable buff; hb db off; '
+            ..'hb as off; hb as attack off; hb on')
+    end
 end
 
 local function apply_brd(player, profile_name, leader)
@@ -403,10 +411,16 @@ local function apply_geo(player, profile, roster)
 end
 
 
-local function apply_pld()
+local function apply_pld(profile_name)
     issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode true; '
         ..'gs c set AutoWSMode false')
-    issue('hb db off; hb as off; hb as attack off; hb off')
+    if profile_name == 'master' then
+        issue('hb enable cure; hb disable na; hb disable buff; hb mincure 2; '
+            ..'hb db off; hb as off; hb as attack off; hb on')
+    else
+        issue('hb disable cure; hb disable na; '
+            ..'hb db off; hb as off; hb as attack off; hb off')
+    end
 end
 
 local function apply_dnc()
@@ -442,7 +456,7 @@ local function apply_profile(session)
     elseif player.main_job == 'GEO' then
         apply_geo(player, profile, session.roster)
     elseif player.main_job == 'PLD' then
-        apply_pld()
+        apply_pld(session.profile)
     elseif player.main_job == 'DNC' then
         apply_dnc()
     elseif player.main_job == 'COR' then
