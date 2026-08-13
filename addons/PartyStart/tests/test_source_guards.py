@@ -126,6 +126,9 @@ class PartyStartSourceGuards(unittest.TestCase):
             "not emergency and player.mpp < PSTART_PLD_CHIVALRY_HPP",
             action,
         )
+        ready_spell = PLD.split("local function pstart_pld_ready_spell", 1)[1]
+        ready_spell = ready_spell.split("\nend", 1)[0]
+        self.assertIn("pstart_pld_ready(spell)", ready_spell)
 
     def test_dnc_never_depends_on_unlearned_merit_actions(self):
         apply_dnc = ADDON.split(

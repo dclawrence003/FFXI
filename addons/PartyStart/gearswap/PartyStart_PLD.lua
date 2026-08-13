@@ -52,15 +52,6 @@ local function pstart_pld_known_ability(action_id)
     return false
 end
 
-local function pstart_pld_spell(choices)
-    local learned = windower.ffxi.get_spells() or {}
-    for _, name in ipairs(choices) do
-        local spell = res.spells:with('en', name)
-        if spell and learned[spell.id] then return spell end
-    end
-    return nil
-end
-
 local function pstart_pld_ready(spell)
     local recasts = windower.ffxi.get_spell_recasts() or {}
     return spell
@@ -72,6 +63,17 @@ local function pstart_pld_ready(spell)
         and (recasts[spell.id] or 0) < spell_latency
         and player.mp >= spell.mp_cost
         and silent_can_use(spell.id)
+end
+
+local function pstart_pld_ready_spell(choices)
+    local learned = windower.ffxi.get_spells() or {}
+    for _, name in ipairs(choices) do
+        local spell = res.spells:with('en', name)
+        if spell and learned[spell.id] and pstart_pld_ready(spell) then
+            return spell
+        end
+    end
+    return nil
 end
 
 local function pstart_pld_member_in_range(member)
@@ -165,8 +167,8 @@ end
 
 local function pstart_pld_cast_cure(lowest, cluster_injured, reason)
     local choices = pstart_pld_cure_choices(lowest.hpp, reason)
-    local spell = pstart_pld_spell(choices)
-    if not pstart_pld_ready(spell) then return false end
+    local spell = pstart_pld_ready_spell(choices)
+    if not spell then return false end
 
     pstart_pld.pending = {
         spell_id = spell.id,
