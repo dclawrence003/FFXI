@@ -10,6 +10,9 @@ BRD = (ROOT / "gearswap" / "PartyStart_BRD.lua").read_text(encoding="utf-8")
 PLD = (ROOT / "gearswap" / "PartyStart_PLD.lua").read_text(encoding="utf-8")
 DNC = (ROOT / "gearswap" / "PartyStart_DNC.lua").read_text(encoding="utf-8")
 GEO = (ROOT / "gearswap" / "PartyStart_GEO.lua").read_text(encoding="utf-8")
+COMPOSITIONS = (ROOT / "data" / "compositions.lua").read_text(
+    encoding="utf-8"
+)
 
 
 class PartyStartSourceGuards(unittest.TestCase):
@@ -23,6 +26,9 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertNotIn("combat_authorized", ADDON)
         self.assertIn("schedule_zone_rearm(8)", ADDON)
         self.assertIn("__zonerearm", ADDON)
+        self.assertNotIn("pc on", ADDON.lower())
+        self.assertNotIn("pc force", ADDON.lower())
+        self.assertIn("pc policy %s %s %s %s", ADDON)
 
     def test_physical_profile_is_the_lean_rdm_profile(self):
         physical = RDM.split("accuracy =", 1)[0]
@@ -63,9 +69,14 @@ class PartyStartSourceGuards(unittest.TestCase):
             "Smalls": ("Maxentius", "Black Halo", "1000"),
             "Achoo": ("Maxentius", "Black Halo", "1000"),
         }
+        progression_offense = COMPOSITIONS.split(
+            "progression = {", 1
+        )[1].split("legacy = {", 1)[0].split("offense = {", 1)[1]
         for name, values in expected.items():
-            start = ADDON.index(f"    {name} = {{")
-            block = ADDON[start:].split("\n    },", 1)[0]
+            start = progression_offense.index(f"                {name} = {{")
+            block = progression_offense[start:].split(
+                "\n                },", 1
+            )[0]
             for value in values:
                 self.assertIn(value, block)
 
@@ -75,8 +86,45 @@ class PartyStartSourceGuards(unittest.TestCase):
         owned_stop = owned_stop.split("\nend", 1)[0]
         self.assertIn("if autows2_owned then", owned_stop)
         self.assertIn("issue('aws2 off')", owned_stop)
-        self.assertIn("Dolomedes = {", ADDON)
-        self.assertIn("jobs = S{'COR'}", ADDON)
+        self.assertIn("Dolomedes = {", COMPOSITIONS)
+        self.assertIn("COR = {weapon_mode='DualSavage'", COMPOSITIONS)
+
+    def test_compositions_cover_all_six_characters_and_flexible_dolo_jobs(self):
+        for name in (
+            "Dolomedes", "Tackleberry", "Kickpuncher", "Barneystinson",
+            "Smalls", "Achoo",
+        ):
+            self.assertIn(f"{name} = {{main=", COMPOSITIONS)
+        self.assertIn("progression = {", COMPOSITIONS)
+        self.assertIn("legacy = {", COMPOSITIONS)
+        self.assertIn("['progression-blu'] = {", COMPOSITIONS)
+        self.assertIn("puller = 'Tackleberry'", COMPOSITIONS)
+        self.assertIn("puller = 'Dolomedes'", COMPOSITIONS)
+        self.assertIn("weapon_mode='TizThib'", COMPOSITIONS)
+        self.assertIn("ws='Expiacion'", COMPOSITIONS)
+
+    def test_activation_is_atomic_and_preview_is_inert(self):
+        finalize = ADDON.split("local function finalize_session", 1)[1]
+        finalize = finalize.split("local function begin", 1)[0]
+        self.assertLess(finalize.index("validate_session(session)"),
+                        finalize.index("apply_profile(session)"))
+        self.assertIn("if #errors > 0 then", finalize)
+        self.assertIn("if session.preview then", finalize)
+        self.assertIn("no automation was changed", finalize)
+        self.assertIn("DISCOVERY_TIMEOUT = 5", ADDON)
+        self.assertIn("PREFIX, 'decision', session.nonce, decision", finalize)
+        self.assertIn("elseif kind == 'decision' then", ADDON)
+        self.assertIn("session.roster = decode_roster(session, encoded)", ADDON)
+        self.assertIn("if decision == 'commit' and #errors == 0", ADDON)
+        self.assertIn("session.next_report_at = now + 0.5", ADDON)
+
+    def test_job_change_suspends_then_revalidates(self):
+        self.assertIn("windower.register_event('job change'", ADDON)
+        self.assertIn("job_revalidate_at = os.clock() + 10", ADDON)
+        self.assertIn("stop_local{silent=true, preserve_revalidation=true}", ADDON)
+        self.assertIn(
+            "begin(pending.composition, pending.profile, false, true)", ADDON
+        )
 
     def test_brd_has_one_party_song_owner(self):
         self.assertIn("pstart_brd_original_check_song()", BRD)
@@ -111,6 +159,20 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("PSTART_PLD_CHIVALRY_TP = 1000", PLD)
         self.assertIn("PSTART_PLD_CHIVALRY_HPP = 45", PLD)
         self.assertIn("reserving 1000 TP for Chivalry", PLD)
+        self.assertIn("gs c unset AutoTankFull", ADDON)
+
+    def test_pld_cooldowns_are_owned_and_conditioned(self):
+        self.assertIn("PSTART_PLD_SENTINEL_ACTION_ID = 48", PLD)
+        self.assertIn("PSTART_PLD_RAMPART_ACTION_ID = 92", PLD)
+        self.assertIn("PSTART_PLD_PALISADE_ACTION_ID = 278", PLD)
+        cooldown = PLD.split(
+            "local function pstart_pld_tank_cooldown", 1
+        )[1].split("local function pstart_pld_member_in_range", 1)[0]
+        self.assertIn("player.status ~= 'Engaged'", cooldown)
+        self.assertIn("pstart_pld.flash_target_id == target.id", cooldown)
+        self.assertIn("cluster_injured >= PSTART_PLD_RAMPART_CLUSTER_COUNT", cooldown)
+        self.assertIn("pstart_pld.pressure_until", cooldown)
+        self.assertIn("buffactive['Sentinel']", cooldown)
 
     def test_pld_mp_policy_throttles_without_delaying_emergencies(self):
         self.assertIn("PSTART_PLD_CURE_INTERVAL_HIGH = 3", PLD)
@@ -133,7 +195,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         ready_spell = ready_spell.split("\nend", 1)[0]
         self.assertIn("pstart_pld_ready(spell)", ready_spell)
 
-    def test_dnc_never_depends_on_unlearned_merit_actions(self):
+    def test_dnc_guards_merit_actions_and_preserves_waltzes(self):
         apply_dnc = ADDON.split(
             "local function apply_dnc", 1
         )[1].split("local function apply_cor", 1)[0]
@@ -145,6 +207,12 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("PSTART_DNC_EMERGENCY_HPP = 42", DNC)
         self.assertNotIn("pstart_dnc_use(PSTART_DNC_ACTIONS.box_step, tostring(target.id)", DNC)
         self.assertIn("pstart_dnc_use(PSTART_DNC_ACTIONS.box_step, '<t>'", DNC)
+        self.assertIn("no_foot_rise = 239", DNC)
+        self.assertIn("pstart_dnc_has_any_finishing_move()", DNC)
+        self.assertIn("PSTART_DNC_NO_FOOT_RISE_HEALTHY_HPP = 70", DNC)
+        action = DNC.split("local function pstart_dnc_action()", 1)[1]
+        self.assertLess(action.index("pstart_dnc_emergency_waltz(lowest)"),
+                        action.index("pstart_dnc_no_foot_rise(lowest)"))
 
     def test_hostile_actions_use_synchronized_local_target(self):
         for source in (RDM, BRD, DNC):
@@ -205,7 +273,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         boot = boot.split("elseif requested", 1)[0]
         self.assertIn("if not pstart_geo_active then", boot)
         self.assertIn("pstart_geo_set_autobuff('Off')", GEO)
-        stop = ADDON.split("local function stop_local()", 1)[1]
+        stop = ADDON.split("local function stop_local(options)", 1)[1]
         stop = stop.split("\nend", 1)[0]
         self.assertIn("gs c pstartgeo idle", stop)
 

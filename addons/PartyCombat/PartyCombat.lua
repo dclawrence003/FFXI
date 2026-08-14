@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.2.6'
+_addon.version = '0.3.0'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -47,6 +47,7 @@ local RECENT_FOLLOW_CLAIM_WINDOW = 60
 
 local defaults = {
     leader = 'Dolomedes',
+    puller = 'Tackleberry',
     attackers = {
         Tackleberry = {
             auto_distance = 10,
@@ -87,6 +88,7 @@ if settings_loader then
     local ok, loaded = pcall(settings_loader)
     if ok and type(loaded) == 'table'
         and type(loaded.leader) == 'string'
+        and type(loaded.puller) == 'string'
         and type(loaded.attackers) == 'table'
     then
         settings = loaded
@@ -97,6 +99,7 @@ if settings_loader then
 else
     settings_warning = tostring(settings_load_error)
 end
+local active_policy_name = 'settings'
 local armed = false
 local authorized = false
 local active_target_id = nil
@@ -142,6 +145,10 @@ local function is_leader()
     return same_name(local_name(), settings.leader)
 end
 
+local function is_puller()
+    return same_name(local_name(), settings.puller)
+end
+
 local function attacker_settings(name)
     if not valid_name(name) then return nil end
     for attacker_name, attacker in pairs(settings.attackers or {}) do
@@ -157,6 +164,41 @@ end
 
 local function is_attacker()
     return attacker_settings(local_name()) ~= nil
+end
+
+local function valid_policy_name(name)
+    return type(name) == 'string'
+        and name:match('^[A-Za-z0-9_-]+$') ~= nil
+        and #name <= 32
+end
+
+local function configured_attacker_names(configuration)
+    local names = {}
+    for name, policy in pairs(configuration.attackers or {}) do
+        if valid_name(name) and type(policy) == 'table' then
+            names[#names + 1] = name:lower()
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+local function same_attacker_roster(configuration, requested)
+    local current = configured_attacker_names(configuration)
+    if #current ~= #requested then return false end
+    for index, name in ipairs(current) do
+        if name ~= requested[index]:lower() then return false end
+    end
+    return true
+end
+
+local function distance_policy(name)
+    local policy = attacker_settings(name) or defaults.attackers[name] or {}
+    return {
+        auto_distance = tonumber(policy.auto_distance) or 10,
+        force_distance = tonumber(policy.force_distance) or 30,
+        engage_distance = tonumber(policy.engage_distance) or 2.8,
+    }
 end
 
 local function send_ipc(kind, ...)
@@ -359,6 +401,64 @@ local function stop_all()
     chat(207, 'Disarmed and stopped all configured attackers.')
 end
 
+local function apply_runtime_policy(policy_name, leader, puller, attacker_names)
+    if not valid_policy_name(policy_name) or not valid_name(leader)
+        or not valid_name(puller)
+    then
+        chat(123, 'Rejected invalid PartyCombat policy metadata.')
+        return false
+    end
+    local seen = {}
+    local normalized = {}
+    for _, name in ipairs(attacker_names or {}) do
+        if not valid_name(name) then
+            chat(123, 'Rejected invalid attacker name: '..tostring(name))
+            return false
+        end
+        local key = name:lower()
+        if not seen[key] then
+            seen[key] = true
+            normalized[#normalized + 1] = name
+        end
+    end
+    table.sort(normalized, function(left, right)
+        return left:lower() < right:lower()
+    end)
+
+    local unchanged = same_name(settings.leader, leader)
+        and same_name(settings.puller, puller)
+        and same_attacker_roster(settings, normalized)
+    if unchanged then
+        active_policy_name = policy_name
+        return true
+    end
+
+    -- A role change is an authority change. Revoke the old policy before
+    -- replacing it, and deliberately leave the new one inert until the
+    -- configured command leader issues //pc on or //pc force.
+    if armed and is_leader() then
+        broadcast_authority(false)
+        send_ipc('stop')
+    end
+    armed = false
+    stop_local(nil, true)
+
+    local attackers = {}
+    for _, name in ipairs(normalized) do
+        attackers[name] = distance_policy(name)
+    end
+    settings = {
+        leader = leader,
+        puller = puller,
+        attackers = attackers,
+    }
+    active_policy_name = policy_name
+    next_authority = 0
+    chat(158, ('Policy %s loaded inert: leader %s, puller %s, %d attackers.')
+        :format(policy_name, leader, puller, #normalized))
+    return true
+end
+
 local function damage_target(action)
     if not action or not action.targets then return nil end
 
@@ -390,12 +490,29 @@ local function damage_target(action)
 end
 
 windower.register_event('action', function(action)
-    if not armed or not is_leader() then return end
+    local leader_authority = armed and is_leader()
+    local puller_authority = authorized and is_puller()
+    if not leader_authority and not puller_authority then return end
     local player = local_player()
     if not player or action.actor_id ~= player.id then return end
 
     local target = damage_target(action)
     if target then
+        -- The puller may establish the next target, but cannot drag the party
+        -- off a living synchronized target. The command leader can always
+        -- override by dealing damage to a different enemy.
+        if puller_authority and not leader_authority and active_target_id
+            and active_target_id ~= target.id
+        then
+            local active = windower.ffxi.get_mob_by_id(active_target_id)
+            if valid_enemy(active) then return end
+        end
+        if puller_authority and not leader_authority then
+            -- Windower IPC delivery to the sending instance is not required
+            -- for correctness. Claim the puller's own target locally before
+            -- announcing it to the other attackers.
+            accept_target(target.id, 'auto')
+        end
         send_ipc('target', target.id, 'auto')
     end
 end)
@@ -505,22 +622,54 @@ windower.register_event('prerender', function()
     end
 end)
 
-windower.register_event('addon command', function(command)
+windower.register_event('addon command', function(command, ...)
+    local args = {...}
     command = command and command:lower() or 'status'
 
     if command == 'status' then
-        local role = is_leader() and 'leader'
-            or (is_attacker() and 'attacker' or 'observer')
+        local role
+        if is_leader() and is_puller() then
+            role = 'leader+puller'
+        elseif is_leader() then
+            role = 'leader'
+        elseif is_puller() and is_attacker() then
+            role = 'puller+attacker'
+        elseif is_puller() then
+            role = 'puller'
+        elseif is_attacker() then
+            role = 'attacker'
+        else
+            role = 'observer'
+        end
         local target = active_target_id
             and windower.ffxi.get_mob_by_id(active_target_id)
             or nil
-        chat(207, ('Role %s | armed %s | authorized %s | target %s | mode %s')
+        chat(207, ('Policy %s | role %s | leader %s | puller %s | armed %s | authorized %s | target %s | mode %s')
             :format(
+                active_policy_name,
                 role,
+                settings.leader,
+                settings.puller,
                 armed and 'On' or 'Off',
                 authorized and 'Yes' or 'No',
                 target and target.name or 'none',
                 tostring(active_mode or 'none')))
+    elseif command == 'policy' then
+        local policy_name = args[1]
+        local leader = args[2]
+        local puller = args[3]
+        local attacker_csv = args[4]
+        if not attacker_csv then
+            chat(123, 'Usage: //pc policy <name> <leader> <puller> <attacker1,attacker2|->')
+            return
+        end
+        local attacker_names = {}
+        if attacker_csv ~= '-' then
+            for name in attacker_csv:gmatch('[^,]+') do
+                attacker_names[#attacker_names + 1] = name
+            end
+        end
+        apply_runtime_policy(policy_name, leader, puller, attacker_names)
     elseif command == 'on' or command == 'arm' or command == 'auto' then
         if not is_leader() then
             chat(123, 'Only the configured leader can arm PartyCombat.')
@@ -546,7 +695,7 @@ windower.register_event('addon command', function(command)
         stop_all()
     elseif command == 'help' then
         chat(207,
-            'Commands: on | force | stop | status. Force also arms automatic tracking.')
+            'Commands: on | force | stop | status | policy <name> <leader> <puller> <attackers>. Force also arms tracking.')
     else
         chat(123, 'Unknown command. Use //pc help.')
     end
@@ -580,7 +729,7 @@ windower.register_event('logout', 'unload', function()
 end)
 
 chat(158,
-    'Loaded inert. Use //pc force on the leader or Alt+P; Alt+O stops combat.')
+    'Loaded inert. The leader or authorized puller can establish targets; use //pc on or //pc force on the leader.')
 if settings_warning then
     chat(123,
         'settings.lua was unavailable during startup; using safe defaults. '

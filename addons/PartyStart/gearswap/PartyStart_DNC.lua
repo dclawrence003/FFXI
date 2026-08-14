@@ -24,6 +24,7 @@ local PSTART_DNC_ACTIONS = {
     curing_waltz_iv = 193,
     box_step = 202,
     reverse_flourish = 206,
+    no_foot_rise = 239,
     presto = 261,
     curing_waltz_v = 311,
 }
@@ -31,6 +32,8 @@ local PSTART_DNC_ACTIONS = {
 local PSTART_DNC_EMERGENCY_HPP = 42
 local PSTART_DNC_CRITICAL_HPP = 25
 local PSTART_DNC_STEP_RETRY = 45
+local PSTART_DNC_NO_FOOT_RISE_HEALTHY_HPP = 70
+local PSTART_DNC_NO_FOOT_RISE_TP_CEILING = 900
 
 local function pstart_dnc_valid_name(name)
     return type(name) == 'string'
@@ -195,6 +198,35 @@ local function pstart_dnc_has_flourish_stock()
         or buffactive['Finishing Move (6+)']
 end
 
+local function pstart_dnc_has_any_finishing_move()
+    return buffactive['Finishing Move 1']
+        or buffactive['Finishing Move 2']
+        or pstart_dnc_has_flourish_stock()
+end
+
+local function pstart_dnc_no_foot_rise(lowest)
+    if player.status ~= 'Engaged'
+        or player.tp >= PSTART_DNC_NO_FOOT_RISE_TP_CEILING
+        or (lowest and lowest.hpp < PSTART_DNC_NO_FOOT_RISE_HEALTHY_HPP)
+        or pstart_dnc_has_any_finishing_move()
+    then
+        return false
+    end
+
+    -- Spend the merit ability only while this client is synchronized to the
+    -- puller's living target. This avoids burning No Foot Rise while between
+    -- pulls, out of range, or reserving TP for emergency healing.
+    local target = pstart_dnc_leader_target()
+    local local_target = windower.ffxi.get_mob_by_target('t')
+    if not target or (target.distance or 999):sqrt() > 4.8
+        or not local_target or local_target.id ~= target.id
+    then
+        return false
+    end
+    return pstart_dnc_use(PSTART_DNC_ACTIONS.no_foot_rise, '<me>',
+        'No Foot Rise -> safe Reverse Flourish stock')
+end
+
 local function pstart_dnc_reverse_flourish()
     if player.status ~= 'Engaged' or player.tp >= 900
         or not pstart_dnc_has_flourish_stock()
@@ -245,6 +277,7 @@ local function pstart_dnc_action()
 
     if pstart_dnc_haste_samba() then return true end
     if pstart_dnc_box_step() then return true end
+    if pstart_dnc_no_foot_rise(lowest) then return true end
     return pstart_dnc_reverse_flourish()
 end
 
@@ -300,8 +333,8 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_dnc.autows_paused = false
         tickdelay = 0
         add_to_chat(122,
-            'PartyStart DNC: Haste Samba, Box Step, and emergency Waltz are On; '
-            ..'Saber Dance remains Off.')
+            'PartyStart DNC: Haste Samba, Box Step, safe No Foot Rise, '
+            ..'Reverse Flourish, and emergency Waltz are On; Saber Dance remains Off.')
         -- PartyStart configures AutoWS2 immediately after this command. The
         -- shared maintenance heartbeat performs the first DNC action after
         -- that ownership handoff, allowing emergency mode to pause it safely.

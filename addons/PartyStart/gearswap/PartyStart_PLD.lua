@@ -1,9 +1,11 @@
 -- PartyStart PLD controller for Selindrile-style GearSwap files.
 -- Integration target: https://github.com/Selindrile/GearSwap
 --
--- This controller intentionally owns HP decisions only. Selindrile's native
--- PLD controller continues to own Majesty upkeep, self buffs, Flash, and
--- subjob enmity after this higher-priority healing pass returns false.
+-- This controller owns HP decisions and a conservative tank-cooldown policy.
+-- Selindrile's native PLD controller continues to own Majesty upkeep, self
+-- buffs, Flash, and subjob enmity after this higher-priority pass returns
+-- false. PartyStart disables native AutoTankFull so Sentinel/Rampart/Palisade
+-- have exactly one automation owner.
 -- Load at the end of a participating character's PLD gear file:
 --     include('Common/PartyStart_PLD.lua')
 
@@ -18,6 +20,11 @@ local pstart_pld = {
     last_health_report = nil,
     last_health_report_at = 0,
     autows_paused = false,
+    target_id = nil,
+    target_seen_at = 0,
+    flash_target_id = nil,
+    pressure_until = 0,
+    last_self_hpp = nil,
 }
 
 local PSTART_PLD_ROUTINE_HPP = 82
@@ -37,6 +44,13 @@ local PSTART_PLD_CHIVALRY_ACTION_ID = 158
 local PSTART_PLD_CHIVALRY_HPP = 45
 local PSTART_PLD_CHIVALRY_RELEASE_HPP = 55
 local PSTART_PLD_CHIVALRY_TP = 1000
+local PSTART_PLD_SENTINEL_ACTION_ID = 48
+local PSTART_PLD_RAMPART_ACTION_ID = 92
+local PSTART_PLD_PALISADE_ACTION_ID = 278
+local PSTART_PLD_ESTABLISH_DELAY = 5
+local PSTART_PLD_RAMPART_CLUSTER_HPP = 85
+local PSTART_PLD_RAMPART_CLUSTER_COUNT = 2
+local PSTART_PLD_PRESSURE_WINDOW = 12
 
 local function pstart_pld_valid_name(name)
     return type(name) == 'string'
@@ -74,6 +88,107 @@ local function pstart_pld_ready_spell(choices)
         end
     end
     return nil
+end
+
+local function pstart_pld_ability_ready(action_id)
+    local ability = res.job_abilities[action_id]
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    return ability
+        and pstart_pld_known_ability(action_id)
+        and not midaction()
+        and not moving
+        and not silent_check_disable()
+        and not silent_check_amnesia()
+        and (not tickdelay or os.clock() >= tickdelay)
+        and os.clock() >= (pstart_pld.retry_at or 0)
+        and (recasts[ability.recast_id] or 999) < latency
+end
+
+local function pstart_pld_enemy_target()
+    local target = windower.ffxi.get_mob_by_target('t')
+    if not target or target.spawn_type ~= 16 or not target.valid_target
+        or not target.hpp or target.hpp <= 0
+    then
+        pstart_pld.target_id = nil
+        pstart_pld.target_seen_at = 0
+        pstart_pld.flash_target_id = nil
+        return nil
+    end
+    if pstart_pld.target_id ~= target.id then
+        pstart_pld.target_id = target.id
+        pstart_pld.target_seen_at = os.clock()
+        pstart_pld.flash_target_id = nil
+    end
+    return target
+end
+
+local function pstart_pld_observe_pressure()
+    if type(player.hpp) == 'number' then
+        if type(pstart_pld.last_self_hpp) == 'number'
+            and player.hpp < pstart_pld.last_self_hpp
+        then
+            pstart_pld.pressure_until = os.clock()
+                + PSTART_PLD_PRESSURE_WINDOW
+        end
+        pstart_pld.last_self_hpp = player.hpp
+    end
+end
+
+local function pstart_pld_use_tank_ability(action_id, detail)
+    local ability = res.job_abilities[action_id]
+    if not ability or not pstart_pld_ability_ready(action_id) then
+        return false
+    end
+    pstart_pld.pending = {
+        kind = 'tank_ability',
+        action_id = action_id,
+        spell_name = ability.en,
+    }
+    windower.chat.input('/ja "'..ability.en..'" <me>')
+    tickdelay = os.clock() + 1.5
+    pstart_pld.last_action = detail or ability.en
+    add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+    return true
+end
+
+local function pstart_pld_tank_cooldown(lowest, cluster_injured)
+    if player.status ~= 'Engaged' and player.status ~= 1 then return false end
+    local target = pstart_pld_enemy_target()
+    if not target then return false end
+
+    -- Never overlap the automated cooldowns. A second button during an
+    -- existing window adds little to routine Apex farming and wastes the next
+    -- safety window.
+    if buffactive['Sentinel'] or buffactive['Rampart']
+        or buffactive['Palisade']
+    then
+        return false
+    end
+
+    local established = pstart_pld.flash_target_id == target.id
+        or os.clock() - pstart_pld.target_seen_at >= PSTART_PLD_ESTABLISH_DELAY
+    if established and pstart_pld_use_tank_ability(
+        PSTART_PLD_SENTINEL_ACTION_ID, 'Sentinel after target establishment')
+    then
+        return true
+    end
+
+    if lowest and lowest.hpp < PSTART_PLD_RAMPART_CLUSTER_HPP
+        and cluster_injured >= PSTART_PLD_RAMPART_CLUSTER_COUNT
+        and pstart_pld_use_tank_ability(
+            PSTART_PLD_RAMPART_ACTION_ID,
+            ('Rampart for %d injured party members'):format(cluster_injured))
+    then
+        return true
+    end
+
+    if os.clock() < (pstart_pld.pressure_until or 0)
+        and pstart_pld_use_tank_ability(
+            PSTART_PLD_PALISADE_ACTION_ID, 'Palisade under active pressure')
+    then
+        return true
+    end
+    return false
 end
 
 local function pstart_pld_member_in_range(member)
@@ -279,6 +394,7 @@ local function pstart_pld_action()
         return false
     end
 
+    pstart_pld_observe_pressure()
     local lowest, cluster_injured = pstart_pld_scan_party()
     local needed, reason = pstart_pld_needs_cure(lowest, cluster_injured)
     if not needed then
@@ -294,7 +410,8 @@ local function pstart_pld_action()
             pstart_pld.last_health_report = lowest.hpp
             pstart_pld.last_health_report_at = os.clock()
         end
-        return pstart_pld_sustain_mp()
+        if pstart_pld_sustain_mp() then return true end
+        return pstart_pld_tank_cooldown(lowest, cluster_injured)
     end
 
     local emergency = lowest.hpp < PSTART_PLD_EMERGENCY_HPP
@@ -320,7 +437,8 @@ local function pstart_pld_action()
     if pstart_pld_cast_cure(lowest, cluster_injured, reason) then
         return true
     end
-    return pstart_pld_sustain_mp()
+    if pstart_pld_sustain_mp() then return true end
+    return pstart_pld_tank_cooldown(lowest, cluster_injured)
 end
 
 local function pstart_pld_status()
@@ -363,6 +481,11 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_pld.pending = nil
         -- PartyStart owns AutoWS2's stop state; do not re-enable it here.
         pstart_pld.autows_paused = false
+        pstart_pld.target_id = nil
+        pstart_pld.target_seen_at = 0
+        pstart_pld.flash_target_id = nil
+        pstart_pld.pressure_until = 0
+        pstart_pld.last_self_hpp = nil
         add_to_chat(122, 'PartyStart PLD healing is Off.')
     elseif requested == 'master' and pstart_pld_valid_name(commandArgs[3]) then
         pstart_pld.active = true
@@ -373,10 +496,15 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_pld.last_health_report = nil
         pstart_pld.last_health_report_at = 0
         pstart_pld.autows_paused = false
+        pstart_pld.target_id = nil
+        pstart_pld.target_seen_at = 0
+        pstart_pld.flash_target_id = nil
+        pstart_pld.pressure_until = 0
+        pstart_pld.last_self_hpp = player.hpp
         tickdelay = 0
         add_to_chat(122,
-            'PartyStart PLD: primary Majesty healing is On; '
-            ..'GearSwap cures before tank upkeep.')
+            'PartyStart PLD: primary Majesty healing and controlled '
+            ..'Sentinel/Rampart/Palisade are On.')
         pstart_pld_action()
     else
         add_to_chat(123,
@@ -397,6 +525,11 @@ end
 local pstart_pld_original_job_aftercast = job_aftercast
 function job_aftercast(spell, spellMap, eventArgs)
     local pending = pstart_pld.pending
+    local spell_name = spell and (spell.english or spell.en or spell.name)
+    if spell and not spell.interrupted and spell_name == 'Flash' then
+        local target = pstart_pld_enemy_target()
+        if target then pstart_pld.flash_target_id = target.id end
+    end
     local completed_chivalry = pending and pending.kind == 'chivalry'
         and spell
         and (spell.id == pending.action_id
@@ -414,6 +547,17 @@ function job_aftercast(spell, spellMap, eventArgs)
             windower.send_command('aws2 on')
             pstart_pld.autows_paused = false
         end
+    elseif pending and pending.kind == 'tank_ability'
+        and spell and spell.id == pending.action_id
+    then
+        if spell.interrupted then
+            pstart_pld.retry_at = os.clock() + 1.5
+            pstart_pld.last_action = pending.spell_name
+                ..' interrupted; retry armed'
+        else
+            pstart_pld.retry_at = os.clock() + 0.75
+        end
+        pstart_pld.pending = nil
     elseif pending and spell and spell.id == pending.spell_id then
         if spell.interrupted then
             pstart_pld.retry_at = os.clock() + 1.5

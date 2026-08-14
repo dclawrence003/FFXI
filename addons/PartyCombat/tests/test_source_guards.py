@@ -15,6 +15,8 @@ def test_addon_starts_inert():
     assert "loadfile(" in SOURCE
     assert "data/settings.lua" in SOURCE
     assert "require('config')" not in SOURCE
+    assert "puller = 'Tackleberry'" in SOURCE
+    assert "puller = 'Tackleberry'" in SETTINGS
 
 
 def test_only_damage_actions_drive_automatic_targets():
@@ -39,6 +41,33 @@ def test_combat_authority_is_explicit():
     assert "broadcast_authority(true)" in SOURCE
     assert "broadcast_authority(false)" in SOURCE
     assert "if not authorized or not is_attacker() then return end" in SOURCE
+
+
+def test_authorized_puller_can_establish_but_not_replace_live_target():
+    action = SOURCE.split("windower.register_event('action'", 1)[1]
+    action = action.split("windower.register_event('ipc message'", 1)[0]
+    assert "local puller_authority = authorized and is_puller()" in action
+    assert "local leader_authority = armed and is_leader()" in action
+    assert "active_target_id ~= target.id" in action
+    assert "if valid_enemy(active) then return end" in action
+    assert "accept_target(target.id, 'auto')" in action
+    assert action.index("accept_target(target.id, 'auto')") < action.index(
+        "send_ipc('target', target.id, 'auto')"
+    )
+
+
+def test_runtime_policy_is_validated_and_loaded_inert():
+    policy = SOURCE.split("local function apply_runtime_policy", 1)[1]
+    policy = policy.split("local function damage_target", 1)[0]
+    assert "valid_policy_name(policy_name)" in policy
+    assert "valid_name(leader)" in policy
+    assert "valid_name(puller)" in policy
+    assert "same_attacker_roster(settings, normalized)" in policy
+    assert "armed = false" in policy
+    assert "settings = {" in policy
+    assert "puller = puller" in policy
+    assert "configured command leader issues //pc on" in policy
+    assert "elseif command == 'policy' then" in SOURCE
 
 
 def test_fastfollow_is_claimed_only_after_a_target_is_accepted():
@@ -81,7 +110,7 @@ def test_zone_follow_recovery_is_delayed_and_cancelled_by_new_combat():
         "windower.register_event('zone change'", 1
     )[1].split("windower.register_event('logout'", 1)[0]
     assert "local restore_after_zone = fastfollow_claimed" in zone
-    assert "zone_follow_restore_at = os.clock() + 3.5" in zone
+    assert "zone_follow_restore_at = now + POST_ZONE_FOLLOW_DELAY" in zone
 
     accept = SOURCE.split("local function accept_target", 1)[1]
     accept = accept.split("local function current_leader_target", 1)[0]

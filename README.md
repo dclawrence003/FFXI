@@ -31,8 +31,8 @@ limitations before use.
 | [EventGuard](addons/EventGuard/) | Windower addon | Records NPC event state and offers cautious recovery commands for a client stuck in an interaction | Prototype |
 | [AutoWS2](addons/AutoWS2/) | Windower addon | Adds shadow-tested, TP-rate-aware AM3 reserve and hard 3000-TP reapplication safety | Prototype; Tizona validation |
 | [Roller2](addons/Roller2/) | Windower addon/fork | Iterates on Selindrile's Roller with safer Snake Eye sequencing | Prototype; live testing |
-| [PartyStart](addons/PartyStart/) | Windower addon | Discovers current party jobs and configures non-combat support profiles from one command | Six-character prototype |
-| [PartyCombat](addons/PartyCombat/) | Windower addon | Gives selected followers action-driven targeting, distance-limited pursuit, and explicit combat authorization | Tackleberry prototype |
+| [PartyStart](addons/PartyStart/) | Windower addon | Atomically validates named compositions, then configures support, offense, and an inert combat-role policy | Six-character prototype |
+| [PartyCombat](addons/PartyCombat/) | Windower addon | Gives composition-selected attackers action-driven targeting, tank-led pull authority, distance-limited pursuit, and explicit combat authorization | Six-character prototype |
 | [FFXI Core Manager](tools/FFXI-Core-Manager/) | Windows utility + Windower addon | Assigns characters to logical processors and restores multimonitor window layouts | Personal-system prototype |
 | [InventoryCore + LootAdvisor](tools/InventoryCore/) | Local Node service + Windower addon | FindAll inventory guidance, roster gil/key-item/currency views, and automatic Limbus chest rotation tracking | Valefor prototype |
 | [LimbusTracker](addons/LimbusTracker/) | Windower addon | Standalone detection, persistent per-character history, and compact self/roster display for modern Limbus chests | Optional InventoryCore sync |

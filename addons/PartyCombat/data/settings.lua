@@ -2,6 +2,7 @@
 -- Character names are case-insensitive.
 return {
     leader = 'Dolomedes',
+    puller = 'Tackleberry',
     attackers = {
         Tackleberry = {
             auto_distance = 10,
