@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'LimbusTracker'
 _addon.author = 'OpenAI Codex at the direction of Dolomedes'
-_addon.version = '0.3.0'
+_addon.version = '0.4.0'
 _addon.commands = {'limbustracker', 'lt'}
 
 local config = require('config')
@@ -84,8 +84,7 @@ local history_path = nil
 local state = nil
 local pending_chest = nil
 local previous_units = {}
-local current_sector = {Temenos = nil, Apollyon = nil}
-local last_temp_scan = 0
+local last_render = 0
 local last_currency_request = 0
 local last_sync_attempt = 0
 
@@ -98,6 +97,26 @@ local synthetic_target_ids = {
     Temenos = {North = 910001, West = 910002, East = 910003, Central = 910004},
     Apollyon = {NW = 920001, SW = 920002, NE = 920003, SE = 920004},
 }
+
+-- Rotation rewards come only from these eight final-floor chests. Other
+-- Limbus targets (notably the roaming ??? that awards 3,000 units) are not
+-- part of the four-sector chest rotation and must never create history.
+local final_chest_targets = {
+    Temenos = {
+        [16929362] = 'North',
+        [16929363] = 'West',
+        [16929364] = 'East',
+        [16929365] = 'Central',
+    },
+    Apollyon = {
+        [16933563] = 'NW',
+        [16933564] = 'SW',
+        [16933565] = 'NE',
+        [16933566] = 'SE',
+    },
+}
+
+local duplicate_window = 300
 
 local function chat(color, message)
     windower.add_to_chat(color, '[LimbusTracker] ' .. message)
@@ -239,28 +258,6 @@ local function should_show()
     if settings.mode == 'off' then return false end
     if settings.mode == 'always' then return true end
     return current_area() ~= nil
-end
-
-local function sector_for_item(item_id)
-    if item_id >= 9956 and item_id <= 9962 then return 'Temenos', 'North' end
-    if item_id >= 9963 and item_id <= 9969 then return 'Temenos', 'West' end
-    if item_id >= 9970 and item_id <= 9976 then return 'Temenos', 'East' end
-    if item_id >= 9977 and item_id <= 9980 then return 'Temenos', 'Central' end
-    if item_id >= 9981 and item_id <= 9985 then return 'Apollyon', 'NW' end
-    if item_id >= 9986 and item_id <= 9989 then return 'Apollyon', 'SW' end
-    if item_id >= 9990 and item_id <= 9994 then return 'Apollyon', 'NE' end
-    if item_id >= 9995 and item_id <= 9998 then return 'Apollyon', 'SE' end
-    return nil, nil
-end
-
-local function scan_limbus_data()
-    local temporary = windower.ffxi.get_items('temporary') or {}
-    for _, slot in pairs(temporary) do
-        if type(slot) == 'table' and tonumber(slot.id or slot.item_id) then
-            local area, sector = sector_for_item(tonumber(slot.id or slot.item_id))
-            if area then current_sector[area] = sector end
-        end
-    end
 end
 
 local function request_currency_two()
@@ -463,20 +460,38 @@ local function backfill_target(area, target_id, chest)
     end
 end
 
+local function validated_chest(area, target_id, requested_chest)
+    local automatic = final_chest_targets[area]
+        and final_chest_targets[area][target_id] or nil
+    if automatic then return automatic end
+
+    for chest, synthetic_id in pairs(synthetic_target_ids[area] or {}) do
+        if synthetic_id == target_id and requested_chest == chest then
+            return chest
+        end
+    end
+    return nil
+end
+
 local function record_chest(area, target_id, chest, units, signature)
     if not initialize_character() then return false end
-    local target_key = 'id_' .. tostring(target_id)
-    chest = chest or state.targets[area][target_key]
-    if chest then backfill_target(area, target_id, chest) end
+    chest = validated_chest(area, target_id, chest)
+    if not chest then return false end
+    backfill_target(area, target_id, chest)
 
-    for _, event in ipairs(state.events[area]) do
+    local now = os.time()
+    for index = #state.events[area], 1, -1 do
+        local event = state.events[area][index]
         if event.signature == signature then return false end
+        local age = now - tonumber(event.opened_at or 0)
+        if age > duplicate_window then break end
+        if event.target_id == target_id then return false end
     end
     local event = {
         chest = chest,
         target_id = target_id,
         units = units,
-        opened_at = os.time(),
+        opened_at = now,
         signature = signature,
         synced = false,
     }
@@ -492,27 +507,31 @@ end
 local function begin_chest(target_id)
     local area = current_area()
     if not area then return end
+    target_id = tonumber(target_id)
+    local chest = target_id and final_chest_targets[area]
+        and final_chest_targets[area][target_id] or nil
+    if not chest then return end
     initialize_character()
-    local target_key = 'id_' .. tostring(target_id)
+    local field = area .. ' Units'
     pending_chest = {
         area = area,
-        chest = current_sector[area]
-            or (state and state.targets[area][target_key] or nil),
+        chest = chest,
         target_id = target_id,
         started = os.time(),
+        units_before = tonumber(previous_units[field]),
     }
     coroutine.schedule(request_currency_two, 0.5)
     coroutine.schedule(request_currency_two, 2)
 end
 
 local function finish_chest_if_ready(packet)
-    if not pending_chest or os.time() - pending_chest.started > 15 then
+    if not pending_chest or os.time() - pending_chest.started > 30 then
         pending_chest = nil
         return false
     end
     local field = pending_chest.area .. ' Units'
-    local before = previous_units[field]
-    local after = packet[field]
+    local before = pending_chest.units_before or previous_units[field]
+    local after = tonumber(packet[field])
     local gained = before and after and (after - before) or nil
     if gained == 3000 or gained == 5000 then
         local name = player_name() or 'Unknown'
@@ -526,26 +545,6 @@ local function finish_chest_if_ready(packet)
         return recorded
     end
     return false
-end
-
-local function record_currency_delta(packet)
-    local area = current_area()
-    local chest = area and current_sector[area] or nil
-    if not area or not chest then return false end
-    local field = area .. ' Units'
-    local before = previous_units[field]
-    local after = tonumber(packet[field])
-    local gained = before and after and (after - before) or nil
-    if gained ~= 3000 and gained ~= 5000 then return false end
-
-    local target_id = pending_chest and pending_chest.area == area
-        and pending_chest.target_id or synthetic_target_ids[area][chest]
-    local name = player_name() or 'Unknown'
-    local signature = table.concat({
-        name, area, chest, before, after, 'currency',
-    }, ':')
-    pending_chest = nil
-    return record_chest(area, target_id, chest, gained, signature)
 end
 
 local function normalize_area(value)
@@ -599,9 +598,9 @@ local function print_status()
     chat(207, ('saved openings: Temenos=%d, Apollyon=%d | InventoryCore sync=%s')
         :format(temenos, apollyon,
             settings.sync_inventorycore and 'on' or 'off'))
-    chat(207, ('detected sector: Temenos=%s, Apollyon=%s | units: T=%s, A=%s')
-        :format(tostring(current_sector.Temenos or '--'),
-            tostring(current_sector.Apollyon or '--'),
+    chat(207, ('pending final chest: %s | units: T=%s, A=%s')
+        :format(pending_chest and (pending_chest.area .. ' '
+                .. pending_chest.chest) or '--',
             tostring(previous_units['Temenos Units'] or '--'),
             tostring(previous_units['Apollyon Units'] or '--')))
 end
@@ -615,7 +614,6 @@ end
 
 windower.register_event('load', function()
     initialize_character()
-    scan_limbus_data()
     request_currency_two()
     render()
 end)
@@ -623,7 +621,6 @@ end)
 windower.register_event('login', function()
     coroutine.schedule(function()
         initialize_character()
-        scan_limbus_data()
         request_currency_two()
         render()
     end, 2)
@@ -631,9 +628,7 @@ end)
 
 windower.register_event('zone change', function()
     pending_chest = nil
-    current_sector = {Temenos = nil, Apollyon = nil}
     coroutine.schedule(function()
-        scan_limbus_data()
         request_currency_two()
         render()
     end, 1)
@@ -651,17 +646,15 @@ windower.register_event('incoming chunk', function(id, original, modified)
     if id ~= 0x118 then return end
     local ok, packet = pcall(packets.parse, 'incoming', modified or original)
     if not ok or not packet then return end
-    local recorded = finish_chest_if_ready(packet)
-    if not recorded then record_currency_delta(packet) end
+    finish_chest_if_ready(packet)
     previous_units['Temenos Units'] = packet['Temenos Units']
     previous_units['Apollyon Units'] = packet['Apollyon Units']
 end)
 
 windower.register_event('prerender', function()
     local now = os.time()
-    if now - last_temp_scan >= 1 then
-        last_temp_scan = now
-        scan_limbus_data()
+    if now - last_render >= 1 then
+        last_render = now
         render()
     end
     if now - last_currency_request >= 300 then request_currency_two() end

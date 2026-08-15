@@ -1,0 +1,13 @@
+echo Staggered LimbusTracker reload beginning.
+send Dolomedes lua r LimbusTracker
+wait 2
+send Tackleberry lua r LimbusTracker
+wait 2
+send Kickpuncher lua r LimbusTracker
+wait 2
+send Barneystinson lua r LimbusTracker
+wait 2
+send Smalls lua r LimbusTracker
+wait 2
+send Achoo lua r LimbusTracker
+echo Staggered LimbusTracker reload complete.

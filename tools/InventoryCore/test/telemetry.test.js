@@ -63,23 +63,38 @@ test('rotation chooses the least recently opened learned sector and keeps five e
   assert.equal(rotation.recent.length, 5);
 });
 
-test('a learned chest target backfills unknown events and duplicate signatures are ignored', () => {
+test('authoritative targets override stale labels and duplicate signatures are ignored', () => {
   const db = memoryDb();
   recordLimbusChest(db, {
-    character: 'Dolomedes', area: 'Temenos', target_id: 17797274,
-    units: 3000, signature: 'dolo-unknown'
+    character: 'Tackleberry', area: 'Temenos', chest: 'North', target_id: 16929364,
+    units: 5000, signature: 'tack-east'
   }, config);
   recordLimbusChest(db, {
-    character: 'Tackleberry', area: 'Temenos', chest: 'North', target_id: 17797274,
-    units: 5000, signature: 'tack-known'
-  }, config);
-  recordLimbusChest(db, {
-    character: 'Tackleberry', area: 'Temenos', chest: 'North', target_id: 17797274,
-    units: 5000, signature: 'tack-known'
+    character: 'Tackleberry', area: 'Temenos', chest: 'North', target_id: 16929364,
+    units: 5000, signature: 'tack-east'
   }, config);
 
   const events = db.prepare('SELECT character,chest FROM limbus_chest_events ORDER BY id').all();
-  assert.equal(events.length, 2);
-  assert.deepEqual(events.map((row) => row.chest), ['North', 'North']);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].character, 'Tackleberry');
+  assert.equal(events[0].chest, 'East');
+  db.close();
+});
+
+test('roaming unit rewards are rejected while explicit manual repairs remain valid', () => {
+  const db = memoryDb();
+  assert.throws(() => recordLimbusChest(db, {
+    character: 'Dolomedes', area: 'Temenos', chest: 'North', target_id: 16929269,
+    units: 3000, signature: 'roaming-question-mark'
+  }, config), /Unrecognized Limbus rotation chest target/);
+
+  recordLimbusChest(db, {
+    character: 'Dolomedes', area: 'Temenos', chest: 'East', target_id: 910003,
+    units: 3000, signature: 'Dolomedes:Temenos:East:3000:1:manual'
+  }, config);
+  const events = db.prepare('SELECT chest,target_id FROM limbus_chest_events').all();
+  assert.equal(events.length, 1);
+  assert.equal(events[0].chest, 'East');
+  assert.equal(events[0].target_id, 910003);
   db.close();
 });

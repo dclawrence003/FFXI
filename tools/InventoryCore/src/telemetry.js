@@ -5,6 +5,22 @@ const LIMBUS_SECTORS = {
   Apollyon: ['NW', 'SW', 'NE', 'SE']
 };
 
+const LIMBUS_FINAL_TARGETS = {
+  Temenos: {
+    16929362: 'North', 16929363: 'West',
+    16929364: 'East', 16929365: 'Central'
+  },
+  Apollyon: {
+    16933563: 'NW', 16933564: 'SW',
+    16933565: 'NE', 16933566: 'SE'
+  }
+};
+
+const LIMBUS_MANUAL_TARGETS = {
+  Temenos: { 910001: 'North', 910002: 'West', 910003: 'East', 910004: 'Central' },
+  Apollyon: { 920001: 'NW', 920002: 'SW', 920003: 'NE', 920004: 'SE' }
+};
+
 function isoNow() {
   return new Date().toISOString();
 }
@@ -98,26 +114,23 @@ function recordLimbusChest(db, payload, config) {
   const units = finiteInteger(payload.units);
   const signature = typeof payload.signature === 'string'
     ? payload.signature.slice(0, 240) : '';
-  let chest = LIMBUS_SECTORS[area]?.includes(payload.chest) ? payload.chest : null;
   if (!area || targetId === null || targetId <= 0 || ![3000, 5000].includes(units) || !signature) {
     throw new Error('Invalid Limbus chest event.');
+  }
+  const finalChest = LIMBUS_FINAL_TARGETS[area]?.[targetId] || null;
+  const manualChest = signature.endsWith(':manual')
+    ? LIMBUS_MANUAL_TARGETS[area]?.[targetId] || null : null;
+  const chest = finalChest || manualChest;
+  if (!chest) {
+    throw new Error('Unrecognized Limbus rotation chest target.');
   }
 
   const openedAt = isoNow();
   return withTransaction(db, () => {
-    if (!chest) {
-      chest = db.prepare(
-        'SELECT chest FROM limbus_chest_targets WHERE area=? AND target_id=?'
-      ).get(area, targetId)?.chest || null;
-    }
-    if (chest) {
-      db.prepare(`INSERT INTO limbus_chest_targets(area,target_id,chest,learned_at)
-        VALUES(?,?,?,?) ON CONFLICT(area,target_id) DO UPDATE SET
-        chest=excluded.chest,learned_at=excluded.learned_at`)
-        .run(area, targetId, chest, openedAt);
-      db.prepare(`UPDATE limbus_chest_events SET chest=?
-        WHERE area=? AND target_id=? AND chest IS NULL`).run(chest, area, targetId);
-    }
+    db.prepare(`INSERT INTO limbus_chest_targets(area,target_id,chest,learned_at)
+      VALUES(?,?,?,?) ON CONFLICT(area,target_id) DO UPDATE SET
+      chest=excluded.chest,learned_at=excluded.learned_at`)
+      .run(area, targetId, chest, openedAt);
 
     db.prepare(`INSERT OR IGNORE INTO limbus_chest_events
       (character,area,chest,target_id,units,opened_at,signature)
@@ -180,6 +193,7 @@ function currencyView(db, config) {
 
 module.exports = {
   LIMBUS_SECTORS,
+  LIMBUS_FINAL_TARGETS,
   ingestTelemetry,
   recordLimbusChest,
   computeRotation,
