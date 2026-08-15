@@ -73,6 +73,8 @@ class AttributionAudit(unittest.TestCase):
         self.assertIn("16929364", text)
         self.assertIn("16933564", text)
         self.assertNotIn("record_currency_delta", text)
+        self.assertIn("history_version = 2", text)
+        self.assertIn("if migrated then save_history() end", text)
         self.assertIn("record_manual", text)
         self.assertNotIn("mob.name:lower() ~= 'treasure chest'", text)
         self.assertNotIn("/api/telemetry", text)

@@ -19,6 +19,10 @@ For each local character, the addon:
 History is not reset at the weekly tally. It remains available after zoning,
 logout, Windower reloads, and computer restarts.
 
+Version 0.4.1 also migrates older local history on load: unrecognized targets
+are removed and recognized final-chest targets are relabeled from the
+authoritative mapping. This repairs stale temporary-item labels left by 0.3.x.
+
 ## Installation
 
 Copy the complete folder to `Windower\addons\LimbusTracker` and load it on

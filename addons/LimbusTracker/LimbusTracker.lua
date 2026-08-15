@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'LimbusTracker'
 _addon.author = 'OpenAI Codex at the direction of Dolomedes'
-_addon.version = '0.4.0'
+_addon.version = '0.4.1'
 _addon.commands = {'limbustracker', 'lt'}
 
 local config = require('config')
@@ -117,6 +117,20 @@ local final_chest_targets = {
 }
 
 local duplicate_window = 300
+local history_version = 2
+
+local function validated_chest(area, target_id, requested_chest)
+    local automatic = final_chest_targets[area]
+        and final_chest_targets[area][target_id] or nil
+    if automatic then return automatic end
+
+    for chest, synthetic_id in pairs(synthetic_target_ids[area] or {}) do
+        if synthetic_id == target_id and requested_chest == chest then
+            return chest
+        end
+    end
+    return nil
+end
 
 local function chat(color, message)
     windower.add_to_chat(color, '[LimbusTracker] ' .. message)
@@ -137,7 +151,7 @@ end
 
 local function new_state(name)
     return {
-        version = 1,
+        version = history_version,
         character = name,
         targets = {Temenos = {}, Apollyon = {}},
         events = {Temenos = {}, Apollyon = {}},
@@ -145,18 +159,49 @@ local function new_state(name)
 end
 
 local function normalize_state(value, name)
-    if type(value) ~= 'table' then value = new_state(name) end
-    value.version = 1
+    local changed = type(value) ~= 'table'
+    if changed then value = new_state(name) end
+    if tonumber(value.version) ~= history_version then changed = true end
+    value.version = history_version
     value.character = name or value.character or 'Unknown'
     value.targets = type(value.targets) == 'table' and value.targets or {}
     value.events = type(value.events) == 'table' and value.events or {}
     for area in pairs(sectors) do
-        value.targets[area] = type(value.targets[area]) == 'table'
+        local old_targets = type(value.targets[area]) == 'table'
             and value.targets[area] or {}
-        value.events[area] = type(value.events[area]) == 'table'
+        local old_events = type(value.events[area]) == 'table'
             and value.events[area] or {}
+        local clean_events = {}
+        local clean_targets = {}
+
+        for _, event in ipairs(old_events) do
+            local target_id = type(event) == 'table'
+                and tonumber(event.target_id) or nil
+            local chest = target_id
+                and validated_chest(area, target_id, event.chest) or nil
+            if chest then
+                if event.target_id ~= target_id or event.chest ~= chest then
+                    changed = true
+                end
+                event.target_id = target_id
+                event.chest = chest
+                clean_events[#clean_events + 1] = event
+                clean_targets['id_' .. tostring(target_id)] = chest
+            else
+                changed = true
+            end
+        end
+
+        for key, chest in pairs(old_targets) do
+            if clean_targets[key] ~= chest then changed = true end
+        end
+        for key, chest in pairs(clean_targets) do
+            if old_targets[key] ~= chest then changed = true end
+        end
+        value.targets[area] = clean_targets
+        value.events[area] = clean_events
     end
-    return value
+    return value, changed
 end
 
 local function is_array(value)
@@ -241,7 +286,9 @@ local function initialize_character()
     local path = data_dir .. 'history_' .. sanitize(name) .. '.lua'
     if history_path ~= path or not state then
         history_path = path
-        state = load_history_file(history_path, name)
+        local migrated = false
+        state, migrated = load_history_file(history_path, name)
+        if migrated then save_history() end
     end
     return true
 end
@@ -460,19 +507,6 @@ local function backfill_target(area, target_id, chest)
     end
 end
 
-local function validated_chest(area, target_id, requested_chest)
-    local automatic = final_chest_targets[area]
-        and final_chest_targets[area][target_id] or nil
-    if automatic then return automatic end
-
-    for chest, synthetic_id in pairs(synthetic_target_ids[area] or {}) do
-        if synthetic_id == target_id and requested_chest == chest then
-            return chest
-        end
-    end
-    return nil
-end
-
 local function record_chest(area, target_id, chest, units, signature)
     if not initialize_character() then return false end
     chest = validated_chest(area, target_id, chest)
@@ -668,7 +702,9 @@ windower.register_event('addon command', function(command, ...)
         print_status()
     elseif command == 'refresh' then
         if initialize_character() then
-            state = load_history_file(history_path, player_name())
+            local migrated = false
+            state, migrated = load_history_file(history_path, player_name())
+            if migrated then save_history() end
         end
         render()
         chat(158, 'History reloaded from disk.')
