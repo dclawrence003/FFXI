@@ -105,6 +105,16 @@ and PartyStart always disables HealBot assist, engage, buff, and hostile-magic
 modes. COR requires Roller2. The physical offense layer requires AutoWS2 on
 each configured participant.
 
+### Safe multibox reloads
+
+Do not stack `send @all` reloads for PartyCombat, PartyStart, and GearSwap.
+Six simultaneous GearSwap rebuilds can hang or crash Windower's `Hook.dll`.
+Copy `scripts\reload_party_stack_safe.txt` into `Windower\scripts` and run
+`//exec reload_party_stack_safe.txt` between fights when only PartyCombat or
+PartyStart changed. It reloads one client at a time and never reloads GearSwap.
+Load GearSwap changes by restarting the affected clients normally, or reload
+GearSwap on one named client at a time with several seconds between clients.
+
 ## Commands
 
 Run from any character in the party:
@@ -155,8 +165,10 @@ Barneystinson, Smalls, and Achoo. Composition data lives in
 `data/compositions.lua`. Tactical profiles remain separate: they determine
 buffs and debuffs, while the composition determines expected jobs, roles,
 puller, authorized attackers, and offense assignments. PartyStart loads the
-matching PartyCombat policy inert; explicitly use `//pc on` or `//pc force`
-when combat should begin.
+matching PartyCombat policy inert. All six members, including the command
+leader, are attackers in the included compositions. Explicitly use `//pc on`
+or `//pc force` from either the configured leader or puller when combat should
+begin.
 
 The BLU compositions call Dolomedes' already-existing `TizThib` weapon state
 and configure AutoWS2 for Expiacion/level-3 aftermath. PartyStart does not

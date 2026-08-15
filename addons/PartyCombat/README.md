@@ -9,13 +9,12 @@ Valefor party:
 
 - Leader: `Dolomedes`
 - Puller: `Tackleberry`
-- Authorized attackers: `Tackleberry`, `Kickpuncher`, `Barneystinson`,
-  `Smalls`, and `Achoo`
+- Authorized attackers: all six characters, including `Dolomedes`
 - Automatic pursuit limit: 10 yalms
 - Explicit forced-pursuit limit: 30 yalms
 
 It is intentionally conservative. Loading the addon does nothing until the
-leader arms it.
+configured leader or puller arms it.
 
 ## Behavior
 
@@ -23,17 +22,17 @@ PartyCombat follows combat actions, not cursor movement:
 
 - Merely tabbing to another enemy does not move the followers.
 - A resolved melee or ranged attack, weaponskill attempt, or damaging spell
-  from Dolomedes announces that enemy as the automatic combat target. An
-  authorized Tackleberry can also establish the first target by attacking it,
-  which lets the PLD pull and acquire initial enmity without becoming the
+  from the armed controller announces that enemy as the automatic combat
+  target. Authorized Tackleberry can establish the first target by attacking
+  it, which lets the PLD pull and acquire initial enmity without becoming the
   command leader. A miss still counts.
 - The puller cannot redirect the party while a different synchronized target
   is still alive. Dolomedes remains the command authority and can override the
   puller by damaging another target.
 - Automatic target changes are accepted only when the enemy is within each
   follower's configured 10-yalm limit.
-- `force` explicitly targets, approaches, and engages Dolomedes' current enemy
-  up to the configured 30-yalm safety limit.
+- `force` explicitly targets, approaches, and engages the invoking controller's
+  current enemy up to the configured 30-yalm safety limit.
 - The attacker stops moving at 2.8 yalms.
 - While it owns a valid combat target, PartyCombat explicitly faces the
   attacker toward that enemy, including when the attacker begins inside the
@@ -80,7 +79,8 @@ bind !o pcombat stop
 ```
 
 Windower uses `!` for Alt, so these are Alt+P and Alt+O. Arming, force, and
-party-wide stop commands are accepted only from the configured command leader.
+party-wide stop commands are accepted from the configured command leader or
+puller. Other clients can stop only their own local attacker.
 
 ## Commands
 
@@ -105,8 +105,8 @@ party-wide stop commands are accepted only from the configured command leader.
 
 The normal flow is:
 
-1. Apply the desired PartyStart composition and press Alt+P once on Dolomedes
-   to arm PartyCombat.
+1. Apply the desired PartyStart composition and use `//pc on` once on either
+   Dolomedes or Tackleberry to arm PartyCombat.
 2. Let Tackleberry attack the first intended enemy, or target one on Dolomedes
    and use force.
 3. Continue fighting normally. The followers switch to an enemy that
@@ -117,7 +117,7 @@ The normal flow is:
 ## Configuration
 
 Edit `addons\PartyCombat\data\settings.lua` to change the roster or limits.
-The default table contains all five followers. Each entry uses the same
+The default table contains all six party members. Each entry uses the same
 initial limits:
 
 ```lua
@@ -125,6 +125,11 @@ return {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
     attackers = {
+        Dolomedes = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
         Tackleberry = {
             auto_distance = 10,
             force_distance = 30,
@@ -164,8 +169,13 @@ PartyStart enabled and does not change PartyCombat or FastFollow.
 - Damaging area-of-effect actions select the first valid enemy reported in the
   action packet.
 - Non-damaging enfeebles do not change the automatic combat target.
-- A puller must already be authorized by the command leader. Puller authority
-  can establish a target but cannot replace a living synchronized target.
+- The configured puller may arm or force PartyCombat directly. Automatic
+  puller authority can establish a target but cannot replace a living
+  synchronized target.
+- If EasyFarm or another external program acquires targets for the puller,
+  disable its job-ability, spell, and weaponskill battle lists. Let it select
+  and approach only; PartyCombat, PartyStart, GearSwap, and AutoWS2 own the
+  shared combat policy.
 - Force mode is deliberately capped at 30 yalms; it is not unlimited.
 - PartyCombat does not automate weaponskills, rolls, ranged attacks, or
   defensive behavior.

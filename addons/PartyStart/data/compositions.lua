@@ -37,8 +37,8 @@ return {
                 Achoo = {main='GEO'},
             },
             attackers = {
-                'Tackleberry', 'Kickpuncher', 'Barneystinson',
-                'Smalls', 'Achoo',
+                'Dolomedes', 'Tackleberry', 'Kickpuncher',
+                'Barneystinson', 'Smalls', 'Achoo',
             },
             offense = {
                 Dolomedes = {
@@ -80,8 +80,8 @@ return {
                 Achoo = {main='GEO'},
             },
             attackers = {
-                'Tackleberry', 'Kickpuncher', 'Barneystinson',
-                'Smalls', 'Achoo',
+                'Dolomedes', 'Tackleberry', 'Kickpuncher',
+                'Barneystinson', 'Smalls', 'Achoo',
             },
             offense = {
                 Dolomedes = {
@@ -128,8 +128,8 @@ return {
                 Achoo = {main='GEO'},
             },
             attackers = {
-                'Tackleberry', 'Kickpuncher', 'Barneystinson',
-                'Smalls', 'Achoo',
+                'Dolomedes', 'Tackleberry', 'Kickpuncher',
+                'Barneystinson', 'Smalls', 'Achoo',
             },
             offense = {
                 Dolomedes = {

@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.3.0'
+_addon.version = '0.3.1'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -49,6 +49,11 @@ local defaults = {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
     attackers = {
+        Dolomedes = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
         Tackleberry = {
             auto_distance = 10,
             force_distance = 30,
@@ -147,6 +152,10 @@ end
 
 local function is_puller()
     return same_name(local_name(), settings.puller)
+end
+
+local function is_controller()
+    return is_leader() or is_puller()
 end
 
 local function attacker_settings(name)
@@ -259,7 +268,9 @@ end
 local function restore_fastfollow()
     -- The local player record can be temporarily unavailable during a zone
     -- transition. The claim flag itself proves this client was an attacker.
-    if fastfollow_claimed and valid_name(settings.leader) then
+    if fastfollow_claimed and valid_name(settings.leader)
+        and not is_leader()
+    then
         windower.send_command('ffo follow '..settings.leader)
     end
     fastfollow_claimed = false
@@ -376,9 +387,15 @@ end
 local function arm()
     armed = true
     next_authority = 0
+    -- IPC delivery back to the sending client is not guaranteed. A controller
+    -- that is also an attacker must authorize itself synchronously.
+    if is_attacker() and not authorized then
+        authorized = true
+        clear_healbot_combat_automation()
+    end
     broadcast_authority(true)
     chat(158,
-        'Armed. Damage-target synchronization is active for configured attackers.')
+        'Armed by the configured leader/puller. Damage-target synchronization is active.')
 end
 
 local function force_current_target()
@@ -388,6 +405,9 @@ local function force_current_target()
         return
     end
     if not armed then arm() else broadcast_authority(true) end
+    if is_attacker() then
+        accept_target(target.id, 'force')
+    end
     send_ipc('target', target.id, 'force')
     chat(158, ('Forced approach and engagement: %s.')
         :format(target.name or target.id))
@@ -435,8 +455,8 @@ local function apply_runtime_policy(policy_name, leader, puller, attacker_names)
 
     -- A role change is an authority change. Revoke the old policy before
     -- replacing it, and deliberately leave the new one inert until the
-    -- configured command leader issues //pc on or //pc force.
-    if armed and is_leader() then
+    -- configured command leader or puller issues //pc on or //pc force.
+    if armed and is_controller() then
         broadcast_authority(false)
         send_ipc('stop')
     end
@@ -491,7 +511,7 @@ end
 
 windower.register_event('action', function(action)
     local leader_authority = armed and is_leader()
-    local puller_authority = authorized and is_puller()
+    local puller_authority = (authorized or armed) and is_puller()
     if not leader_authority and not puller_authority then return end
     local player = local_player()
     if not player or action.actor_id ~= player.id then return end
@@ -507,10 +527,10 @@ windower.register_event('action', function(action)
             local active = windower.ffxi.get_mob_by_id(active_target_id)
             if valid_enemy(active) then return end
         end
-        if puller_authority and not leader_authority then
+        if is_attacker() then
             -- Windower IPC delivery to the sending instance is not required
-            -- for correctness. Claim the puller's own target locally before
-            -- announcing it to the other attackers.
+            -- for correctness. Claim the controller's own target locally
+            -- before announcing it to the other attackers.
             accept_target(target.id, 'auto')
         end
         send_ipc('target', target.id, 'auto')
@@ -541,16 +561,20 @@ windower.register_event('ipc message', function(message)
             if enabled and not was_authorized then
                 clear_healbot_combat_automation()
             elseif not enabled then
+                if is_controller() then armed = false end
                 stop_local(nil, true)
             end
         end
     elseif kind == 'target' and authorized then
         accept_target(fields[4], fields[5])
-    elseif kind == 'stop' and is_attacker() then
-        zone_follow_restore_at = nil
-        zone_follow_restore_remaining = 0
-        last_fastfollow_claim_at = nil
-        stop_local(nil, true)
+    elseif kind == 'stop' then
+        armed = false
+        if is_attacker() then
+            zone_follow_restore_at = nil
+            zone_follow_restore_remaining = 0
+            last_fastfollow_claim_at = nil
+            stop_local(nil, true)
+        end
     end
 end)
 
@@ -562,7 +586,9 @@ windower.register_event('prerender', function()
     -- only FastFollow restore. A new combat target or explicit stop cancels
     -- the bounded recovery sequence.
     if zone_follow_restore_at and now >= zone_follow_restore_at then
-        if not active_target_id and valid_name(settings.leader) then
+        if not active_target_id and valid_name(settings.leader)
+            and not is_leader()
+        then
             windower.send_command('ffo follow '..settings.leader)
         end
         zone_follow_restore_remaining = zone_follow_restore_remaining - 1
@@ -574,7 +600,7 @@ windower.register_event('prerender', function()
         end
     end
 
-    if armed and is_leader() and now >= next_authority then
+    if armed and is_controller() and now >= next_authority then
         next_authority = now + AUTHORITY_INTERVAL
         broadcast_authority(true)
     end
@@ -671,16 +697,16 @@ windower.register_event('addon command', function(command, ...)
         end
         apply_runtime_policy(policy_name, leader, puller, attacker_names)
     elseif command == 'on' or command == 'arm' or command == 'auto' then
-        if not is_leader() then
-            chat(123, 'Only the configured leader can arm PartyCombat.')
+        if not is_controller() then
+            chat(123, 'Only the configured leader or puller can arm PartyCombat.')
             return
         end
         arm()
     elseif command == 'force' or command == 'engage'
         or command == 'attack'
     then
-        if not is_leader() then
-            chat(123, 'Only the configured leader can force engagement.')
+        if not is_controller() then
+            chat(123, 'Only the configured leader or puller can force engagement.')
             return
         end
         force_current_target()
@@ -688,14 +714,14 @@ windower.register_event('addon command', function(command, ...)
         zone_follow_restore_at = nil
         zone_follow_restore_remaining = 0
         last_fastfollow_claim_at = nil
-        if not is_leader() then
+        if not is_controller() then
             stop_local('Local attacker stopped.', true)
             return
         end
         stop_all()
     elseif command == 'help' then
         chat(207,
-            'Commands: on | force | stop | status | policy <name> <leader> <puller> <attackers>. Force also arms tracking.')
+            'Commands: on | force | stop | status | policy <name> <leader> <puller> <attackers>. Leader or puller may arm/force.')
     else
         chat(123, 'Unknown command. Use //pc help.')
     end
@@ -706,7 +732,7 @@ windower.register_event('zone change', function()
     local recently_claimed = last_fastfollow_claim_at
         and now - last_fastfollow_claim_at <= RECENT_FOLLOW_CLAIM_WINDOW
     local restore_after_zone = fastfollow_claimed or recently_claimed
-    if armed and is_leader() then
+    if armed and is_controller() then
         broadcast_authority(false)
     end
     armed = false
@@ -722,14 +748,14 @@ windower.register_event('zone change', function()
 end)
 
 windower.register_event('logout', 'unload', function()
-    if armed and is_leader() then
+    if armed and is_controller() then
         broadcast_authority(false)
     end
     stop_running()
 end)
 
 chat(158,
-    'Loaded inert. The leader or authorized puller can establish targets; use //pc on or //pc force on the leader.')
+    'Loaded inert. Use //pc on or //pc force on the configured leader or puller.')
 if settings_warning then
     chat(123,
         'settings.lua was unavailable during startup; using safe defaults. '

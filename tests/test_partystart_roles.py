@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 
@@ -11,6 +12,9 @@ class PartyStartRolePolicy(unittest.TestCase):
         cls.addon = (ROOT / "addons/PartyStart/PartyStart.lua").read_text(
             encoding="utf-8"
         )
+        cls.compositions = (
+            ROOT / "addons/PartyStart/data/compositions.lua"
+        ).read_text(encoding="utf-8")
         cls.rdm = (
             ROOT / "addons/PartyStart/gearswap/PartyStart_RDM.lua"
         ).read_text(encoding="utf-8")
@@ -24,17 +28,30 @@ class PartyStartRolePolicy(unittest.TestCase):
             ("Smalls", "RDM", "Maxentius", "Black Halo"),
             ("Achoo", "GEO", "Maxentius", "Black Halo"),
         ):
-            start = self.addon.index(character + " = {")
-            block = self.addon[start : self.addon.index("    },", start) + 6]
-            self.assertIn("jobs = S{'" + job + "'}", block)
-            self.assertIn("weapon_mode = '" + weapon + "'", block)
-            self.assertIn("ws = '" + weaponskill + "'", block)
+            self.assertIn(character + " = {", self.compositions)
+            self.assertIn(
+                job + " = {weapon_mode='" + weapon + "', ws='"
+                + weaponskill + "', tp=1000}",
+                self.compositions,
+            )
+
+    def test_every_composition_authorizes_the_command_leader_to_attack(self):
+        blocks = re.findall(
+            r"attackers\s*=\s*\{(.*?)\},\s*offense",
+            self.compositions,
+            flags=re.DOTALL,
+        )
+        self.assertEqual(3, len(blocks))
+        for block in blocks:
+            self.assertIn("'Dolomedes'", block)
 
     def test_new_job_automation_is_enabled(self):
         self.assertIn("local function apply_pld(profile_name, leader)", self.addon)
         self.assertIn("gs c set AutoTankMode", self.addon)
         self.assertIn("gs c unset AutoWSMode", self.addon)
-        self.assertIn("local function apply_dnc(profile_name, leader)", self.addon)
+        self.assertIn(
+            "local function apply_dnc(profile_name, target_source)", self.addon
+        )
         self.assertIn("gs c set AutoSambaMode Off", self.addon)
         self.assertIn("gs c pstartdnc %s %s", self.addon)
         self.assertIn("gs c set AutoBuffMode Off; gs c unset AutoPrestoMode", self.addon)

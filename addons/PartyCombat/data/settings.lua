@@ -4,6 +4,11 @@ return {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
     attackers = {
+        Dolomedes = {
+            auto_distance = 10,
+            force_distance = 30,
+            engage_distance = 2.8,
+        },
         Tackleberry = {
             auto_distance = 10,
             force_distance = 30,
