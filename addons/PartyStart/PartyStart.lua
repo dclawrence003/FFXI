@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.3'
+_addon.version = '1.2.4'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -33,6 +33,7 @@ local zone_epoch = 0
 local job_revalidate_at = nil
 local pending_revalidation = nil
 local nonce_counter = 0
+local encounter_alerts = {}
 
 local profiles = {
     master = {
@@ -166,8 +167,8 @@ local profiles = {
         brd_debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
         },
-        geo = {indi='Fury', geo='Frailty', entrust='Precision', lean=true,
-            entrust_jobs={'COR','DNC','PLD'}},
+        geo = {indi='Fury', geo='Frailty', entrust='Wilt', lean=true,
+            entrust_jobs={'PLD','COR','DNC'}},
         rdm = {
             haste_scope='attackers', refresh_scope='mp',
             phalanx_scope='tank', defense_scope='party',
@@ -176,8 +177,9 @@ local profiles = {
         pld_controller = true,
         advisories = {
             'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes and Kickpuncher attack from behind.',
-            'V1: Smalls opens Stymie + Saboteur + Silence. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
+            'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
             'V1: Barney supplies Barstonra/Barsilencera and is the intended Housemaker bait. Move him away when Housemaker begins charging.',
+            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker Earthshaker, and Hundred Fists.',
             'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold; sleep and kill any activated Urchins manually.',
         },
     },
@@ -276,6 +278,69 @@ local haste_jobs = S{
 local function chat(color, message)
     windower.add_to_chat(color or 207, '[PartyStart] '..message)
 end
+
+local V1_WARBLE_ALERTS = {
+    ['Fire Meeble Warble'] = 'FIRE WARBLE: Barfira; expect Plague/Burn.',
+    ['Blizzard Meeble Warble'] =
+        'ICE WARBLE: Barblizzara; expect Paralyze/Frost.',
+    ['Thunder Meeble Warble'] =
+        'THUNDER WARBLE: Barthundra; expect Stun/Shock.',
+    ['Stone Meeble Warble'] =
+        'STONE WARBLE: Barstonra is already maintained; expect Petrify/Rasp.',
+    ['Water Meeble Warble'] =
+        'WATER WARBLE: Barwatera; expect Poison/Drown.',
+    ['Aero Meeble Warble'] =
+        'WIND WARBLE: Baraera; expect Silence/Choke.',
+    ['Meeble Warble'] =
+        'WARBLE ready: element was not exposed by the action resource.',
+}
+
+local function monster_ability_from_action(action)
+    if type(action) ~= 'table' then return nil end
+    if action.category == 7 then
+        for _, target in ipairs(action.targets or {}) do
+            for _, result in ipairs(target.actions or {}) do
+                local ability = res.monster_abilities[result.param]
+                if ability then return ability end
+            end
+        end
+        return nil
+    end
+    if action.category == 6 or action.category == 11 then
+        return res.monster_abilities[action.param]
+    end
+    return nil
+end
+
+local function v1_encounter_alert(action)
+    if current_profile ~= 'ambuscade-v1' then return end
+    local ability = monster_ability_from_action(action)
+    local actor = ability and windower.ffxi.get_mob_by_id(action.actor_id)
+        or nil
+    if not actor or type(actor.name) ~= 'string' then return end
+
+    local message
+    if actor.name == 'Bozzetto Breadwinner' then
+        message = V1_WARBLE_ALERTS[ability.en]
+        if ability.en == 'Hundred Fists' then
+            message = 'HUNDRED FISTS: reserved PLD mitigation is activating; Gale Spikes can reflect damage and overwrite Haste II.'
+        end
+    elseif actor.name == 'Bozzetto Housemaker'
+        and type(ability.en) == 'string'
+        and ability.en:find('Earthshaker', 1, true)
+    then
+        message = 'HOUSEMAKER EARTHSHAKER: move Barney away from every player, pet, and luopan now.'
+    end
+    if not message then return end
+
+    local key = tostring(actor.id)..':'..tostring(ability.id)
+    local now = os.clock()
+    if now - (encounter_alerts[key] or 0) < 6 then return end
+    encounter_alerts[key] = now
+    chat(167, '*** '..message..' ***')
+end
+
+windower.register_event('action', v1_encounter_alert)
 
 local function valid_name(name)
     return type(name) == 'string'
@@ -493,10 +558,20 @@ local function apply_physical_offense(player, composition, attackers)
                 aftermath.ws or offense.ws,
                 tonumber(aftermath.duration) or 180)
     end
+    -- Ordinary weaponskills should continue through the final displayed 5%
+    -- of a target. On high-HP Ambuscade enemies that last segment is still a
+    -- substantial amount of HP. Aftermath profiles retain the conservative
+    -- 5% floor so they do not spend a 3000-TP reapplication on a dying mob.
+    local hp_min = tonumber(offense.hp_min)
+    if hp_min == nil then
+        hp_min = aftermath and aftermath.enabled and 5 or 0
+    end
+    local hp_max = tonumber(offense.hp_max) or 100
     issue(('gs c set Weapons %s; wait 1; %s; '
-        ..'aws2 use %s; aws2 tp %d; aws2 on')
+        ..'aws2 use %s; aws2 tp %d; aws2 hp %d %d; aws2 on')
         :format(offense.weapon_mode, aftermath_command,
-            offense.ws, tonumber(offense.tp) or 1000))
+            offense.ws, tonumber(offense.tp) or 1000,
+            hp_min, hp_max))
     autows2_owned = true
 end
 
@@ -1153,6 +1228,7 @@ local function stop_local(options)
     current_profile = nil
     current_composition = nil
     active_session = nil
+    encounter_alerts = {}
     zone_rearm_at = nil
     zone_epoch = zone_epoch + 1
     next_maintenance = 0

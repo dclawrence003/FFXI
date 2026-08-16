@@ -150,7 +150,9 @@ local pstart_rdm_profiles = {
             abilities={'Stymie', 'Saboteur'},
         },
         debuffs = {
-            {spells={'Silence'}, duration=45,
+            {spells={'Silence'}, duration=45, confirm_result=true,
+                target_names={'Bozzetto Breadwinner'}},
+            {spells={'Paralyze II', 'Paralyze'}, duration=120,
                 target_names={'Bozzetto Breadwinner'}},
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=120,
                 target_names={'Bozzetto Breadwinner'}},
@@ -188,6 +190,7 @@ local pstart_rdm = {
     defense = {},
     buff_timers = {},
     debuff_timers = {},
+    debuff_attempts = {},
     pending = nil,
     convert_recovery_until = 0,
     remote_loss_count = 0,
@@ -207,6 +210,9 @@ local PSTART_RDM_LOSE_EFFECT_MESSAGES = {
     [342]=true, [343]=true, [344]=true, [350]=true, [378]=true,
     [453]=true, [531]=true, [647]=true,
 }
+
+local PSTART_RDM_DEBUFF_RETRY = 3
+local PSTART_RDM_DEBUFF_COVERED_RECHECK = 15
 
 local PSTART_RDM_MAINTAINED_BUFFS = {
     Haste = {'Haste II', 'Haste'},
@@ -383,11 +389,74 @@ local function pstart_rdm_register_remote_buff_loss(
     pstart_rdm.last_remote_loss = buff.en..' -> '..target.name
 end
 
+local function pstart_rdm_debuff_outcome(message_id)
+    local message = res.action_messages[message_id]
+    if not message then return 'unknown' end
+    local text = type(message.en) == 'string' and message.en:lower() or ''
+    if message_id == 66 or text:find('resist', 1, true) then
+        return 'resisted'
+    end
+    -- "No effect" normally means another source already has an equal or
+    -- stronger enfeeble on the target. Treat it as temporarily covered rather
+    -- than retrying every maintenance tick.
+    if text:find('no effect', 1, true) then
+        return 'covered'
+    end
+    if message.color == 'R'
+        or text:find('fails to take effect', 1, true)
+    then
+        return 'failed'
+    end
+    return 'landed'
+end
+
+local function pstart_rdm_register_debuff_result(action)
+    local local_player = windower.ffxi.get_player()
+    if not local_player or type(action) ~= 'table'
+        or action.actor_id ~= local_player.id
+        or action.category ~= 4
+    then
+        return
+    end
+    local spell_id = tonumber(action.param)
+    if not spell_id then return end
+
+    for _, target in ipairs(action.targets or {}) do
+        local key = tostring(target.id)..':'..tostring(spell_id)
+        local attempt = pstart_rdm.debuff_attempts[key]
+        local result = target.actions and target.actions[1] or nil
+        if attempt and result and result.message then
+            local outcome = pstart_rdm_debuff_outcome(result.message)
+            local now = os.clock()
+            attempt.outcome = outcome
+            attempt.resolved_at = now
+            if outcome == 'landed' then
+                pstart_rdm.debuff_timers[key] = now + attempt.duration
+                add_to_chat(158, ('[PartyStart RDM] %s confirmed on %s.')
+                    :format(attempt.spell_name, attempt.target_name))
+            elseif outcome == 'covered' then
+                pstart_rdm.debuff_timers[key] =
+                    now + PSTART_RDM_DEBUFF_COVERED_RECHECK
+                add_to_chat(207, ('[PartyStart RDM] %s reported no effect on '
+                    ..'%s; treating the target as temporarily covered.')
+                    :format(attempt.spell_name, attempt.target_name))
+            else
+                pstart_rdm.debuff_timers[key] =
+                    now + PSTART_RDM_DEBUFF_RETRY
+                add_to_chat(123, ('[PartyStart RDM] %s did not land on %s; '
+                    ..'retrying as soon as recast permits.')
+                    :format(attempt.spell_name, attempt.target_name))
+            end
+        end
+    end
+end
+
 -- Apex Eft's Geist Wall can remove a maintained buff long before its normal
 -- duration expires. Invalidate only that target's GearSwap timer from the
 -- authoritative action packet so it is recast without giving HealBot buff
 -- ownership or restarting the whole six-character rotation.
 windower.raw_register_event('action', function(action)
+    pstart_rdm_register_debuff_result(action)
     local profile = pstart_rdm.active
         and pstart_rdm_profiles[pstart_rdm.profile]
         or nil
@@ -957,9 +1026,21 @@ local function pstart_rdm_cast_debuff(profile)
                         pstart_rdm.pending = {
                             kind = 'debuff',
                             spell_id = spell.id,
+                            target_id = target.id,
                             key = key,
                             duration = task.duration,
+                            confirm_result = task.confirm_result == true,
                         }
+                        if task.confirm_result then
+                            pstart_rdm.debuff_attempts[key] = {
+                                spell_id = spell.id,
+                                spell_name = spell.en,
+                                target_id = target.id,
+                                target_name = target.name,
+                                duration = task.duration,
+                                expires = os.clock() + 10,
+                            }
+                        end
                         windower.chat.input('/ma "'..spell.en..'" <t>')
                         tickdelay = os.clock() + 3
                         return true
@@ -1046,6 +1127,7 @@ function user_job_self_command(commandArgs, eventArgs)
     elseif requested == 'off' then
         pstart_rdm.active = false
         pstart_rdm.pending = nil
+        pstart_rdm.debuff_attempts = {}
         pstart_rdm.convert_recovery_until = 0
         pstart_rdm.last_loss_events = {}
         pstart_rdm.reactive_repairs = {}
@@ -1071,6 +1153,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.defense = pstart_rdm_names(commandArgs[7])
         pstart_rdm.pending = nil
         pstart_rdm.debuff_timers = {}
+        pstart_rdm.debuff_attempts = {}
         pstart_rdm.convert_recovery_until = 0
         pstart_rdm.remote_loss_count = 0
         pstart_rdm.last_remote_loss = 'none'
@@ -1129,7 +1212,24 @@ function job_aftercast(spell, spellMap, eventArgs)
                 pstart_rdm.reactive_repairs[pending.repair_key] = nil
             end
         else
+            if pending.confirm_result and not spell.interrupted then
+                local attempt = pstart_rdm.debuff_attempts[pending.key]
+                if attempt and attempt.outcome == 'landed' then
+                    retry = pending.duration
+                elseif attempt and attempt.outcome == 'covered' then
+                    retry = PSTART_RDM_DEBUFF_COVERED_RECHECK
+                else
+                    -- Use a short provisional timer until the authoritative
+                    -- action result confirms success or failure. The raw
+                    -- action callback may run immediately before or after
+                    -- GearSwap's aftercast callback; either order is safe.
+                    retry = PSTART_RDM_DEBUFF_RETRY
+                end
+            end
             pstart_rdm.debuff_timers[pending.key] = os.clock() + retry
+            if pending.confirm_result and spell.interrupted then
+                pstart_rdm.debuff_attempts[pending.key] = nil
+            end
         end
         pstart_rdm.pending = nil
     end

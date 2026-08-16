@@ -28,7 +28,9 @@ PartyStart establishes clear ownership:
   sustained profiles; its cure queue is disabled.
   The Ambuscade profiles give GearSwap backup-cure ownership, full MP-job
   Refresh, Haste only on the three attackers, Phalanx II on PLD, and a one-time
-  Shell V pass. V1 also owns Stymie/Saboteur/Silence on Breadwinner.
+  Shell V pass. V1 also owns Stymie/Saboteur/Silence and Paralyze II on
+  Breadwinner. Silence uses the authoritative action result and retries a
+  resist instead of assuming every completed cast landed.
 - PLD GearSwap is the primary healer in sustained profiles. It evaluates HP
   before the
   native PLD tick, maintains Majesty through the native controller, casts
@@ -62,6 +64,9 @@ PartyStart establishes clear ownership:
 - AutoWS2 owns configured weapon skills in physical profiles, including
   Dolomedes when he is COR. V1/V2 arm only Dolomedes, Tackleberry, and
   Kickpuncher for offense; Barney, Smalls, and Achoo remain backline support.
+  Non-aftermath offense uses a 0% target-HP floor so weapon skills continue
+  through the final displayed 5%; aftermath profiles retain a 5% floor to
+  avoid spending a 3000-TP reapplication on a dying enemy.
 - RDM GearSwap maintains Temper II while engaged and tracks its Multi Strikes
   status effect directly.
 
@@ -138,6 +143,10 @@ PartyStart across all six. It deliberately does not reload Dolo's GearSwap.
 For the healing hotfix, `//exec reload_apexcrabs_healing_safe.txt` is narrower:
 it reloads only Tackleberry and Smalls, ten seconds apart, before refreshing
 PartyStart across the team. Dolo's GearSwap remains untouched.
+For the V1 encounter update, `//exec reload_ambuv1_safe.txt` reloads only
+Smalls' GearSwap, waits ten seconds, then refreshes PartyStart one client at a
+time. It never reloads Dolo's GearSwap and should be run out of combat before
+reapplying `progression/ambuscade-v1`.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -429,12 +438,15 @@ Tackleberry.
   Smalls, and Achoo receive target-only synchronization and do not engage or
   move under PartyCombat.
 - Chaos/Samurai Roll; Victory March/Valor Minuet V/Blade Madrigal;
-  Indi-Fury/Geo-Frailty; Entrusted Indi-Precision, preferring Dolomedes.
+  Indi-Fury/Geo-Frailty; Entrusted Indi-Wilt, preferring Tackleberry so the
+  aura remains centered on the tank and Breadwinner.
 - Smalls maintains Haste II on the three attackers, Refresh on MP jobs,
   Phalanx II on Tackleberry, Shell V on the party, and backup cures below 55%.
   On the exact Breadwinner target he prioritizes Stymie, Saboteur, Silence,
-  Dia III, and Distract III, with learned-tier fallbacks. If either JA is on
-  recast, the controller skips it rather than delaying Silence.
+  Paralyze II, Dia III, and Distract III, with learned-tier fallbacks. If
+  either JA is on recast, the controller skips it rather than delaying
+  Silence. A confirmed resist receives a short recast-aware retry instead of
+  the normal 45-second Silence timer.
 - Barney maintains Barstonra and Barsilencera and restricts automatic Elegy to
   Breadwinner. His AoE barspells intentionally make him the Housemaker bait.
 - Tackleberry retains Majesty healing and native Flash/Provoke. Sentinel and
@@ -445,6 +457,10 @@ Tackleberry.
   Kickpuncher behind the boss, move Barney away when Housemaker charges, and
   sleep/kill any Urchins that activate. Static Barstone is the safe default;
   the profile does not attempt to infer each Warble element.
+- Every V1 client prints a prominent readying alert for elemental Warbles,
+  Housemaker's Earthshaker, and Hundred Fists. Warble alerts identify the
+  matching Barspell and expected ailments; they observe only and do not yet
+  change Barney's maintained Barstone policy.
 
 ### V2: Popular Penelope
 
@@ -476,7 +492,7 @@ Tackleberry.
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
 | `safe` | March / Scherzo / Madrigal | Barrier / Frailty |
-| `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; Barstone / Barsilence; Breadwinner Elegy | Fury / Frailty; Entrust Precision |
+| `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; Barstone / Barsilence; Breadwinner Elegy | Fury / Frailty; Entrust Wilt on PLD |
 | `ambuscade-v2` (`v2`) | March / Minuet / Madrigal; Barstone / Barsleep; Penelope Elegy | Fury / Frailty; Entrust Refresh |
 
 RDM enfeebles by profile:
@@ -490,7 +506,7 @@ RDM enfeebles by profile:
 | `accuracy` | Frazzle, Dia, Distract |
 | `magic` | Frazzle, Dia, Addle |
 | `safe` | Frazzle, Dia, Distract, Slow, Paralyze, Blind, Addle |
-| `ambuscade-v1` | Priority Stymie/Saboteur/Silence, Dia, Distract on Breadwinner only |
+| `ambuscade-v1` | Priority Stymie/Saboteur/Silence with result confirmation, Paralyze, Dia, and Distract on Breadwinner only |
 | `ambuscade-v2` | Dia on Popular Penelope only |
 
 On Smalls, `//gs c pstartrdm status` reports current MP,
@@ -546,8 +562,8 @@ AutoWS2 reservation, and total completed cures.
   enfeebles below 45% MP, and ignoring targets already below 50% HP. The
   heavier profiles retain party Shell, Frazzle, and a 35% enfeeble floor.
   V1 is the deliberate exception: when Breadwinner becomes the synchronized
-  target, its JA opener and Silence/Dia/Distract pass run ahead of routine buff
-  maintenance. V2 keeps the normal support-first order.
+  target, its JA opener and Silence/Paralyze/Dia/Distract pass run ahead of
+  routine buff maintenance. V2 keeps the normal support-first order.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
 - BRD hostile-song timers are tracked per enemy. The controller retries Elegy

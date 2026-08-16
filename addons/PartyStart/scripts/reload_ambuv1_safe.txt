@@ -1,0 +1,15 @@
+echo Staggered Ambuscade V1 tuning reload beginning. Dolo GearSwap is untouched.
+send Smalls gs reload
+wait 10
+send Dolomedes lua r PartyStart
+wait 3
+send Tackleberry lua r PartyStart
+wait 3
+send Kickpuncher lua r PartyStart
+wait 3
+send Barneystinson lua r PartyStart
+wait 3
+send Smalls lua r PartyStart
+wait 3
+send Achoo lua r PartyStart
+echo Ambuscade V1 tuning reload complete. Apply progression/ambuv1, then arm PartyCombat.
