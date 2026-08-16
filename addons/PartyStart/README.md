@@ -237,6 +237,15 @@ Majesty curing plus continuously maintained, non-redundant support.
 `//pstart efts`, `//pstart apexefts`, and `//pstart apex-efts` are aliases that
 preserve this established profile without changing its canonical name.
 
+All supplied unattended XP profiles (`master`, `apexbats`, and `apexcrabs`)
+install PartyCombat's **stationary** movement policy. Attackers still receive
+the synchronized target, turn to face it, and engage; PartyCombat never changes
+their map position. The external puller must bring each enemy to the planted
+party. FastFollow remains suppressed between target deaths; `//pc stop`, a
+mobile profile change, or zoning releases PartyCombat's stationary position
+claim. Any future profile intended for unattended, fixed-camp XP must explicitly
+set `stationary = true`; other supplied combat profiles remain mobile.
+
 The active stack is Chaos/Samurai Roll, Victory March/Mage's Ballad III/Blade
 Madrigal, Indi-Fury/Geo-Frailty, Entrusted Indi-Refresh on PLD, Haste II,
 the best learned Refresh tier on Smalls and the PLD, Phalanx II on PLD, Haste
@@ -305,7 +314,9 @@ casts on Barneystinson BRD/WHM, Smalls RDM/WHM, and Achoo GEO/WHM.
 
 Apex Bats detect by sound. PartyStart and PartyCombat do not select a safe pull
 route or replace the external pull loop, so camp placement and the puller's
-unattended configuration remain operational prerequisites.
+unattended configuration remain operational prerequisites. Like the Eft and
+Crab profiles, this profile keeps the party planted while allowing every
+attacker to turn toward and engage the synchronized target.
 
 ### `apexcrabs` (`crabs`)
 
@@ -319,14 +330,12 @@ infinite chain when the mixed bat/crab camp is occupied.
 //pc on
 ```
 
-This profile deliberately installs PartyCombat's **stationary** movement
-policy. Every attacker still receives the target, faces it, and engages, but
-none of them approaches it. Tackleberry's Flash brings the crab to the planted
-party. All other supplied profiles remain mobile.
-FastFollow remains suppressed between target deaths; `//pc stop`, a profile
-change, or zoning releases PartyCombat's stationary position claim.
+This profile uses the shared unattended-XP stationary policy described above.
+Tackleberry's Flash brings the crab to the planted party; every attacker can
+turn, target, and engage without approaching it.
 
-The matching EasyFarm profile must use:
+The matching EasyFarm pull profile for any stationary unattended-XP camp must
+use:
 
 - Detection Distance: `10`
 - Wander Distance: `0`

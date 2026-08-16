@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.2'
+_addon.version = '1.2.3'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -37,6 +37,7 @@ local nonce_counter = 0
 local profiles = {
     master = {
         sustained = true,
+        stationary = true,
         physical_offense = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
@@ -52,6 +53,7 @@ local profiles = {
     apexbats = {
         label = 'Sustained Apex Bats: Dho Gates',
         sustained = true,
+        stationary = true,
         physical_offense = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},

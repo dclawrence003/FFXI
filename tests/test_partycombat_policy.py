@@ -61,6 +61,11 @@ class PartyCombatPolicy(unittest.TestCase):
         movement = self.addon.split("windower.register_event('prerender'", 1)[1]
         movement = movement.split("windower.register_event('addon command'", 1)[0]
         self.assertIn("inject_combat_target(target)", movement)
+        self.assertIn("face_target(self, target)", movement)
+        self.assertLess(
+            movement.index("face_target(self, target)"),
+            movement.index("if settings.stationary then"),
+        )
         self.assertLess(
             movement.index("if settings.stationary then"),
             movement.index("windower.ffxi.run(dx / length, dy / length)"),

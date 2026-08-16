@@ -154,6 +154,9 @@ def test_active_attackers_face_their_combat_target():
     assert "inject_combat_target(target)" in movement
     assert "face_target(self, target)" in movement
     assert movement.index("face_target(self, target)") < movement.index(
+        "if settings.stationary then"
+    )
+    assert movement.index("face_target(self, target)") < movement.index(
         "if distance > engage_distance"
     )
 

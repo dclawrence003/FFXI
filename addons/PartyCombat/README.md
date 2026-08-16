@@ -193,9 +193,11 @@ target selection, approach movement, engagement, disengagement, and combat
 authorization. Stopping or zoning PartyCombat revokes authorization.
 `//pstart off` separately stops only AutoWS2 instances PartyStart enabled and
 does not change PartyCombat or FastFollow.
-PartyStart's `apexcrabs` profile sends `stationary`; the other supplied profiles
-send `mobile`. A direct `policy` command that omits the final field remains
-mobile for backward compatibility.
+PartyStart's unattended `master` (Apex Efts), `apexbats`, and `apexcrabs`
+profiles send `stationary`; the other supplied profiles send `mobile`. Future
+fixed-camp unattended profiles should explicitly set `stationary = true`. A
+direct `policy` command that omits the final field remains mobile for backward
+compatibility.
 
 ## Safety and limitations
 
@@ -220,7 +222,7 @@ mobile for backward compatibility.
 - For a mobile EasyFarm puller, disable its job-ability, spell, and weaponskill
   battle lists. Let it select and approach only; PartyCombat, PartyStart,
   GearSwap, and AutoWS2 own the shared combat policy.
-- For the stationary Apex Crabs camp, use exactly one enabled EasyFarm Pull
+- For any stationary unattended-XP camp, use exactly one enabled EasyFarm Pull
   action: `Flash`. Set Detection Distance to `10`, Wander Distance to `0`, and
   Approach off. Set the Flash row's EasyFarm Distance to `50`, the UI maximum.
   That value is intentionally not Flash's real range: it disables EasyFarm's

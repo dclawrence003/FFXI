@@ -138,7 +138,7 @@ class PartyStartRolePolicy(unittest.TestCase):
 
     def test_apex_bats_profile_keeps_mp_and_status_policy_separate(self):
         addon = self.addon.split("    apexbats = {", 1)[1].split(
-            "    physical = {", 1
+            "    apexcrabs = {", 1
         )[0]
         rdm = self.rdm.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
@@ -148,6 +148,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         )[0]
         self.assertIn("Sustained Apex Bats: Dho Gates", addon)
         self.assertIn("sustained = true", addon)
+        self.assertIn("stationary = true", addon)
         self.assertIn("Mage's Ballad III", addon)
         self.assertIn("entrust='Refresh'", addon)
         self.assertIn("party_shell = false", rdm)
@@ -168,7 +169,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         )[0]
         self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
         self.assertIn("stationary = true", addon)
-        self.assertEqual(1, self.addon.count("stationary = true"))
+        self.assertEqual(3, self.addon.count("stationary = true"))
         self.assertIn("pc policy %s %s %s %s %s %s", self.addon)
         self.assertIn("profile.stationary and 'stationary' or 'mobile'", self.addon)
         self.assertIn("targeter_csv, movement_mode", self.addon)
@@ -184,6 +185,20 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("Barwatera", brd)
         self.assertIn("apexcrabs=true", self.pld)
         self.assertIn("crabs = 'apexcrabs'", self.addon)
+
+    def test_every_unattended_xp_profile_is_stationary(self):
+        master = self.addon.split("    master = {", 1)[1].split(
+            "    apexbats = {", 1
+        )[0]
+        bats = self.addon.split("    apexbats = {", 1)[1].split(
+            "    apexcrabs = {", 1
+        )[0]
+        crabs = self.addon.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        for profile in (master, bats, crabs):
+            self.assertIn("sustained = true", profile)
+            self.assertIn("stationary = true", profile)
 
 
 if __name__ == "__main__":

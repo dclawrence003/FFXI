@@ -348,7 +348,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.2.2'", ADDON)
+        self.assertIn("_addon.version = '1.2.3'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -365,7 +365,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.2.2'", ADDON)
+        self.assertIn("_addon.version = '1.2.3'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -424,6 +424,22 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertNotIn("queue.expires =", action_handler)
         self.assertIn("Barwatera", brd)
         self.assertIn("apexcrabs=true", PLD)
+
+    def test_every_unattended_xp_profile_is_stationary(self):
+        master = ADDON.split("    master = {", 1)[1].split(
+            "    apexbats = {", 1
+        )[0]
+        bats = ADDON.split("    apexbats = {", 1)[1].split(
+            "    apexcrabs = {", 1
+        )[0]
+        crabs = ADDON.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        for profile in (master, bats, crabs):
+            self.assertIn("sustained = true", profile)
+            self.assertIn("stationary = true", profile)
+        self.assertEqual(3, ADDON.count("stationary = true"))
+        self.assertIn("profile.stationary and 'stationary' or 'mobile'", ADDON)
 
 
 if __name__ == "__main__":
