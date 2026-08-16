@@ -319,6 +319,26 @@ infinite chain when the mixed bat/crab camp is occupied.
 //pc on
 ```
 
+This profile deliberately installs PartyCombat's **stationary** movement
+policy. Every attacker still receives the target, faces it, and engages, but
+none of them approaches it. Tackleberry's Flash brings the crab to the planted
+party. All other supplied profiles remain mobile.
+
+The matching EasyFarm profile must use:
+
+- Detection Distance: `10`
+- Wander Distance: `0`
+- Approach: off
+- exactly one enabled Pull action: `Flash`
+- Flash row Distance: `50` (EasyFarm's UI maximum)
+- Battle, Job Ability, and Weaponskill lists: all disabled
+
+The Flash-row value is an intentional no-movement guard, not the spell's real
+range. EasyFarm otherwise walks into a pull action's configured range even when
+Approach is off, and already-aggroed mobs bypass its Detection Distance. With
+the row at 50, FFXI still enforces Flash's real 12-yalm casting limit while
+EasyFarm has no reason to navigate.
+
 `//pstart crabs`, `//pstart crab`, `//pstart apexcrab`, and
 `//pstart apex-crabs` are equivalent short forms. The profile retains the
 1113-accuracy Blade Madrigal policy and the same Chaos/Samurai,

@@ -167,6 +167,11 @@ class PartyStartRolePolicy(unittest.TestCase):
             "    physical = {", 1
         )[0]
         self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
+        self.assertIn("stationary = true", addon)
+        self.assertEqual(1, self.addon.count("stationary = true"))
+        self.assertIn("pc policy %s %s %s %s %s %s", self.addon)
+        self.assertIn("profile.stationary and 'stationary' or 'mobile'", self.addon)
+        self.assertIn("targeter_csv, movement_mode", self.addon)
         self.assertIn("party_shell = true", rdm)
         self.assertIn("target_names={'Apex Crab'}", rdm)
         self.assertIn("ttl=30", rdm)

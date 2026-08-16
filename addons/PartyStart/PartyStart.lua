@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.1'
+_addon.version = '1.2.2'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -72,6 +72,7 @@ local profiles = {
     apexcrabs = {
         label = 'Sustained Apex Crabs: Dho Gates',
         sustained = true,
+        stationary = true,
         physical_offense = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
@@ -84,6 +85,7 @@ local profiles = {
             {'Dia III', 'Dia II', 'Dia'},
         },
         advisories = {
+            'Apex Crabs: stationary camp mode is active; PartyCombat engages and faces but never approaches. Load EasyFarm\'s stationary Flash profile.',
             'Apex Crabs: Barwatera and Shell cover Water-aligned Bubble Shower; HealBot removes STR Down only from physical jobs by default.',
             'Apex Crabs: Smalls makes one MP-reserved Dispel attempt after each observed Bubble Curtain, Metallic Body, or Scissor Guard; it does not poll blindly.',
             'Apex Crabs: Tackleberry uses the aggressive AoE-heal policy and pre-reserves 1000 TP for Chivalry without suspending needed cures.',
@@ -962,12 +964,14 @@ local function apply_combat_policy(session, composition, profile)
     local attacker_csv = #attackers > 0 and table.concat(attackers, ',') or '-'
     local targeter_csv = #targeters > 0 and table.concat(targeters, ',') or '-'
     local policy_name = session.composition..'-'..session.profile
-    issue(('pc policy %s %s %s %s %s')
+    local movement_mode = profile.stationary and 'stationary' or 'mobile'
+    issue(('pc policy %s %s %s %s %s %s')
         :format(policy_name, composition.command_leader,
-            puller, attacker_csv, targeter_csv))
+            puller, attacker_csv, targeter_csv, movement_mode))
     session.target_source = puller
     session.attackers = attackers
     session.targeters = targeters
+    session.movement_mode = movement_mode
 end
 
 local function apply_profile(session)

@@ -54,6 +54,23 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertIn("target-only observer", self.addon)
         self.assertIn("local unchanged = active_policy_name == policy_name", self.addon)
 
+    def test_stationary_policy_disables_approach_but_keeps_engagement(self):
+        self.assertIn("stationary = false", self.settings)
+        self.assertIn("settings.stationary and 'stationary' or 'mobile'", self.addon)
+        self.assertIn("if settings.stationary then", self.addon)
+        movement = self.addon.split("windower.register_event('prerender'", 1)[1]
+        movement = movement.split("windower.register_event('addon command'", 1)[0]
+        self.assertIn("inject_combat_target(target)", movement)
+        self.assertLess(
+            movement.index("if settings.stationary then"),
+            movement.index("windower.ffxi.run(dx / length, dy / length)"),
+        )
+
+    def test_stationary_puller_flash_can_establish_the_target(self):
+        self.assertIn("local PULL_FLASH_SPELL_ID = 112", self.addon)
+        self.assertIn("action.param == PULL_FLASH_SPELL_ID", self.addon)
+        self.assertIn("settings.stationary == true and puller_authority", self.addon)
+
 
 if __name__ == "__main__":
     unittest.main()

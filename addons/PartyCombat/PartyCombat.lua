@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.4.1'
+_addon.version = '0.4.2'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -45,10 +45,12 @@ local TARGET_SYNC_INTERVAL = 1
 local POST_ZONE_FOLLOW_DELAY = 3.5
 local POST_ZONE_FOLLOW_ATTEMPTS = 3
 local RECENT_FOLLOW_CLAIM_WINDOW = 60
+local PULL_FLASH_SPELL_ID = 112
 
 local defaults = {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
+    stationary = false,
     attackers = {
         Dolomedes = {
             auto_distance = 10,
@@ -455,7 +457,8 @@ local function accept_target(id, mode)
 
     -- FastFollow remains user-owned while PartyCombat is merely armed. Stop
     -- it only when this attacker has accepted a real combat target and
-    -- PartyCombat is about to take movement control.
+    -- PartyCombat is taking exclusive ownership of combat positioning. In a
+    -- stationary policy, that ownership means suppressing all translation.
     zone_follow_restore_at = nil
     zone_follow_restore_remaining = 0
     claim_combat_movement()
@@ -497,8 +500,9 @@ local function force_current_target()
         accept_target(target.id, 'force')
     end
     send_ipc('target', target.id, 'force')
-    chat(158, ('Forced approach and engagement: %s.')
-        :format(target.name or target.id))
+    chat(158, ('Forced %s engagement: %s.')
+        :format(settings.stationary and 'stationary' or 'approach',
+            target.name or target.id))
 end
 
 local function stop_all()
@@ -510,13 +514,21 @@ local function stop_all()
 end
 
 local function apply_runtime_policy(
-    policy_name, leader, puller, attacker_names, targeter_names)
+    policy_name, leader, puller, attacker_names, targeter_names, movement_mode)
+    movement_mode = type(movement_mode) == 'string'
+        and movement_mode:lower()
+        or 'mobile'
     if not valid_policy_name(policy_name) or not valid_name(leader)
         or not valid_name(puller)
     then
         chat(123, 'Rejected invalid PartyCombat policy metadata.')
         return false
     end
+    if movement_mode ~= 'mobile' and movement_mode ~= 'stationary' then
+        chat(123, 'Rejected invalid movement mode: '..tostring(movement_mode))
+        return false
+    end
+    local stationary = movement_mode == 'stationary'
     local seen = {}
     local normalized = {}
     for _, name in ipairs(attacker_names or {}) do
@@ -565,6 +577,7 @@ local function apply_runtime_policy(
         and same_name(settings.puller, puller)
         and same_attacker_roster(settings, normalized)
         and same_targeter_roster(settings, normalized_targeters)
+        and (settings.stationary == true) == stationary
     if unchanged then
         active_policy_name = policy_name
         return true
@@ -591,31 +604,38 @@ local function apply_runtime_policy(
     settings = {
         leader = leader,
         puller = puller,
+        stationary = stationary,
         attackers = attackers,
         targeters = targeters,
     }
     active_policy_name = policy_name
     next_authority = 0
     chat(158, ('Policy %s loaded inert: leader %s, puller %s, '
-        ..'%d attackers, %d synchronized targeters.')
+        ..'%d attackers, %d synchronized targeters, %s movement.')
         :format(policy_name, leader, puller, #normalized,
-            #normalized_targeters))
+            #normalized_targeters, stationary and 'stationary' or 'mobile'))
     return true
 end
 
-local function damage_target(action)
+local function damage_target(action, allow_stationary_pull)
     if not action or not action.targets then return nil end
 
     local physical = action.category == 1
         or action.category == 2
         or action.category == 3
+    -- Flash is deliberately recognized only for the configured puller while
+    -- a stationary policy is active. It lets a non-damaging ranged pull
+    -- establish the shared target without making every enfeeble a redirect.
+    local stationary_pull = allow_stationary_pull
+        and action.category == 4
+        and action.param == PULL_FLASH_SPELL_ID
 
     for _, target_action in ipairs(action.targets) do
         local target = target_action.id
             and windower.ffxi.get_mob_by_id(target_action.id)
             or nil
         if valid_enemy(target) then
-            if physical then return target end
+            if physical or stationary_pull then return target end
 
             if action.category == 4 then
                 local result = target_action.actions
@@ -640,7 +660,8 @@ windower.register_event('action', function(action)
     local player = local_player()
     if not player or action.actor_id ~= player.id then return end
 
-    local target = damage_target(action)
+    local target = damage_target(
+        action, settings.stationary == true and puller_authority)
     if target then
         -- The puller may establish the next target, but cannot drag the party
         -- off a living synchronized target. The command leader can always
@@ -775,6 +796,14 @@ windower.register_event('prerender', function()
     inject_combat_target(target)
     face_target(self, target)
 
+    -- A stationary camp still synchronizes, faces, and engages every attacker,
+    -- but it never asks Windower to translate the character toward the mob.
+    -- Flash (or existing aggro) must bring the enemy into melee range instead.
+    if settings.stationary then
+        stop_running()
+        return
+    end
+
     if distance > engage_distance then
         local dx = target.x - self.x
         local dy = target.y - self.y
@@ -812,12 +841,13 @@ windower.register_event('addon command', function(command, ...)
         local target = active_target_id
             and windower.ffxi.get_mob_by_id(active_target_id)
             or nil
-        chat(207, ('Policy %s | role %s | leader %s | puller %s | armed %s | authorized %s | target %s | mode %s')
+        chat(207, ('Policy %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s')
             :format(
                 active_policy_name,
                 role,
                 settings.leader,
                 settings.puller,
+                settings.stationary and 'stationary' or 'mobile',
                 armed and 'On' or 'Off',
                 authorized and 'Yes' or 'No',
                 target and target.name or 'none',
@@ -828,9 +858,10 @@ windower.register_event('addon command', function(command, ...)
         local puller = args[3]
         local attacker_csv = args[4]
         local targeter_csv = args[5]
+        local movement_mode = args[6] or 'mobile'
         if not attacker_csv then
             chat(123, 'Usage: //pc policy <name> <leader> <puller> '
-                ..'<attackers|-> [targeters|->]')
+                ..'<attackers|-> [targeters|->] [mobile|stationary]')
             return
         end
         local attacker_names = {}
@@ -850,7 +881,8 @@ windower.register_event('addon command', function(command, ...)
             end
         end
         apply_runtime_policy(
-            policy_name, leader, puller, attacker_names, targeter_names)
+            policy_name, leader, puller, attacker_names, targeter_names,
+            movement_mode)
     elseif command == 'on' or command == 'arm' or command == 'auto' then
         if not is_controller() then
             chat(123, 'Only the configured leader or puller can arm PartyCombat.')
@@ -877,7 +909,8 @@ windower.register_event('addon command', function(command, ...)
     elseif command == 'help' then
         chat(207,
             'Commands: on | force | stop | status | policy <name> <leader> '
-            ..'<puller> <attackers> [targeters]. Leader or puller may arm/force.')
+            ..'<puller> <attackers> [targeters] [mobile|stationary]. '
+            ..'Leader or puller may arm/force.')
     else
         chat(123, 'Unknown command. Use //pc help.')
     end

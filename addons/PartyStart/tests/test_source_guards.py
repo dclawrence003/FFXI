@@ -28,7 +28,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("__zonerearm", ADDON)
         self.assertNotIn("pc on", ADDON.lower())
         self.assertNotIn("pc force", ADDON.lower())
-        self.assertIn("pc policy %s %s %s %s %s", ADDON)
+        self.assertIn("pc policy %s %s %s %s %s %s", ADDON)
 
     def test_physical_profile_is_the_lean_rdm_profile(self):
         physical = RDM.split("accuracy =", 1)[0]
@@ -319,7 +319,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertGreaterEqual(ADDON.count("target_all = true"), 2)
         self.assertIn("profile_targeters(profile, session.names, attackers)", ADDON)
-        self.assertIn("pc policy %s %s %s %s %s", ADDON)
+        self.assertIn("pc policy %s %s %s %s %s %s", ADDON)
         self.assertIn("stop_owned_autows2()", ADDON)
 
     def test_v1_uses_priority_silence_and_reserved_pld_cooldowns(self):
@@ -348,7 +348,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.2.1'", ADDON)
+        self.assertIn("_addon.version = '1.2.2'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -365,7 +365,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.2.1'", ADDON)
+        self.assertIn("_addon.version = '1.2.2'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -389,6 +389,10 @@ class PartyStartSourceGuards(unittest.TestCase):
         )[0]
         self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
         self.assertIn("sustained = true", addon)
+        self.assertIn("stationary = true", addon)
+        self.assertIn("profile.stationary and 'stationary' or 'mobile'", ADDON)
+        self.assertIn("targeter_csv, movement_mode", ADDON)
+        self.assertIn("session.movement_mode = movement_mode", ADDON)
         self.assertIn("crabs = 'apexcrabs'", ADDON)
         self.assertIn("party_shell = true", rdm)
         self.assertIn("['Bubble Curtain']=true", rdm)

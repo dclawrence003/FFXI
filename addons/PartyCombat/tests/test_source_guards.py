@@ -19,11 +19,15 @@ def test_addon_starts_inert():
     assert "puller = 'Tackleberry'" in SETTINGS
 
 
-def test_only_damage_actions_drive_automatic_targets():
+def test_damage_actions_and_scoped_stationary_flash_drive_targets():
     assert "action.category == 1" in SOURCE
     assert "action.category == 2" in SOURCE
     assert "action.category == 3" in SOURCE
     assert "message.color == 'D'" in SOURCE
+    assert "local PULL_FLASH_SPELL_ID = 112" in SOURCE
+    assert "action.param == PULL_FLASH_SPELL_ID" in SOURCE
+    assert "settings.stationary == true and puller_authority" in SOURCE
+    assert "if physical or stationary_pull then return target end" in SOURCE
 
 
 def test_distance_limits_are_separate():
@@ -134,7 +138,7 @@ def test_fastfollow_recovery_uses_puller_not_command_leader():
     assert "settings.puller" in anchor
     assert anchor.index("settings.puller") < anchor.index("settings.leader")
     assert "ffo follow '..settings.leader" not in SOURCE
-    assert "_addon.version = '0.4.1'" in SOURCE
+    assert "_addon.version = '0.4.2'" in SOURCE
 
 
 def test_active_attackers_face_their_combat_target():
@@ -151,6 +155,31 @@ def test_active_attackers_face_their_combat_target():
     assert "face_target(self, target)" in movement
     assert movement.index("face_target(self, target)") < movement.index(
         "if distance > engage_distance"
+    )
+
+
+def test_stationary_policy_is_explicit_and_blocks_translation():
+    assert "stationary = false" in SOURCE
+    assert "stationary = false" in SETTINGS
+    assert "[mobile|stationary]" in SOURCE
+
+    policy = SOURCE.split("local function apply_runtime_policy", 1)[1]
+    policy = policy.split("local function damage_target", 1)[0]
+    assert "movement_mode ~= 'mobile'" in policy
+    assert "movement_mode ~= 'stationary'" in policy
+    assert "(settings.stationary == true) == stationary" in policy
+    assert "stationary = stationary" in policy
+
+    movement = SOURCE.split(
+        "windower.register_event('prerender'", 1
+    )[1].split("windower.register_event('addon command'", 1)[0]
+    guard = movement.split("if settings.stationary then", 1)[1]
+    guard = guard.split("if distance > engage_distance", 1)[0]
+    assert "stop_running()" in guard
+    assert "return" in guard
+    assert "windower.ffxi.run" not in guard
+    assert movement.index("if settings.stationary then") < movement.index(
+        "windower.ffxi.run(dx / length, dy / length)"
     )
 
 

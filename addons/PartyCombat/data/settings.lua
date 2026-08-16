@@ -3,6 +3,7 @@
 return {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
+    stationary = false,
     attackers = {
         Dolomedes = {
             auto_distance = 10,

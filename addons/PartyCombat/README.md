@@ -25,17 +25,25 @@ PartyCombat follows combat actions, not cursor movement:
   target. Authorized Tackleberry can establish the first target by attacking
   it, which lets the PLD pull and acquire initial enmity without becoming the
   command leader. A miss still counts.
+- In a stationary policy, a completed Flash from the configured puller also
+  announces the enemy. Other non-damaging spells remain unable to redirect the
+  party.
 - The puller cannot redirect the party while a different synchronized target
   is still alive. Dolomedes remains the command authority and can override the
   puller by damaging another target.
 - Automatic target changes are accepted only when the enemy is within each
   follower's configured 10-yalm limit.
-- `force` explicitly targets, approaches, and engages the invoking controller's
-  current enemy up to the configured 30-yalm safety limit.
+- `force` explicitly targets and engages the invoking controller's current
+  enemy up to the configured 30-yalm safety limit. Mobile policies approach;
+  stationary policies remain planted.
 - The attacker stops moving at 2.8 yalms.
 - While it owns a valid combat target, PartyCombat explicitly faces the
   attacker toward that enemy, including when the attacker begins inside the
   2.8-yalm movement threshold.
+- A stationary policy still synchronizes, faces, and engages every configured
+  attacker, but PartyCombat never issues translational movement. The enemy must
+  come into melee range. Mobile policies retain the normal 2.8-yalm approach
+  behavior.
 - A dead, despawned, or invalid target ends the pursuit.
 - A runtime policy may authorize a character as a **target-only observer**.
   These clients receive the same local `<t>` as the damage group so RDM/BRD
@@ -60,8 +68,10 @@ PartyCombat follows combat actions, not cursor movement:
 Arming PartyCombat does not change FastFollow. It clears inherited HealBot
 follow/assist/engage state when it authorizes an attacker, then stops
 FastFollow only after that attacker accepts a valid combat target and
-PartyCombat is about to take movement control. When pursuit ends, PartyCombat
-is stopped, or a zone transition occurs, only a follower whose FastFollow state
+PartyCombat takes exclusive ownership of combat positioning. In a stationary
+policy, that claim suppresses other follow controllers while PartyCombat itself
+never requests translational movement. When pursuit ends, PartyCombat is
+stopped, or a zone transition occurs, only a follower whose FastFollow state
 PartyCombat claimed is returned to following the configured puller. The puller
 is never ordered to follow itself. GearSwap remains responsible for equipment,
 and AutoWS2 or another separately configured system remains responsible for
@@ -110,15 +120,17 @@ puller. Other clients can stop only their own local attacker.
 - `on`: Arms automatic damage-target synchronization without selecting or
   approaching anything and without changing FastFollow.
 - `force`: Arms synchronization and explicitly orders the configured attacker
-  to approach and engage the leader's current enemy.
+  to target and engage the leader's current enemy. It approaches only when the
+  active policy is mobile.
 - `stop`: Disarms synchronization, stops movement, and disengages attackers.
-- `status`: Displays the local client's role, authorization, target, and mode.
-- `policy <name> <leader> <puller> <attackers> [targeters]`: Validates and
-  installs an in-memory role policy. `targeters` defaults to the attacker list
-  for backward compatibility; every attacker is automatically included even
-  if the optional list omits it. PartyStart uses this command. Changing policy
-  safely disarms combat, while reapplying an identical policy is idempotent. It
-  never arms combat.
+- `status`: Displays role, movement policy, authorization, target, and mode.
+- `policy <name> <leader> <puller> <attackers> [targeters]
+  [mobile|stationary]`: Validates and installs an in-memory role policy.
+  `targeters` defaults to the attacker list and movement defaults to `mobile`
+  for backward compatibility. Every attacker is automatically included even if
+  the optional targeter list omits it. PartyStart uses this command. Changing
+  policy safely disarms combat, while reapplying an identical policy is
+  idempotent. It never arms combat.
 
 The normal flow is:
 
@@ -141,6 +153,7 @@ initial limits:
 return {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
+    stationary = false,
     attackers = {
         Dolomedes = {
             auto_distance = 10,
@@ -158,10 +171,10 @@ return {
 ```
 
 Attackers can be added or removed as character-named entries. Each client must
-read the same configuration. PartyStart 1.0+ can replace the leader, puller,
-attacker roster, and synchronized targeter roster in memory through a
-validated composition/profile policy; distance limits are retained from the
-matching static character entries. Static settings without a `targeters`
+read the same configuration. PartyStart can replace the leader, puller,
+attacker roster, synchronized targeter roster, and movement policy in memory
+through a validated composition/profile policy; distance limits are retained
+from the matching static character entries. Static settings without a `targeters`
 table retain the old behavior in which targeters equal attackers. The old
 `data\settings.xml` is ignored and may be retained as a historical backup.
 
@@ -177,29 +190,41 @@ target selection, approach movement, engagement, disengagement, and combat
 authorization. Stopping or zoning PartyCombat revokes authorization.
 `//pstart off` separately stops only AutoWS2 instances PartyStart enabled and
 does not change PartyCombat or FastFollow.
+PartyStart's `apexcrabs` profile sends `stationary`; the other supplied profiles
+send `mobile`. A direct `policy` command that omits the final field remains
+mobile for backward compatibility.
 
 ## Safety and limitations
 
 - This is a live-test prototype. Begin on harmless enemies in an open area.
-- Movement is a straight line. It does not path around walls, hazards, or
-  additional enemy groups.
+- In mobile mode, movement is a straight line and does not path around walls,
+  hazards, or additional enemy groups. Stationary mode issues no translational
+  movement.
 - Facing is maintained only while PartyCombat owns a valid combat target; it
   does not rotate characters merely because the addon is armed.
 - The automatic leash is measured from the attacker to the enemy, not from the
   leader.
 - Damaging area-of-effect actions select the first valid enemy reported in the
   action packet.
-- Non-damaging enfeebles do not change the automatic combat target.
+- Non-damaging enfeebles do not change the automatic combat target, except a
+  completed puller Flash in stationary mode.
 - Target-only observers have their local target reasserted while an armed,
   synchronized enemy remains alive. Manual target selection on those clients
   is therefore temporary until PartyCombat is stopped or the enemy ends.
 - The configured puller may arm or force PartyCombat directly. Automatic
   puller authority can establish a target but cannot replace a living
   synchronized target.
-- If EasyFarm or another external program acquires targets for the puller,
-  disable its job-ability, spell, and weaponskill battle lists. Let it select
-  and approach only; PartyCombat, PartyStart, GearSwap, and AutoWS2 own the
-  shared combat policy.
+- For a mobile EasyFarm puller, disable its job-ability, spell, and weaponskill
+  battle lists. Let it select and approach only; PartyCombat, PartyStart,
+  GearSwap, and AutoWS2 own the shared combat policy.
+- For the stationary Apex Crabs camp, use exactly one enabled EasyFarm Pull
+  action: `Flash`. Set Detection Distance to `10`, Wander Distance to `0`, and
+  Approach off. Set the Flash row's EasyFarm Distance to `50`, the UI maximum.
+  That value is intentionally not Flash's real range: it disables EasyFarm's
+  unconditional pull-action navigation helper. Detection remains inside
+  Flash range, while FFXI still enforces the spell's actual 12-yalm limit.
+  Leave EasyFarm's Battle, Job Ability, and Weaponskill lists disabled;
+  PartyCombat handles shared engagement and AutoWS2 handles weaponskills.
 - Force mode is deliberately capped at 30 yalms; it is not unlimited.
 - PartyCombat does not automate weaponskills, rolls, ranged attacks, or
   defensive behavior.
