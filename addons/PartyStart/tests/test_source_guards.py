@@ -313,7 +313,7 @@ class PartyStartSourceGuards(unittest.TestCase):
     def test_ambuscade_profiles_limit_engagement_but_share_targets(self):
         self.assertGreaterEqual(
             ADDON.count(
-                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Achoo'}"
+                "'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Smalls', 'Achoo',"
             ),
             2,
         )
@@ -385,6 +385,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("HOUSEMAKER_REARM_DISTANCE", ADDON)
         self.assertIn("HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW", ADDON)
         self.assertIn("BARNEY TAKES 1,000 EVEN WHEN ISOLATED", ADDON)
+        self.assertIn("DRILL CLAW: FRONTAL CONE DAMAGE", ADDON)
 
     def test_apex_bats_profile_is_sustained_and_status_aware(self):
         addon = ADDON.split("    apexbats = {", 1)[1].split(
@@ -396,7 +397,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.3.2'", ADDON)
+        self.assertIn("_addon.version = '1.3.3'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -413,7 +414,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','limbus','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.3.2'", ADDON)
+        self.assertIn("_addon.version = '1.3.3'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,

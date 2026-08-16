@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.3.2'
+_addon.version = '1.3.3'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -194,7 +194,9 @@ local profiles = {
         label = 'August 2026 V1: Bozzetto Breadwinner',
         reraise = true,
         physical_offense = true,
-        attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Achoo'},
+        attackers = {
+            'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Smalls', 'Achoo',
+        },
         target_all = true,
         -- Barney must watch Housemaker's staging area and move as soon as it
         -- charges. Keep him out of PartyCombat's one-second observer target
@@ -231,13 +233,14 @@ local profiles = {
             },
         },
         advisories = {
-            'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes, Kickpuncher, and Achoo attack from behind.',
+            'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes, Kickpuncher, Smalls, and Achoo attack from behind.',
             'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
             'V1: Barney must be BRD/WHM; he supplies Barstonra/Barsilencera and is the intended Housemaker bait. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
             'V1: PartyCombat never forces Barney onto Breadwinner. His camera is user-owned for watching Housemaker; briefly target Breadwinner manually only when an Elegy attempt is wanted.',
             'V1: Barney, Smalls, and Achoo maintain self-Reraise. Dolomedes, Tackleberry, and Kickpuncher require Reraise items; each client warns while unprotected.',
             'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker movement/Earthshaker, and Hundred Fists.',
-            'V1: Dolo and Kickpuncher automatically split to a visible Bozzetto Urchin and return to Breadwinner after it dies; Tackleberry and Achoo keep attacking Breadwinner, Smalls remains target-only, and Barney remains free-look.',
+            'V1: Dolo and Kickpuncher automatically split to a visible Bozzetto Urchin and return to Breadwinner after it dies; Tackleberry, Smalls, and Achoo keep attacking Breadwinner while Barney remains free-look.',
+            'V1: Drill Claw is a frontal cone with damage and -75% Max HP; keep Breadwinner facing the wall. An unblocked elemental Warble is radial party-wide magic damage.',
             'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold.',
         },
     },
@@ -245,7 +248,9 @@ local profiles = {
         label = 'August 2026 V2: Popular Penelope',
         reraise = true,
         physical_offense = true,
-        attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Achoo'},
+        attackers = {
+            'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Smalls', 'Achoo',
+        },
         target_all = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
@@ -261,7 +266,7 @@ local profiles = {
         },
         pld_controller = true,
         advisories = {
-            'V2: Tackleberry and Dolomedes stand in front to split Bad Breath; Kickpuncher and Achoo attack from behind; Barney and Smalls stay outside the cone.',
+            'V2: Tackleberry and Dolomedes stand in front to split Bad Breath; Kickpuncher, Smalls, and Achoo attack from behind; Barney stays outside the cone.',
             'V2: Use Poison Potions before the pull and carry Echo Drops, Remedies, and Holy Water. The final Extremely Bad Breath can inflict Doom.',
             'V2: Sweet Breath resets enmity. PLD automation deliberately saves Sentinel for manual post-reset hate recovery; use Flash/Provoke/Sentinel as needed.',
             'V2: Barsleepra and Barstonra are maintained, but positioning and consumables remain manual responsibilities.',
@@ -514,6 +519,8 @@ local function v1_encounter_alert(action)
         message = V1_WARBLE_ALERTS[ability.en]
         if ability.en == 'Hundred Fists' then
             message = 'HUNDRED FISTS: reserved PLD mitigation is activating; Gale Spikes can reflect damage and overwrite Haste II.'
+        elseif ability.en == 'Drill Claw' then
+            message = 'DRILL CLAW: FRONTAL CONE DAMAGE + 75% MAX HP DOWN. KEEP BREADWINNER FACING THE WALL; ERASE AFFECTED TARGETS.'
         end
     elseif actor.name:lower():find('housemaker', 1, true)
         and type(ability.en) == 'string'

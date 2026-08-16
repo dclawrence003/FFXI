@@ -197,9 +197,9 @@ compatibility. FastFollow must be stopped independently on stationary party
 members before these profiles are armed.
 
 The supplied Ambuscade V1 profile assigns `Bozzetto Urchin` to Dolomedes and
-Kickpuncher. Tackleberry and Achoo keep attacking Bozzetto Breadwinner while
-Smalls remains its target-only observer. Barney is deliberately excluded from
-target synchronization so his camera remains free for watching Housemaker.
+Kickpuncher. Tackleberry, Smalls, and Achoo keep attacking Bozzetto Breadwinner.
+Barney is deliberately excluded from target synchronization so his camera
+remains free for watching Housemaker.
 
 ## Safety and limitations
 

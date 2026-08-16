@@ -27,7 +27,7 @@ PartyStart establishes clear ownership:
   HealBot remains enabled on RDM only for packet-backed status removal in
   sustained profiles; its cure queue is disabled.
   The Ambuscade profiles give GearSwap backup-cure ownership, full MP-job
-  Refresh, Haste only on the four attackers, Phalanx II on PLD, and a one-time
+  Refresh, Haste only on the five attackers, Phalanx II on PLD, and a one-time
   Shell V pass. V1 also owns Stymie/Saboteur/Silence and Paralyze II on
   Breadwinner. Silence uses the authoritative action result and retries a
   resist instead of assuming every completed cast landed.
@@ -67,8 +67,8 @@ PartyStart establishes clear ownership:
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
 - AutoWS2 owns configured weapon skills in physical profiles, including
-  Dolomedes when he is COR. V1/V2 arm Dolomedes, Tackleberry, Kickpuncher, and
-  Achoo for offense; Barney and Smalls remain backline support.
+  Dolomedes when he is COR. V1/V2 arm Dolomedes, Tackleberry, Kickpuncher,
+  Smalls, and Achoo for offense; Barney remains backline support.
   Non-aftermath offense uses a 0% target-HP floor so weapon skills continue
   through the final displayed 5%; aftermath profiles retain a 5% floor to
   avoid spending a 3000-TP reapplication on a dying enemy.
@@ -238,9 +238,9 @@ buffs and debuffs and may narrow the composition's authorized attackers, while
 the composition determines expected jobs, roles, puller, and offense
 assignments. PartyStart loads the matching PartyCombat policy inert. General
 sustained/general physical and Limbus profiles retain all six composition attackers. The Ambuscade
-profiles authorize Dolomedes, Tackleberry, Kickpuncher, and Achoo to engage.
-V2 synchronizes all six targets; V1 keeps Smalls target-only and deliberately
-leaves Barney's target and camera free. Explicitly use `//pc on` or
+profiles authorize Dolomedes, Tackleberry, Kickpuncher, Smalls, and Achoo to
+engage. V2 synchronizes all six targets; V1 deliberately leaves Barney's
+target and camera free. Explicitly use `//pc on` or
 `//pc force` from either the configured leader or puller when combat should
 begin.
 
@@ -505,21 +505,20 @@ Tackleberry.
   Housemaker hate, and the support line loses its tested Reraise/status-removal
   coverage. Tackleberry remains `PLD/WAR` (or the composition's separately
   supported `/BLU` option outside this encounter).
-- Damage group: Dolomedes COR, Tackleberry PLD, Kickpuncher DNC, and Achoo
-  GEO. Achoo equips Maxentius, engages, and uses Black Halo at 1,000 TP.
-  Smalls receives target-only synchronization and does not engage or move
-  under PartyCombat. Barney is a free-look observer: he likewise never
+- Damage group: Dolomedes COR, Tackleberry PLD, Kickpuncher DNC, Smalls RDM,
+  and Achoo GEO. Smalls and Achoo equip Maxentius, engage, and use Black Halo
+  at 1,000 TP whenever their casting responsibilities leave an opening.
+  Barney is a free-look observer: he never
   engages or moves, but PartyCombat does not force his target or camera.
 - If a `Bozzetto Urchin` becomes targetable, PartyCombat automatically splits
   Dolomedes and Kickpuncher to it. Their actions stay local to that kill group,
-  so Tackleberry and Achoo remain on Breadwinner while Smalls remains its
-  target-only observer. The pair
+  so Tackleberry, Smalls, and Achoo remain on Breadwinner. The pair
   resumes Breadwinner after the Urchin dies, then takes the next visible
   Urchin if necessary.
 - Chaos/Samurai Roll; Victory March/Valor Minuet V/Blade Madrigal;
   Indi-Fury/Geo-Frailty; Entrusted Indi-Wilt, preferring Tackleberry so the
   aura remains centered on the tank and Breadwinner.
-- Smalls maintains Haste II on the four attackers, Refresh on MP jobs,
+- Smalls maintains Haste II on the five attackers, Refresh on MP jobs,
   Phalanx II on Tackleberry, Shell V on the party, and backup cures below 55%.
   On the exact Breadwinner target he prioritizes Stymie, Saboteur, Silence,
   Paralyze II, Dia III, and Distract III, with learned-tier fallbacks. If
@@ -538,14 +537,17 @@ Tackleberry.
   Rampart are withheld before the 50% Hundred Fists/Gale Spikes transition;
   the threshold check runs ahead of routine cures so mitigation cannot be
   starved by the heal loop.
-- Manual: tank in the starting corner facing the wall and keep Dolomedes and
-  Kickpuncher behind the boss. Barney stays with the group for Barspell
+- Manual: tank in the starting corner facing the wall and keep Dolomedes,
+  Kickpuncher, Smalls, and Achoo behind the boss. Barney stays with the group for Barspell
   coverage and healing until Housemaker charges; then move only Barney at
   least 20 yalms away. Earthshaker still deals its unavoidable 1,000 damage to
   Barney. Return him immediately afterward for Cure/Paralyna and renewed
   Barspell coverage. PartyCombat will not recapture his target while you scan
   for or track Housemaker. Static Barstone is the safe default; the profile does not
-  attempt to infer each Warble element.
+  attempt to infer each Warble element. A simultaneous radial party hit is most
+  likely an unblocked non-Earth Warble. Drill Claw instead is a frontal cone
+  with 75% Max HP Down; several affected characters indicate Breadwinner faced
+  the stack, and the profile now prints a specific Drill Claw warning.
 - Barney's V1 GearSwap controller attempts a learned self-Cure below 85% HP as
   a last-resort backstop while he is isolated. Earthshaker's potent Paralyze
   can interrupt it, so this does not replace returning to Smalls/Tackleberry.
@@ -560,8 +562,8 @@ Tackleberry.
 
 ### V2: Popular Penelope
 
-- The same four-character damage group is used. Barney and Smalls remain
-  target-only observers.
+- The same five-character damage group is used. Barney remains a target-only
+  observer.
 - Chaos/Samurai Roll; March/Minuet/Madrigal; Fury/Frailty; Entrusted
   Indi-Refresh on Tackleberry.
 - Smalls maintains the same focused Haste/Refresh/Phalanx/Shell policy, uses
@@ -572,7 +574,7 @@ Tackleberry.
   available for manual Flash/Provoke/Sentinel recovery instead of being spent
   at pull.
 - Manual: put Tackleberry and Dolomedes in front to split Bad Breath,
-  Kickpuncher and Achoo behind, and Barney and Smalls outside the cone. Use Poison
+  Kickpuncher, Smalls, and Achoo behind, and Barney outside the cone. Use Poison
   Potions before the pull and carry Echo Drops, Remedies, and Holy Water; the
   final Extremely Bad Breath can inflict Doom. PartyCombat synchronizes roles
   but cannot determine front/rear encounter geometry.
