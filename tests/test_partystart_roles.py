@@ -18,6 +18,12 @@ class PartyStartRolePolicy(unittest.TestCase):
         cls.rdm = (
             ROOT / "addons/PartyStart/gearswap/PartyStart_RDM.lua"
         ).read_text(encoding="utf-8")
+        cls.brd = (
+            ROOT / "addons/PartyStart/gearswap/PartyStart_BRD.lua"
+        ).read_text(encoding="utf-8")
+        cls.pld = (
+            ROOT / "addons/PartyStart/gearswap/PartyStart_PLD.lua"
+        ).read_text(encoding="utf-8")
 
     def test_current_offense_jobs_are_guarded(self):
         for character, job, weapon, weaponskill in (
@@ -46,7 +52,9 @@ class PartyStartRolePolicy(unittest.TestCase):
             self.assertIn("'Dolomedes'", block)
 
     def test_new_job_automation_is_enabled(self):
-        self.assertIn("local function apply_pld(profile_name, leader)", self.addon)
+        self.assertIn(
+            "local function apply_pld(profile_name, profile, leader)", self.addon
+        )
         self.assertIn("gs c set AutoTankMode", self.addon)
         self.assertIn("gs c unset AutoWSMode", self.addon)
         self.assertIn(
@@ -76,7 +84,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("entrust='Refresh'", master)
         self.assertIn("profile_name == 'master'", self.addon)
         self.assertIn("and job == 'PLD'", self.addon)
-        self.assertIn("session.profile == 'master'", self.addon)
+        self.assertIn("profile.physical_offense", self.addon)
         self.assertIn("master = {", self.rdm)
         self.assertIn("lean = true", self.rdm)
         self.assertIn("party_shell = false", self.rdm)
@@ -90,17 +98,42 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("if pstart_rdm_convert_recovery() then return true end", self.rdm)
         self.assertIn("player.hpp >= 90", self.rdm)
         self.assertIn("local function pstart_rdm_emergency_heal()", self.rdm)
-        self.assertIn("member.hpp > 0 and member.hpp < 25", self.rdm)
+        self.assertIn("member.hpp > 0 and member.hpp < heal_hpp", self.rdm)
         self.assertIn("if pstart_rdm_emergency_heal() then return true end", self.rdm)
         self.assertIn("hb deactivateindoors off", self.addon)
         self.assertIn("hb disable cure", self.addon)
         self.assertIn("hb enable na; hb disable buff", self.addon)
-        self.assertIn("apply_pld(session.profile, session.leader)", self.addon)
+        self.assertIn(
+            "apply_pld(session.profile, profile, session.leader)", self.addon
+        )
 
     def test_rdm_defenses_use_the_full_target_union(self):
-        self.assertIn("local defense = pstart_rdm_union_names(", self.rdm)
+        self.assertIn("#pstart_rdm.defense > 0", self.rdm)
+        self.assertIn("or pstart_rdm_union_names(", self.rdm)
         self.assertIn("{'Protect V', 'Protect IV'", self.rdm)
         self.assertIn("{'Shell V', 'Shell IV'", self.rdm)
+
+    def test_august_ambuscade_profiles_are_encounter_scoped(self):
+        for profile in ("ambuscade-v1", "ambuscade-v2"):
+            self.assertIn(f"['{profile}'] = {{", self.addon)
+            self.assertIn(f"['{profile}'] = {{", self.rdm)
+            self.assertIn(f"['{profile}'] = {{", self.brd)
+            self.assertIn(f"['{profile}']=true", self.pld)
+        self.assertGreaterEqual(
+            self.addon.count(
+                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'}"
+            ),
+            2,
+        )
+        self.assertGreaterEqual(self.addon.count("target_all = true"), 2)
+        self.assertIn("Stymie", self.rdm)
+        self.assertIn("Saboteur", self.rdm)
+        self.assertIn("{'Silence'}", self.rdm)
+        self.assertIn("Barstonra", self.brd)
+        self.assertIn("Barsilencera", self.brd)
+        self.assertIn("Barsleepra", self.brd)
+        self.assertIn("PSTART_PLD_V1_HUNDRED_FISTS_HPP = 52", self.pld)
+        self.assertIn("Sweet Breath resets enmity", self.addon)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@
 --     include('Common/PartyStart_BRD.lua')
 --
 -- PartyStart drives it with:
---     gs c pstartbrd <master|physical|accuracy|magic|safe> <leader>
+--     gs c pstartbrd <master|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
 --     gs c pstartbrd off
 
 local pstart_brd_profiles = {
@@ -66,6 +66,38 @@ local pstart_brd_profiles = {
         debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
             {'Pining Nocturne'},
+        },
+    },
+    ['ambuscade-v1'] = {
+        song_mode = 'Melee',
+        songs = {
+            {spell='Victory March', buff='march'},
+            {spell='Valor Minuet V', buff='minuet'},
+            {spell='Blade Madrigal', buff='madrigal'},
+        },
+        party_buffs = {
+            {spell='Barstonra', buff='Barstone'},
+            {spell='Barsilencera', buff='Barsilence'},
+        },
+        debuff_target_names = {'Bozzetto Breadwinner'},
+        debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+    },
+    ['ambuscade-v2'] = {
+        song_mode = 'Melee',
+        songs = {
+            {spell='Victory March', buff='march'},
+            {spell='Valor Minuet V', buff='minuet'},
+            {spell='Blade Madrigal', buff='madrigal'},
+        },
+        party_buffs = {
+            {spell='Barstonra', buff='Barstone'},
+            {spell='Barsleepra', buff='Barsleep'},
+        },
+        debuff_target_names = {'Popular Penelope'},
+        debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
         },
     },
 }
@@ -218,6 +250,31 @@ local function pstart_brd_target()
     return target, leader
 end
 
+local function pstart_brd_target_allowed(target, names)
+    if not names or #names == 0 then return true end
+    if not target or type(target.name) ~= 'string' then return false end
+    for _, name in ipairs(names) do
+        if target.name:lower() == name:lower() then return true end
+    end
+    return false
+end
+
+local function pstart_brd_cast_party_buff(profile)
+    for _, task in ipairs(profile.party_buffs or {}) do
+        local spell = pstart_brd_spell(task.spell)
+        if spell and not buffactive[task.buff] and pstart_brd_ready(spell) then
+            pstart_brd.pending = {
+                kind = 'party_buff',
+                spell_id = spell.id,
+            }
+            windower.chat.input('/ma "'..spell.en..'" <me>')
+            tickdelay = os.clock() + 3
+            return true
+        end
+    end
+    return false
+end
+
 local function pstart_brd_timer_key(target, spell)
     return tostring(target.id)..':'..tostring(spell.id)
 end
@@ -225,6 +282,9 @@ end
 local function pstart_brd_cast_debuff(profile)
     local target, leader = pstart_brd_target()
     if not target or not leader then
+        return false
+    end
+    if not pstart_brd_target_allowed(target, profile.debuff_target_names) then
         return false
     end
     -- PartyCombat owns target synchronization. A server mob ID is not a
@@ -236,13 +296,14 @@ local function pstart_brd_cast_debuff(profile)
     end
 
     local now = os.clock()
-    for _, choices in ipairs(profile.debuffs) do
+    for _, choices in ipairs(profile.debuffs or {}) do
         local spell = pstart_brd_first_spell(choices)
         if spell then
             local key = pstart_brd_timer_key(target, spell)
             if (pstart_brd.debuff_timers[key] or 0) <= now then
                 if pstart_brd_ready(spell) then
                     pstart_brd.pending = {
+                        kind = 'debuff',
                         spell_id = spell.id,
                         target_id = target.id,
                         key = key,
@@ -255,6 +316,11 @@ local function pstart_brd_cast_debuff(profile)
         end
     end
     return false
+end
+
+local function pstart_brd_maintenance(profile)
+    if pstart_brd_cast_party_buff(profile) then return true end
+    return pstart_brd_cast_debuff(profile)
 end
 
 local pstart_brd_original_self_command = user_job_self_command
@@ -272,9 +338,9 @@ function user_job_self_command(commandArgs, eventArgs)
     if requested == 'tick' then
         local profile = pstart_brd_profiles[pstart_brd.profile]
         if pstart_brd.active and profile then
-            -- Barney's character GearSwap is the sole party-song owner.
-            -- PartyStart's explicit heartbeat is only for hostile songs.
-            pstart_brd_cast_debuff(profile)
+            -- Barney's character GearSwap remains the sole party-song owner.
+            -- This heartbeat owns only encounter barspells and hostile songs.
+            pstart_brd_maintenance(profile)
         end
         return
     elseif not requested then
@@ -289,6 +355,9 @@ function user_job_self_command(commandArgs, eventArgs)
                 tostring(pstart_brd.profile or 'none'),
                 tostring(pstart_brd.leader or 'none')))
         add_to_chat(122, 'PartyStart BRD debuff target: '..target_text)
+        local profile = pstart_brd_profiles[pstart_brd.profile] or {}
+        add_to_chat(122, ('PartyStart BRD encounter barspells: %d')
+            :format(#(profile.party_buffs or {})))
         pstart_brd_report_instrument()
         return
     end
@@ -317,7 +386,8 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
-            ..'<master|physical|accuracy|magic|safe|off> <leader>')
+            ..'<master|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'ambuscade-v2|off> <leader>')
     end
 
     if state.DisplayMode and state.DisplayMode.value then
@@ -343,18 +413,20 @@ function check_song()
     then
         return true
     end
-    return pstart_brd_cast_debuff(profile)
+    return pstart_brd_maintenance(profile)
 end
 
 local pstart_brd_original_job_aftercast = job_aftercast
 function job_aftercast(spell, spellMap, eventArgs)
     local pending = pstart_brd.pending
     if pending and spell and spell.id == pending.spell_id then
-        if spell.interrupted then
-            pstart_brd.debuff_timers[pending.key] = os.clock() + 3
-        else
-            pstart_brd.debuff_timers[pending.key]
-                = os.clock() + PSTART_BRD_DEBUFF_RETRY
+        if pending.kind == 'debuff' then
+            if spell.interrupted then
+                pstart_brd.debuff_timers[pending.key] = os.clock() + 3
+            else
+                pstart_brd.debuff_timers[pending.key]
+                    = os.clock() + PSTART_BRD_DEBUFF_RETRY
+            end
         end
         pstart_brd.pending = nil
     end

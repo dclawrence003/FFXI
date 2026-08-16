@@ -51,6 +51,12 @@ local PSTART_PLD_ESTABLISH_DELAY = 5
 local PSTART_PLD_RAMPART_CLUSTER_HPP = 85
 local PSTART_PLD_RAMPART_CLUSTER_COUNT = 2
 local PSTART_PLD_PRESSURE_WINDOW = 12
+local PSTART_PLD_V1_HUNDRED_FISTS_HPP = 52
+local PSTART_PLD_PROFILES = {
+    master=true,
+    ['ambuscade-v1']=true,
+    ['ambuscade-v2']=true,
+}
 
 local function pstart_pld_valid_name(name)
     return type(name) == 'string'
@@ -165,12 +171,35 @@ local function pstart_pld_tank_cooldown(lowest, cluster_injured)
         return false
     end
 
-    local established = pstart_pld.flash_target_id == target.id
-        or os.clock() - pstart_pld.target_seen_at >= PSTART_PLD_ESTABLISH_DELAY
-    if established and pstart_pld_use_tank_ability(
-        PSTART_PLD_SENTINEL_ACTION_ID, 'Sentinel after target establishment')
+    if pstart_pld.profile == 'ambuscade-v1'
+        and target.name == 'Bozzetto Breadwinner'
     then
-        return true
+        if target.hpp > PSTART_PLD_V1_HUNDRED_FISTS_HPP then
+            return false
+        end
+        if pstart_pld_use_tank_ability(
+            PSTART_PLD_SENTINEL_ACTION_ID,
+            'Sentinel reserved for Breadwinner Hundred Fists')
+        then
+            return true
+        end
+        if target.hpp <= 50 and not buffactive['Sentinel']
+            and pstart_pld_use_tank_ability(
+                PSTART_PLD_RAMPART_ACTION_ID,
+                'Rampart follow-up during Breadwinner Hundred Fists')
+        then
+            return true
+        end
+    elseif pstart_pld.profile == 'master' then
+        local established = pstart_pld.flash_target_id == target.id
+            or os.clock() - pstart_pld.target_seen_at
+                >= PSTART_PLD_ESTABLISH_DELAY
+        if established and pstart_pld_use_tank_ability(
+            PSTART_PLD_SENTINEL_ACTION_ID,
+            'Sentinel after target establishment')
+        then
+            return true
+        end
     end
 
     if lowest and lowest.hpp < PSTART_PLD_RAMPART_CLUSTER_HPP
@@ -385,7 +414,7 @@ local function pstart_pld_sustain_mp()
 end
 
 local function pstart_pld_action()
-    if not pstart_pld.active or pstart_pld.profile ~= 'master'
+    if not pstart_pld.active or not PSTART_PLD_PROFILES[pstart_pld.profile]
         or player.main_job ~= 'PLD'
         or midaction() or moving or silent_check_disable()
         or (tickdelay and os.clock() < tickdelay)
@@ -396,6 +425,14 @@ local function pstart_pld_action()
 
     pstart_pld_observe_pressure()
     local lowest, cluster_injured = pstart_pld_scan_party()
+    -- Breadwinner's 50% Hundred Fists transition is deterministic. Claim the
+    -- reserved mitigation before a stream of Majesty cures can monopolize the
+    -- action loop at exactly the dangerous threshold.
+    if pstart_pld.profile == 'ambuscade-v1'
+        and pstart_pld_tank_cooldown(lowest, cluster_injured)
+    then
+        return true
+    end
     local needed, reason = pstart_pld_needs_cure(lowest, cluster_injured)
     if not needed then
         if lowest and lowest.hpp < 100
@@ -487,9 +524,11 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_pld.pressure_until = 0
         pstart_pld.last_self_hpp = nil
         add_to_chat(122, 'PartyStart PLD healing is Off.')
-    elseif requested == 'master' and pstart_pld_valid_name(commandArgs[3]) then
+    elseif PSTART_PLD_PROFILES[requested]
+        and pstart_pld_valid_name(commandArgs[3])
+    then
         pstart_pld.active = true
-        pstart_pld.profile = 'master'
+        pstart_pld.profile = requested
         pstart_pld.leader = commandArgs[3]
         pstart_pld.pending = nil
         pstart_pld.retry_at = 0
@@ -503,13 +542,13 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_pld.last_self_hpp = player.hpp
         tickdelay = 0
         add_to_chat(122,
-            'PartyStart PLD: primary Majesty healing and controlled '
-            ..'Sentinel/Rampart/Palisade are On.')
+            ('PartyStart PLD: %s primary Majesty healing and controlled '
+                ..'cooldowns are On.'):format(requested))
         pstart_pld_action()
     else
         add_to_chat(123,
             'PartyStart PLD usage: gs c pstartpld '
-            ..'<master|status|off> <leader>')
+            ..'<master|ambuscade-v1|ambuscade-v2|status|off> <leader>')
     end
 end
 

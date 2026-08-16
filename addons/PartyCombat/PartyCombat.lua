@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.3.1'
+_addon.version = '0.4.0'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -41,6 +41,7 @@ local PREFIX = 'PARTYCOMBAT1'
 local AUTHORITY_INTERVAL = 2
 local ENGAGE_RETRY_INTERVAL = 1.5
 local MOVEMENT_INTERVAL = 0.08
+local TARGET_SYNC_INTERVAL = 1
 local POST_ZONE_FOLLOW_DELAY = 3.5
 local POST_ZONE_FOLLOW_ATTEMPTS = 3
 local RECENT_FOLLOW_CLAIM_WINDOW = 60
@@ -112,6 +113,7 @@ local active_mode = nil
 local pursuit_limit = nil
 local next_authority = 0
 local next_movement = 0
+local next_target_sync = 0
 local last_engage_at = 0
 local running = false
 local last_ignore_target = nil
@@ -175,6 +177,31 @@ local function is_attacker()
     return attacker_settings(local_name()) ~= nil
 end
 
+local function targeter_configured(name)
+    if not valid_name(name) then return false end
+    -- Older settings files predate observer targeting. Preserve their exact
+    -- behavior by treating the attacker roster as the targeter roster.
+    if type(settings.targeters) ~= 'table' then
+        return attacker_settings(name) ~= nil
+    end
+    for targeter_name, enabled in pairs(settings.targeters) do
+        if type(targeter_name) == 'number' then
+            if valid_name(enabled) and same_name(enabled, name) then
+                return true
+            end
+        elseif enabled and valid_name(targeter_name)
+            and same_name(targeter_name, name)
+        then
+            return true
+        end
+    end
+    return false
+end
+
+local function is_targeter()
+    return targeter_configured(local_name())
+end
+
 local function valid_policy_name(name)
     return type(name) == 'string'
         and name:match('^[A-Za-z0-9_-]+$') ~= nil
@@ -201,6 +228,32 @@ local function same_attacker_roster(configuration, requested)
     return true
 end
 
+local function configured_targeter_names(configuration)
+    if type(configuration.targeters) ~= 'table' then
+        return configured_attacker_names(configuration)
+    end
+    local names, seen = {}, {}
+    for targeter_name, enabled in pairs(configuration.targeters) do
+        local name = type(targeter_name) == 'number' and enabled or targeter_name
+        local included = type(targeter_name) == 'number' or enabled
+        if included and valid_name(name) and not seen[name:lower()] then
+            seen[name:lower()] = true
+            names[#names + 1] = name:lower()
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+local function same_targeter_roster(configuration, requested)
+    local current = configured_targeter_names(configuration)
+    if #current ~= #requested then return false end
+    for index, name in ipairs(current) do
+        if name ~= requested[index]:lower() then return false end
+    end
+    return true
+end
+
 local function distance_policy(name)
     local policy = attacker_settings(name) or defaults.attackers[name] or {}
     return {
@@ -219,10 +272,8 @@ local function send_ipc(kind, ...)
 end
 
 local function broadcast_authority(enabled)
-    for attacker_name, attacker in pairs(settings.attackers or {}) do
-        if type(attacker) == 'table' and valid_name(attacker_name) then
-            send_ipc('authority', attacker_name, enabled and '1' or '0')
-        end
+    for _, targeter_name in ipairs(configured_targeter_names(settings)) do
+        send_ipc('authority', targeter_name, enabled and '1' or '0')
     end
 end
 
@@ -330,6 +381,18 @@ local function inject_combat_target(target)
     return true
 end
 
+local function inject_observer_target(target)
+    local player = local_player()
+    if not player or not valid_enemy(target) then return false end
+    packets.inject(packets.new('incoming', 0x058, {
+        ['Player'] = player.id,
+        ['Target'] = target.id,
+        ['Player Index'] = player.index,
+    }))
+    next_target_sync = os.clock() + TARGET_SYNC_INTERVAL
+    return true
+end
+
 local function ignored_target_message(target, distance, limit)
     local now = os.clock()
     if last_ignore_target ~= target.id or now - last_ignore_at > 10 then
@@ -341,10 +404,22 @@ local function ignored_target_message(target, distance, limit)
 end
 
 local function accept_target(id, mode)
-    if not authorized or not is_attacker() then return end
+    if not authorized or not is_targeter() then return end
 
     local target = windower.ffxi.get_mob_by_id(tonumber(id))
     if not valid_enemy(target) then return end
+
+    -- Target-only observers need the same local <t> as the damage group so
+    -- their GearSwap controllers can Silence, Elegy, or otherwise debuff.
+    -- They never claim movement, stop FastFollow, face, engage, or approach.
+    if not is_attacker() then
+        active_target_id = target.id
+        active_mode = 'observe'
+        pursuit_limit = nil
+        last_ignore_target = nil
+        inject_observer_target(target)
+        return
+    end
 
     local attacker = attacker_settings(local_name())
     if not attacker then return end
@@ -389,7 +464,7 @@ local function arm()
     next_authority = 0
     -- IPC delivery back to the sending client is not guaranteed. A controller
     -- that is also an attacker must authorize itself synchronously.
-    if is_attacker() and not authorized then
+    if is_targeter() and not authorized then
         authorized = true
         clear_healbot_combat_automation()
     end
@@ -405,7 +480,7 @@ local function force_current_target()
         return
     end
     if not armed then arm() else broadcast_authority(true) end
-    if is_attacker() then
+    if is_targeter() then
         accept_target(target.id, 'force')
     end
     send_ipc('target', target.id, 'force')
@@ -421,7 +496,8 @@ local function stop_all()
     chat(207, 'Disarmed and stopped all configured attackers.')
 end
 
-local function apply_runtime_policy(policy_name, leader, puller, attacker_names)
+local function apply_runtime_policy(
+    policy_name, leader, puller, attacker_names, targeter_names)
     if not valid_policy_name(policy_name) or not valid_name(leader)
         or not valid_name(puller)
     then
@@ -445,9 +521,37 @@ local function apply_runtime_policy(policy_name, leader, puller, attacker_names)
         return left:lower() < right:lower()
     end)
 
-    local unchanged = same_name(settings.leader, leader)
+    local target_seen = {}
+    local normalized_targeters = {}
+    for _, name in ipairs(targeter_names or attacker_names or {}) do
+        if not valid_name(name) then
+            chat(123, 'Rejected invalid targeter name: '..tostring(name))
+            return false
+        end
+        local key = name:lower()
+        if not target_seen[key] then
+            target_seen[key] = true
+            normalized_targeters[#normalized_targeters + 1] = name
+        end
+    end
+    -- Every attacker necessarily consumes target authority too. Repair an
+    -- incomplete caller list instead of producing an armed-but-inert attacker.
+    for _, name in ipairs(normalized) do
+        local key = name:lower()
+        if not target_seen[key] then
+            target_seen[key] = true
+            normalized_targeters[#normalized_targeters + 1] = name
+        end
+    end
+    table.sort(normalized_targeters, function(left, right)
+        return left:lower() < right:lower()
+    end)
+
+    local unchanged = active_policy_name == policy_name
+        and same_name(settings.leader, leader)
         and same_name(settings.puller, puller)
         and same_attacker_roster(settings, normalized)
+        and same_targeter_roster(settings, normalized_targeters)
     if unchanged then
         active_policy_name = policy_name
         return true
@@ -467,15 +571,22 @@ local function apply_runtime_policy(policy_name, leader, puller, attacker_names)
     for _, name in ipairs(normalized) do
         attackers[name] = distance_policy(name)
     end
+    local targeters = {}
+    for _, name in ipairs(normalized_targeters) do
+        targeters[name] = true
+    end
     settings = {
         leader = leader,
         puller = puller,
         attackers = attackers,
+        targeters = targeters,
     }
     active_policy_name = policy_name
     next_authority = 0
-    chat(158, ('Policy %s loaded inert: leader %s, puller %s, %d attackers.')
-        :format(policy_name, leader, puller, #normalized))
+    chat(158, ('Policy %s loaded inert: leader %s, puller %s, '
+        ..'%d attackers, %d synchronized targeters.')
+        :format(policy_name, leader, puller, #normalized,
+            #normalized_targeters))
     return true
 end
 
@@ -527,7 +638,7 @@ windower.register_event('action', function(action)
             local active = windower.ffxi.get_mob_by_id(active_target_id)
             if valid_enemy(active) then return end
         end
-        if is_attacker() then
+        if is_targeter() then
             -- Windower IPC delivery to the sending instance is not required
             -- for correctness. Claim the controller's own target locally
             -- before announcing it to the other attackers.
@@ -555,7 +666,7 @@ windower.register_event('ipc message', function(message)
     if kind == 'authority' then
         local attacker_name = fields[4]
         local enabled = fields[5] == '1'
-        if same_name(local_name(), attacker_name) and is_attacker() then
+        if same_name(local_name(), attacker_name) and is_targeter() then
             local was_authorized = authorized
             authorized = enabled
             if enabled and not was_authorized then
@@ -569,7 +680,7 @@ windower.register_event('ipc message', function(message)
         accept_target(fields[4], fields[5])
     elseif kind == 'stop' then
         armed = false
-        if is_attacker() then
+        if is_targeter() then
             zone_follow_restore_at = nil
             zone_follow_restore_remaining = 0
             last_fastfollow_claim_at = nil
@@ -605,16 +716,32 @@ windower.register_event('prerender', function()
         broadcast_authority(true)
     end
 
-    if not authorized or not active_target_id or now < next_movement then
+    if not authorized or not active_target_id then
         return
     end
-    next_movement = now + MOVEMENT_INTERVAL
 
     local target = windower.ffxi.get_mob_by_id(active_target_id)
     if not valid_enemy(target) then
-        stop_local('Target ended; attacker stopped.', false)
+        stop_local(is_attacker()
+            and 'Target ended; attacker stopped.'
+            or 'Target ended; observer target cleared.', false)
         return
     end
+
+    if not is_attacker() then
+        if now >= next_target_sync then
+            local local_target = windower.ffxi.get_mob_by_target('t')
+            if not local_target or local_target.id ~= target.id then
+                inject_observer_target(target)
+            else
+                next_target_sync = now + TARGET_SYNC_INTERVAL
+            end
+        end
+        return
+    end
+
+    if now < next_movement then return end
+    next_movement = now + MOVEMENT_INTERVAL
 
     local self = windower.ffxi.get_mob_by_target('me')
     if not self then
@@ -664,6 +791,8 @@ windower.register_event('addon command', function(command, ...)
             role = 'puller'
         elseif is_attacker() then
             role = 'attacker'
+        elseif is_targeter() then
+            role = 'target-only observer'
         else
             role = 'observer'
         end
@@ -685,8 +814,10 @@ windower.register_event('addon command', function(command, ...)
         local leader = args[2]
         local puller = args[3]
         local attacker_csv = args[4]
+        local targeter_csv = args[5]
         if not attacker_csv then
-            chat(123, 'Usage: //pc policy <name> <leader> <puller> <attacker1,attacker2|->')
+            chat(123, 'Usage: //pc policy <name> <leader> <puller> '
+                ..'<attackers|-> [targeters|->]')
             return
         end
         local attacker_names = {}
@@ -695,7 +826,18 @@ windower.register_event('addon command', function(command, ...)
                 attacker_names[#attacker_names + 1] = name
             end
         end
-        apply_runtime_policy(policy_name, leader, puller, attacker_names)
+        local targeter_names = {}
+        if targeter_csv == nil then
+            for _, name in ipairs(attacker_names) do
+                targeter_names[#targeter_names + 1] = name
+            end
+        elseif targeter_csv ~= '-' then
+            for name in targeter_csv:gmatch('[^,]+') do
+                targeter_names[#targeter_names + 1] = name
+            end
+        end
+        apply_runtime_policy(
+            policy_name, leader, puller, attacker_names, targeter_names)
     elseif command == 'on' or command == 'arm' or command == 'auto' then
         if not is_controller() then
             chat(123, 'Only the configured leader or puller can arm PartyCombat.')
@@ -721,7 +863,8 @@ windower.register_event('addon command', function(command, ...)
         stop_all()
     elseif command == 'help' then
         chat(207,
-            'Commands: on | force | stop | status | policy <name> <leader> <puller> <attackers>. Leader or puller may arm/force.')
+            'Commands: on | force | stop | status | policy <name> <leader> '
+            ..'<puller> <attackers> [targeters]. Leader or puller may arm/force.')
     else
         chat(123, 'Unknown command. Use //pc help.')
     end

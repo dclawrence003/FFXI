@@ -28,7 +28,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("__zonerearm", ADDON)
         self.assertNotIn("pc on", ADDON.lower())
         self.assertNotIn("pc force", ADDON.lower())
-        self.assertIn("pc policy %s %s %s %s", ADDON)
+        self.assertIn("pc policy %s %s %s %s %s", ADDON)
 
     def test_physical_profile_is_the_lean_rdm_profile(self):
         physical = RDM.split("accuracy =", 1)[0]
@@ -39,8 +39,12 @@ class PartyStartSourceGuards(unittest.TestCase):
     def test_rdm_support_precedes_offensive_magic(self):
         action = RDM.split("local function pstart_rdm_action()", 1)[1]
         party = action.index("pstart_rdm_cast_party_buffs()")
-        debuff = action.index("pstart_rdm_cast_debuff(profile)")
-        self.assertLess(party, debuff)
+        priority = action.index(
+            "profile.priority_debuff and pstart_rdm_cast_debuff(profile)"
+        )
+        fallback = action.rindex("return pstart_rdm_cast_debuff(profile)")
+        self.assertLess(priority, party)
+        self.assertLess(party, fallback)
         master = RDM.split("master = {", 1)[1].split("physical = {", 1)[0]
         self.assertIn("party_shell = false", master)
         self.assertIn("routine_buff_mp_floor = 35", master)
@@ -141,7 +145,7 @@ class PartyStartSourceGuards(unittest.TestCase):
             "local function apply_pld", 1
         )[1].split("local function apply_dnc", 1)[0]
         self.assertIn("hb disable cure", master_rdm)
-        self.assertIn("gs c pstartpld master", master_pld)
+        self.assertIn("gs c pstartpld %s %s", master_pld)
         self.assertIn("PSTART_PLD_ROUTINE_HPP = 82", PLD)
         self.assertIn("PSTART_PLD_EMERGENCY_HPP = 55", PLD)
         self.assertIn("PSTART_PLD_CONSERVE_ROUTINE_HPP = 72", PLD)
@@ -225,7 +229,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         dnc_off = dnc_off.split("elseif requested", 1)[0]
         self.assertNotIn("aws2 on", dnc_off)
         pld_off = PLD.split("elseif requested == 'off' then", 1)[1]
-        pld_off = pld_off.split("elseif requested", 1)[0]
+        pld_off = pld_off.split("elseif PSTART_PLD_PROFILES", 1)[0]
         self.assertNotIn("aws2 on", pld_off)
 
     def test_master_uses_stackable_physical_debuffs(self):
@@ -253,7 +257,8 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("local master_refresh = profile_name == 'master'", apply_rdm)
         self.assertIn("name:lower() == player.name:lower()", apply_rdm)
         self.assertIn("or job == 'PLD' or job == 'RUN'", apply_rdm)
-        self.assertIn("if profile_name ~= 'master' or master_refresh", apply_rdm)
+        self.assertIn("local refresh_wanted", apply_rdm)
+        self.assertIn("or profile_name ~= 'master' or master_refresh", apply_rdm)
         self.assertIn("local function haste_rank", apply_rdm)
         self.assertIn("{'Gain-MND', 'Gain-STR'}", RDM)
         self.assertIn("local function pstart_rdm_can_spend", RDM)
@@ -276,6 +281,34 @@ class PartyStartSourceGuards(unittest.TestCase):
         stop = ADDON.split("local function stop_local(options)", 1)[1]
         stop = stop.split("\nend", 1)[0]
         self.assertIn("gs c pstartgeo idle", stop)
+
+    def test_ambuscade_profiles_limit_engagement_but_share_targets(self):
+        self.assertGreaterEqual(
+            ADDON.count(
+                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'}"
+            ),
+            2,
+        )
+        self.assertGreaterEqual(ADDON.count("target_all = true"), 2)
+        self.assertIn("profile_targeters(profile, session.names, attackers)", ADDON)
+        self.assertIn("pc policy %s %s %s %s %s", ADDON)
+        self.assertIn("stop_owned_autows2()", ADDON)
+
+    def test_v1_uses_priority_silence_and_reserved_pld_cooldowns(self):
+        self.assertIn("target_names={'Bozzetto Breadwinner'}", RDM)
+        self.assertIn("abilities={'Stymie', 'Saboteur'}", RDM)
+        self.assertIn("{spells={'Silence'}, duration=45", RDM)
+        self.assertIn("priority_debuff = true", RDM)
+        self.assertIn("PSTART_PLD_V1_HUNDRED_FISTS_HPP = 52", PLD)
+        self.assertIn("Sentinel reserved for Breadwinner Hundred Fists", PLD)
+        self.assertIn("Rampart follow-up during Breadwinner Hundred Fists", PLD)
+
+    def test_brd_encounter_bars_and_exact_boss_debuffs(self):
+        self.assertIn("{spell='Barstonra', buff='Barstone'}", BRD)
+        self.assertIn("{spell='Barsilencera', buff='Barsilence'}", BRD)
+        self.assertIn("{spell='Barsleepra', buff='Barsleep'}", BRD)
+        self.assertIn("debuff_target_names = {'Bozzetto Breadwinner'}", BRD)
+        self.assertIn("debuff_target_names = {'Popular Penelope'}", BRD)
 
 
 if __name__ == "__main__":

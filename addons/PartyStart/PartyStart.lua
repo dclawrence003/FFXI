@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.9.1'
+_addon.version = '1.0.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -36,6 +36,7 @@ local nonce_counter = 0
 
 local profiles = {
     master = {
+        physical_offense = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
         brd_debuffs = {
@@ -48,6 +49,7 @@ local profiles = {
         },
     },
     physical = {
+        physical_offense = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
         brd_debuffs = {
@@ -108,6 +110,67 @@ local profiles = {
             {'Addle II', 'Addle'},
         },
     },
+    ['ambuscade-v1'] = {
+        label = 'August 2026 V1: Bozzetto Breadwinner',
+        physical_offense = true,
+        attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'},
+        target_all = true,
+        cor = {'chaos', 'samurai'},
+        brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+        geo = {indi='Fury', geo='Frailty', entrust='Precision', lean=true,
+            entrust_jobs={'COR','DNC','PLD'}},
+        rdm = {
+            haste_scope='attackers', refresh_scope='mp',
+            phalanx_scope='tank', defense_scope='party',
+            gearswap_healing=true,
+        },
+        pld_controller = true,
+        advisories = {
+            'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes and Kickpuncher attack from behind.',
+            'V1: Smalls opens Stymie + Saboteur + Silence. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
+            'V1: Barney supplies Barstonra/Barsilencera and is the intended Housemaker bait. Move him away when Housemaker begins charging.',
+            'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold; sleep and kill any activated Urchins manually.',
+        },
+    },
+    ['ambuscade-v2'] = {
+        label = 'August 2026 V2: Popular Penelope',
+        physical_offense = true,
+        attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'},
+        target_all = true,
+        cor = {'chaos', 'samurai'},
+        brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh', lean=true,
+            entrust_jobs={'PLD','RDM','GEO','BRD'}},
+        rdm = {
+            haste_scope='attackers', refresh_scope='mp',
+            phalanx_scope='tank', defense_scope='party',
+            gearswap_healing=true,
+        },
+        pld_controller = true,
+        advisories = {
+            'V2: Tackleberry and Dolomedes stand in front to split Bad Breath; Kickpuncher attacks from behind; Barney, Smalls, and Achoo stay outside the cone.',
+            'V2: Use Poison Potions before the pull and carry Echo Drops, Remedies, and Holy Water. The final Extremely Bad Breath can inflict Doom.',
+            'V2: Sweet Breath resets enmity. PLD automation deliberately saves Sentinel for manual post-reset hate recovery; use Flash/Provoke/Sentinel as needed.',
+            'V2: Barsleepra and Barstonra are maintained, but positioning and consumables remain manual responsibilities.',
+        },
+    },
+}
+
+local profile_aliases = {
+    v1 = 'ambuscade-v1',
+    ambu1 = 'ambuscade-v1',
+    ambuv1 = 'ambuscade-v1',
+    ['ambu-v1'] = 'ambuscade-v1',
+    v2 = 'ambuscade-v2',
+    ambu2 = 'ambuscade-v2',
+    ambuv2 = 'ambuscade-v2',
+    ['ambu-v2'] = 'ambuscade-v2',
 }
 
 local composition_warning = nil
@@ -189,6 +252,12 @@ local function normalize_composition(name)
     return composition_aliases[name] or name
 end
 
+local function normalize_profile(name)
+    if type(name) ~= 'string' then return nil end
+    name = name:lower()
+    return profile_aliases[name] or name
+end
+
 local function get_composition(name)
     local normalized = normalize_composition(name)
     return normalized, normalized and compositions[normalized] or nil
@@ -211,15 +280,32 @@ local function list_contains_value(values, wanted)
     return false
 end
 
-local function composition_attackers(composition, active_names)
+local function composition_attackers(composition, active_names, profile)
     local attackers = {}
-    for _, name in ipairs(composition.attackers or {}) do
+    local configured = profile and profile.attackers or composition.attackers
+    for _, name in ipairs(configured or {}) do
         if list_contains_name(active_names, name) then
             attackers[#attackers + 1] = name
         end
     end
     table.sort(attackers)
     return attackers
+end
+
+local function profile_targeters(profile, active_names, attackers)
+    if profile and profile.target_all then
+        local targeters = {}
+        for _, name in ipairs(active_names or {}) do
+            if valid_name(name) then targeters[#targeters + 1] = name end
+        end
+        table.sort(targeters)
+        return targeters
+    end
+    local targeters = {}
+    for _, name in ipairs(attackers or {}) do
+        targeters[#targeters + 1] = name
+    end
+    return targeters
 end
 
 local function composition_role(composition, name)
@@ -325,7 +411,11 @@ local function composition_offense(composition, player)
     return by_character and by_character[player.main_job] or nil
 end
 
-local function apply_physical_offense(player, composition)
+local function apply_physical_offense(player, composition, attackers)
+    if not list_contains_name(attackers, player.name) then
+        stop_owned_autows2()
+        return
+    end
     local offense = composition_offense(composition, player)
     if not offense then
         stop_owned_autows2()
@@ -422,6 +512,7 @@ local function validate_session(session)
     local errors = {}
     local warnings = {}
     local composition = compositions[session.composition]
+    local profile = profiles[session.profile]
     if not composition then
         errors[#errors + 1] = 'unknown composition '..tostring(session.composition)
         return errors, warnings
@@ -450,8 +541,9 @@ local function validate_session(session)
                 :format(name, record.sub_job, table.concat(expected.sub_jobs, '/'))
         end
 
-        if record and expected
-            and (session.profile == 'master' or session.profile == 'physical')
+        if record and expected and profile and profile.physical_offense
+            and list_contains_name(
+                composition_attackers(composition, session.names, profile), name)
             and not composition_offense(composition, {
                 name=name, main_job=record.main_job,
             })
@@ -485,6 +577,9 @@ end
 local function announce_validation(session, errors, warnings)
     if not is_requester(session) then return end
     local composition = compositions[session.composition]
+    local profile = profiles[session.profile]
+    local attackers = composition and profile
+        and composition_attackers(composition, session.names, profile) or {}
     chat(207, ('%s / %s: %s')
         :format(session.composition, session.profile,
             composition and composition.label or 'unknown'))
@@ -495,10 +590,12 @@ local function announce_validation(session, errors, warnings)
                 and composition_offense(composition, {
                     name=name, main_job=record.main_job,
                 }) or nil
-            local offense_text = offense
+            local offense_text = list_contains_name(attackers, name) and offense
                 and (offense.weapon_mode..' / '..offense.ws
                     ..' @ '..tostring(offense.tp or 1000))
-                or 'manual/no AutoWS2'
+                or (profile and profile.target_all
+                    and 'target-only support; no AutoWS2'
+                    or 'manual/no AutoWS2')
             chat(207, ('  %s %s/%s | %s | %s')
                 :format(name, record.main_job, record.sub_job,
                     composition and composition_role(composition, name)
@@ -561,7 +658,9 @@ local function apply_whm(player)
         ..'hb as attack off; hb on')
 end
 
-local function apply_rdm(player, profile_name, roster, leader, target_source)
+local function apply_rdm(
+    player, profile_name, profile, roster, leader, target_source,
+    composition, active_names)
     local haste = first_known{'Haste II', 'Haste'}
     local refresh = first_known{'Refresh III', 'Refresh II', 'Refresh'}
     local phalanx_ii = first_known{'Phalanx II'}
@@ -570,10 +669,17 @@ local function apply_rdm(player, profile_name, roster, leader, target_source)
     local refresh_tanks = {}
     local refresh_others = {}
     local phalanx_targets = {}
+    local defense_targets = {}
+    local encounter_policy = profile.rdm or {}
+    local attackers = composition_attackers(composition, active_names, profile)
 
     for _,name in ipairs(sorted_roster(roster)) do
         local job = roster[name].main_job
-        if haste and haste_jobs:contains(job) then
+        local haste_wanted = encounter_policy.haste_scope == 'attackers'
+            and list_contains_name(attackers, name)
+            or encounter_policy.haste_scope ~= 'attackers'
+                and haste_jobs:contains(job)
+        if haste and haste_wanted then
             haste_targets[#haste_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, haste))
         end
@@ -585,20 +691,29 @@ local function apply_rdm(player, profile_name, roster, leader, target_source)
             local master_refresh = profile_name == 'master'
                 and (name:lower() == player.name:lower()
                     or job == 'PLD' or job == 'RUN')
-            if profile_name ~= 'master' or master_refresh then
+            local refresh_wanted = encounter_policy.refresh_scope == 'mp'
+                or profile_name ~= 'master' or master_refresh
+            if refresh_wanted then
                 local destination = (job == 'PLD' or job == 'RUN')
                     and refresh_tanks or refresh_others
                 destination[#destination + 1] = name
             end
         end
-        local phalanx_wanted = profile_name == 'master'
-            and job == 'PLD'
-            or profile_name ~= 'master'
-                and name ~= player.name
-                and frontline_jobs:contains(job)
+        local configured_tank = composition.roles and composition.roles.tank
+        local phalanx_wanted = encounter_policy.phalanx_scope == 'tank'
+            and valid_name(configured_tank)
+            and name:lower() == configured_tank:lower()
+            or encounter_policy.phalanx_scope ~= 'tank'
+                and (profile_name == 'master' and job == 'PLD'
+                    or profile_name ~= 'master'
+                        and name ~= player.name
+                        and frontline_jobs:contains(job))
         if phalanx_ii and phalanx_wanted then
             phalanx_targets[#phalanx_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, phalanx_ii))
+        end
+        if encounter_policy.defense_scope == 'party' then
+            defense_targets[#defense_targets + 1] = name
         end
     end
 
@@ -656,6 +771,7 @@ local function apply_rdm(player, profile_name, roster, leader, target_source)
         'Distract III', 'Distract II', 'Distract',
         'Slow II', 'Slow', 'Paralyze II', 'Paralyze',
         'Blind II', 'Blind', 'Addle II', 'Addle',
+        'Silence',
     }
     for _, spell in ipairs(old_debuffs) do
         if knows_spell(spell) then issue('hb db rm '..spell) end
@@ -665,10 +781,21 @@ local function apply_rdm(player, profile_name, roster, leader, target_source)
         return #names > 0 and table.concat(names, ',') or '-'
     end
     issue('gs c set AutoBuffMode Off')
-    issue(('gs c pstartrdm %s %s %s %s %s'):format(
+    if #defense_targets == 0 then
+        local seen = {}
+        for _, names in ipairs{haste_targets, refresh_targets, phalanx_targets} do
+            for _, name in ipairs(names) do
+                if not seen[name:lower()] then
+                    seen[name:lower()] = true
+                    defense_targets[#defense_targets + 1] = name
+                end
+            end
+        end
+    end
+    issue(('gs c pstartrdm %s %s %s %s %s %s'):format(
         profile_name, target_source, csv(haste_targets), csv(refresh_targets),
-        csv(phalanx_targets)))
-    if profile_name == 'master' then
+        csv(phalanx_targets), csv(defense_targets)))
+    if profile_name == 'master' or encounter_policy.gearswap_healing then
         -- GearSwap owns all HP decisions in the sustained profile. HealBot is
         -- retained on RDM only for packet-backed status removal; letting it
         -- also cure creates a race with PLD and drains the RDM first.
@@ -712,7 +839,7 @@ local function apply_geo(player, profile_name, profile, roster)
     local geo = profile.geo
     local entrustee = first_jobs(roster, geo.entrust_jobs)
         or player.name
-    if profile_name == 'master' then
+    if profile_name == 'master' or geo.lean then
         issue('gs c pstartgeo lean')
     else
         issue('gs c pstartgeo restore')
@@ -724,20 +851,20 @@ local function apply_geo(player, profile_name, profile, roster)
 end
 
 
-local function apply_pld(profile_name, leader)
+local function apply_pld(profile_name, profile, leader)
     -- AutoTankMode and AutoWSMode are boolean Mote states. Boolean states use
     -- `set`/`unset`; appending true/false does not reliably change them.
     issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
         ..'gs c unset AutoTankFull; '
         ..'gs c set HybridMode Tank; '
         ..'gs c unset AutoWSMode')
-    if profile_name == 'master' then
+    if profile_name == 'master' or profile.pld_controller then
         -- HealBot's optional PartyOps gate can reject a newer PartyOps phase
         -- before action selection. The PLD controller therefore lives in
         -- GearSwap and runs before native Flash/Provoke upkeep.
         issue('hb disable cure; hb disable na; hb db off; '
             ..'hb as off; hb as attack off; hb off')
-        issue(('gs c pstartpld master %s'):format(leader))
+        issue(('gs c pstartpld %s %s'):format(profile_name, leader))
     else
         issue('gs c pstartpld off')
         issue('hb disable cure; hb disable na; '
@@ -773,14 +900,20 @@ local function runtime_puller(composition, active_names)
     return composition.command_leader
 end
 
-local function apply_combat_policy(session, composition)
-    local attackers = composition_attackers(composition, session.names)
+local function apply_combat_policy(session, composition, profile)
+    local attackers = composition_attackers(
+        composition, session.names, profile)
+    local targeters = profile_targeters(profile, session.names, attackers)
     local puller = runtime_puller(composition, session.names)
     local attacker_csv = #attackers > 0 and table.concat(attackers, ',') or '-'
-    issue(('pc policy %s %s %s %s')
-        :format(session.composition, composition.command_leader,
-            puller, attacker_csv))
+    local targeter_csv = #targeters > 0 and table.concat(targeters, ',') or '-'
+    local policy_name = session.composition..'-'..session.profile
+    issue(('pc policy %s %s %s %s %s')
+        :format(policy_name, composition.command_leader,
+            puller, attacker_csv, targeter_csv))
     session.target_source = puller
+    session.attackers = attackers
+    session.targeters = targeters
 end
 
 local function apply_profile(session)
@@ -793,7 +926,7 @@ local function apply_profile(session)
         return
     end
 
-    apply_combat_policy(session, composition)
+    apply_combat_policy(session, composition, profile)
 
     -- Clear HealBot movement/assist automation when selecting a support
     -- profile. FastFollow is user-owned and must remain unchanged.
@@ -802,14 +935,14 @@ local function apply_profile(session)
     if player.main_job == 'WHM' then
         apply_whm(player)
     elseif player.main_job == 'RDM' then
-        apply_rdm(player, session.profile, session.roster, session.leader,
-            session.target_source)
+        apply_rdm(player, session.profile, profile, session.roster,
+            session.leader, session.target_source, composition, session.names)
     elseif player.main_job == 'BRD' then
         apply_brd(player, session.profile, session.target_source)
     elseif player.main_job == 'GEO' then
         apply_geo(player, session.profile, profile, session.roster)
     elseif player.main_job == 'PLD' then
-        apply_pld(session.profile, session.leader)
+        apply_pld(session.profile, profile, session.leader)
     elseif player.main_job == 'DNC' then
         apply_dnc(session.profile, session.target_source)
     elseif player.main_job == 'COR' then
@@ -820,8 +953,8 @@ local function apply_profile(session)
         issue('hb db off; hb as off; hb as attack off; hb off')
     end
 
-    if session.profile == 'physical' or session.profile == 'master' then
-        apply_physical_offense(player, composition)
+    if profile.physical_offense then
+        apply_physical_offense(player, composition, session.attackers)
     else
         stop_owned_autows2()
     end
@@ -835,6 +968,11 @@ local function apply_profile(session)
         :format(session.composition, session.profile,
             player.main_job, player.sub_job,
             autows2_owned and 'on' or 'unchanged', session.target_source))
+    if is_requester(session) then
+        for _, advisory in ipairs(profile.advisories or {}) do
+            chat(123, advisory)
+        end
+    end
 end
 
 local function schedule_zone_rearm(delay)
@@ -881,11 +1019,12 @@ local function begin(composition_name, profile_name, preview, revalidation)
         return
     end
     local normalized, composition = get_composition(composition_name)
+    profile_name = normalize_profile(profile_name)
     if not composition then
         chat(123, 'Unknown composition: '..tostring(composition_name))
         return
     end
-    if not profiles[profile_name] then
+    if not profile_name or not profiles[profile_name] then
         chat(123, 'Unknown profile: '..tostring(profile_name))
         return
     end
@@ -1174,16 +1313,17 @@ windower.register_event('addon command', function(command, ...)
         return
     end
 
-    if profiles[command] then
-        begin(last_composition, command, false)
+    local direct_profile = normalize_profile(command)
+    if direct_profile and profiles[direct_profile] then
+        begin(last_composition, direct_profile, false)
     elseif command == 'on' or command == 'start' then
         begin(last_composition, last_profile, false)
     elseif command == 'use' then
         begin(args[1] or last_composition,
-            (args[2] or last_profile):lower(), false)
+            normalize_profile(args[2] or last_profile), false)
     elseif command == 'preview' then
         begin(args[1] or last_composition,
-            (args[2] or last_profile):lower(), true)
+            normalize_profile(args[2] or last_profile), true)
     elseif command == 'stop' or command == 'off' then
         send_ipc{PREFIX, 'stop', new_nonce(windower.ffxi.get_player())}
         stop_local()
@@ -1196,13 +1336,17 @@ windower.register_event('addon command', function(command, ...)
         for name, _ in pairs(compositions) do names[#names + 1] = name end
         table.sort(names)
         chat(207, 'Compositions: '..table.concat(names, ', '))
-        chat(207, 'Profiles: master, physical, accuracy, magic, safe')
+        chat(207, 'Profiles: master, physical, accuracy, magic, safe, '
+            ..'ambuscade-v1 (v1), ambuscade-v2 (v2)')
     else
-        chat(207, 'Commands: use <composition> <profile> | preview <composition> <profile> | on | off | master | physical | accuracy | magic | safe | status | list')
+        chat(207, 'Commands: use <composition> <profile> | preview '
+            ..'<composition> <profile> | on | off | master | physical | '
+            ..'accuracy | magic | safe | v1 | v2 | status | list')
     end
 end)
 
-chat(158, 'Loaded. Use //pstart preview progression master, then //pstart use progression master.')
+chat(158, 'Loaded. Use //pstart preview progression master, then '
+    ..'//pstart use progression master. Ambuscade aliases: //pstart v1 or v2.')
 if composition_warning then
     chat(167, 'Composition policy unavailable; activation is blocked. '
         ..composition_warning)

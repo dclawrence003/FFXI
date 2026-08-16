@@ -74,6 +74,51 @@ local pstart_rdm_profiles = {
             {spells={'Addle II', 'Addle'}, duration=150},
         },
     },
+    ['ambuscade-v1'] = {
+        gain = {spells={'Gain-MND'}, buff='MND Boost'},
+        temper = false,
+        lean = true,
+        party_shell = true,
+        party_protect = false,
+        routine_buff_mp_floor = 25,
+        tank_buff_mp_floor = 15,
+        debuff_mp_floor = 20,
+        debuff_min_target_hpp = 5,
+        healing = true,
+        heal_hpp = 55,
+        heal_mp_floor = 20,
+        priority_debuff = true,
+        opener = {
+            target_names={'Bozzetto Breadwinner'},
+            abilities={'Stymie', 'Saboteur'},
+        },
+        debuffs = {
+            {spells={'Silence'}, duration=45,
+                target_names={'Bozzetto Breadwinner'}},
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=120,
+                target_names={'Bozzetto Breadwinner'}},
+            {spells={'Distract III', 'Distract II', 'Distract'}, duration=150,
+                target_names={'Bozzetto Breadwinner'}},
+        },
+    },
+    ['ambuscade-v2'] = {
+        gain = {spells={'Gain-MND'}, buff='MND Boost'},
+        temper = false,
+        lean = true,
+        party_shell = true,
+        party_protect = false,
+        routine_buff_mp_floor = 25,
+        tank_buff_mp_floor = 15,
+        debuff_mp_floor = 20,
+        debuff_min_target_hpp = 10,
+        healing = true,
+        heal_hpp = 65,
+        heal_mp_floor = 20,
+        debuffs = {
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=120,
+                target_names={'Popular Penelope'}},
+        },
+    },
 }
 
 local pstart_rdm = {
@@ -83,6 +128,7 @@ local pstart_rdm = {
     haste = {},
     refresh = {},
     phalanx = {},
+    defense = {},
     buff_timers = {},
     debuff_timers = {},
     pending = nil,
@@ -91,6 +137,8 @@ local pstart_rdm = {
     last_remote_loss = 'none',
     last_loss_events = {},
     reactive_repairs = {},
+    opener_targets = {},
+    last_heal_at = 0,
 }
 
 local PSTART_RDM_LOSE_EFFECT_MESSAGES = {
@@ -161,6 +209,15 @@ local function pstart_rdm_ready_spell(choices)
     return nil
 end
 
+local function pstart_rdm_known_ability(ability)
+    if not ability then return false end
+    local abilities = windower.ffxi.get_abilities() or {}
+    for _, learned_id in ipairs(abilities.job_abilities or {}) do
+        if learned_id == ability.id then return true end
+    end
+    return false
+end
+
 local function pstart_rdm_party_token(name)
     if name:lower() == player.name:lower() then
         return '<me>'
@@ -207,7 +264,8 @@ local function pstart_rdm_owns_buff(name, buff)
     end
 
     local profile = pstart_rdm_profiles[pstart_rdm.profile]
-    local defensive_target = pstart_rdm_name_in(pstart_rdm.haste, name)
+    local defensive_target = pstart_rdm_name_in(pstart_rdm.defense, name)
+        or pstart_rdm_name_in(pstart_rdm.haste, name)
         or pstart_rdm_name_in(pstart_rdm.refresh, name)
         or pstart_rdm_name_in(pstart_rdm.phalanx, name)
     if not profile or not defensive_target then
@@ -219,7 +277,8 @@ local function pstart_rdm_owns_buff(name, buff)
         -- Majesty supplies initial Protect in master. RDM repairs only an
         -- individual copy that a loss packet confirms was dispelled, subject
         -- to the sustained profile's routine MP reserve.
-        return pstart_rdm.profile == 'master' or not profile.lean
+        return profile.party_protect
+            or pstart_rdm.profile == 'master' or not profile.lean
     end
     return false
 end
@@ -381,7 +440,9 @@ local function pstart_rdm_convert()
 end
 
 local function pstart_rdm_convert_recovery()
-    if pstart_rdm.profile ~= 'master'
+    local profile = pstart_rdm_profiles[pstart_rdm.profile]
+    if not profile
+        or (pstart_rdm.profile ~= 'master' and not profile.healing)
         or os.clock() > (pstart_rdm.convert_recovery_until or 0)
     then
         return false
@@ -411,13 +472,18 @@ local function pstart_rdm_convert_recovery()
 end
 
 local function pstart_rdm_emergency_heal()
-    if pstart_rdm.profile ~= 'master' then
+    local profile = pstart_rdm_profiles[pstart_rdm.profile]
+    if not profile
+        or (pstart_rdm.profile ~= 'master' and not profile.healing)
+        or os.clock() - (pstart_rdm.last_heal_at or 0) < 2.5
+    then
         return false
     end
 
     -- PLD owns routine healing and DNC owns TP-funded emergency healing.
     -- RDM is the final low-HP/low-complexity safety net only.
-    if player.mpp < 20 then
+    local heal_hpp = profile.heal_hpp or 25
+    if player.mpp < (profile.heal_mp_floor or 20) then
         return false
     end
 
@@ -426,7 +492,7 @@ local function pstart_rdm_emergency_heal()
         if type(key) == 'string' and key:match('^p[0-5]$')
             and type(member) == 'table' and member.name
             and type(member.hpp) == 'number'
-            and member.hpp > 0 and member.hpp < 25
+            and member.hpp > 0 and member.hpp < heal_hpp
             and pstart_rdm_in_range(member.name)
             and (not target_hpp or member.hpp < target_hpp)
         then
@@ -452,6 +518,7 @@ local function pstart_rdm_emergency_heal()
     if spell then
         windower.chat.input('/ma "'..spell.en..'" '..target_token)
         tickdelay = os.clock() + 3
+        pstart_rdm.last_heal_at = os.clock()
         add_to_chat(122, ('PartyStart RDM: emergency %s -> %s (%d%%).')
             :format(spell.en, target_name, target_hpp))
         return true
@@ -492,8 +559,9 @@ local function pstart_rdm_cast_party_buffs()
     local profile = pstart_rdm_profiles[pstart_rdm.profile]
     local routine_floor = profile.routine_buff_mp_floor or 0
     local tank_floor = profile.tank_buff_mp_floor or routine_floor
-    local defense = pstart_rdm_union_names(
-        pstart_rdm.haste, pstart_rdm.refresh, pstart_rdm.phalanx)
+    local defense = #pstart_rdm.defense > 0 and pstart_rdm.defense
+        or pstart_rdm_union_names(
+            pstart_rdm.haste, pstart_rdm.refresh, pstart_rdm.phalanx)
     for _, name in ipairs(refresh) do
         if pstart_rdm_cast_buff(
             name, {'Refresh III', 'Refresh II', 'Refresh'}, 'Refresh', 135)
@@ -522,6 +590,16 @@ local function pstart_rdm_cast_party_buffs()
             if pstart_rdm_cast_buff(name,
                 {'Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell'},
                 'Shell', 1650)
+            then
+                return true
+            end
+        end
+    end
+    if profile.party_protect then
+        for _, name in ipairs(defense) do
+            if pstart_rdm_cast_buff(name,
+                {'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect'},
+                'Protect', 1800)
             then
                 return true
             end
@@ -623,6 +701,70 @@ local function pstart_rdm_enemy()
     return target, leader
 end
 
+local function pstart_rdm_target_allowed(target, names)
+    if not names or #names == 0 then return true end
+    if not target or type(target.name) ~= 'string' then return false end
+    for _, name in ipairs(names) do
+        if target.name:lower() == name:lower() then return true end
+    end
+    return false
+end
+
+local function pstart_rdm_cast_opener(profile)
+    local opener = profile.opener
+    if not opener then return false end
+    local target = pstart_rdm_enemy()
+    if not target or not pstart_rdm_target_allowed(
+        target, opener.target_names)
+    then
+        return false
+    end
+    local local_target = windower.ffxi.get_mob_by_target('t')
+    if not local_target or local_target.id ~= target.id then return false end
+
+    local progress = pstart_rdm.opener_targets[target.id]
+    if not progress then
+        progress = {stage=1, complete=false}
+        pstart_rdm.opener_targets[target.id] = progress
+    end
+    if progress.complete then return false end
+
+    while progress.stage <= #(opener.abilities or {}) do
+        local ability_name = opener.abilities[progress.stage]
+        local ability = res.job_abilities:with('en', ability_name)
+        if not pstart_rdm_known_ability(ability)
+            or buffactive[ability_name]
+        then
+            progress.stage = progress.stage + 1
+        else
+            local recasts = windower.ffxi.get_ability_recasts() or {}
+            if (recasts[ability.recast_id] or 999) >= latency then
+                -- Do not hold the critical Silence waiting for a long JA
+                -- recast. Use every opener ability that is ready now, then
+                -- proceed with the best available enfeebling set.
+                progress.stage = progress.stage + 1
+            elseif midaction() or moving or silent_check_disable()
+                or silent_check_amnesia()
+                or (tickdelay and os.clock() < tickdelay)
+            then
+                return false
+            else
+                pstart_rdm.pending = {
+                    kind = 'opener',
+                    action_id = ability.id,
+                    target_id = target.id,
+                    next_stage = progress.stage + 1,
+                }
+                windower.chat.input('/ja "'..ability.en..'" <me>')
+                tickdelay = os.clock() + 2
+                return true
+            end
+        end
+    end
+    progress.complete = true
+    return false
+end
+
 local function pstart_rdm_cast_debuff(profile)
     local target, leader = pstart_rdm_enemy()
     if not target or not leader then
@@ -641,21 +783,23 @@ local function pstart_rdm_cast_debuff(profile)
         return false
     end
 
-    for _, task in ipairs(profile.debuffs) do
-        local spell = pstart_rdm_spell(task.spells)
-        if spell then
-            local key = tostring(target.id)..':'..tostring(spell.id)
-            if (pstart_rdm.debuff_timers[key] or 0) <= os.clock() then
-                if pstart_rdm_ready(spell) then
-                    pstart_rdm.pending = {
-                        kind = 'debuff',
-                        spell_id = spell.id,
-                        key = key,
-                        duration = task.duration,
-                    }
-                    windower.chat.input('/ma "'..spell.en..'" <t>')
-                    tickdelay = os.clock() + 3
-                    return true
+    for _, task in ipairs(profile.debuffs or {}) do
+        if pstart_rdm_target_allowed(target, task.target_names) then
+            local spell = pstart_rdm_spell(task.spells)
+            if spell then
+                local key = tostring(target.id)..':'..tostring(spell.id)
+                if (pstart_rdm.debuff_timers[key] or 0) <= os.clock() then
+                    if pstart_rdm_ready(spell) then
+                        pstart_rdm.pending = {
+                            kind = 'debuff',
+                            spell_id = spell.id,
+                            key = key,
+                            duration = task.duration,
+                        }
+                        windower.chat.input('/ma "'..spell.en..'" <t>')
+                        tickdelay = os.clock() + 3
+                        return true
+                    end
                 end
             end
         end
@@ -675,10 +819,17 @@ local function pstart_rdm_action()
     if pstart_rdm_emergency_heal() then return true end
     if pstart_rdm_convert_recovery() then return true end
     if pstart_rdm_convert() then return true end
+    if pstart_rdm_cast_opener(profile) then return true end
+    if profile.priority_debuff and pstart_rdm_cast_debuff(profile) then
+        return true
+    end
     if pstart_rdm_cast_reactive_repair() then return true end
     if pstart_rdm_cast_party_buffs() then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
-    return pstart_rdm_cast_debuff(profile)
+    if not profile.priority_debuff then
+        return pstart_rdm_cast_debuff(profile)
+    end
+    return false
 end
 
 local pstart_rdm_original_self_command = user_job_self_command
@@ -714,11 +865,14 @@ function user_job_self_command(commandArgs, eventArgs)
                 tostring(pstart_rdm.last_remote_loss)))
         local profile = pstart_rdm_profiles[pstart_rdm.profile] or {}
         add_to_chat(122,
-            ('PartyStart RDM MP %d%% / targets H:%d R:%d P:%d / reserve %d%% / Shell %s')
+            ('PartyStart RDM MP %d%% / targets H:%d R:%d P:%d D:%d / '
+                ..'reserve %d%% / Shell %s / backup cure <%d%%')
             :format(player.mpp or 0, #pstart_rdm.haste,
                 #pstart_rdm.refresh, #pstart_rdm.phalanx,
+                #pstart_rdm.defense,
                 profile.routine_buff_mp_floor or 0,
-                profile.party_shell and 'On' or 'Off'))
+                profile.party_shell and 'On' or 'Off',
+                profile.heal_hpp or (pstart_rdm.profile == 'master' and 25 or 0)))
         return
     elseif requested == 'off' then
         pstart_rdm.active = false
@@ -726,6 +880,8 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.convert_recovery_until = 0
         pstart_rdm.last_loss_events = {}
         pstart_rdm.reactive_repairs = {}
+        pstart_rdm.opener_targets = {}
+        pstart_rdm.last_heal_at = 0
         state.AutoBuffMode:set('Off')
         add_to_chat(122, 'PartyStart RDM buff and debuff maintenance is Off.')
         return
@@ -740,12 +896,16 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.haste = pstart_rdm_names(commandArgs[4])
         pstart_rdm.refresh = pstart_rdm_names(commandArgs[5])
         pstart_rdm.phalanx = pstart_rdm_names(commandArgs[6])
+        pstart_rdm.defense = pstart_rdm_names(commandArgs[7])
         pstart_rdm.pending = nil
+        pstart_rdm.debuff_timers = {}
         pstart_rdm.convert_recovery_until = 0
         pstart_rdm.remote_loss_count = 0
         pstart_rdm.last_remote_loss = 'none'
         pstart_rdm.last_loss_events = {}
         pstart_rdm.reactive_repairs = {}
+        pstart_rdm.opener_targets = {}
+        pstart_rdm.last_heal_at = 0
         state.AutoBuffMode:set('Off')
         tickdelay = 0
         add_to_chat(122, ('PartyStart RDM: %s / leader %s / GearSwap owns magic.')
@@ -754,7 +914,8 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart RDM usage: gs c pstartrdm '
-            ..'<profile|status|off> <leader> <haste> <refresh> <phalanx>')
+            ..'<profile|status|off> <leader> <haste> <refresh> <phalanx> '
+            ..'[defense]')
     end
 end
 
@@ -772,7 +933,16 @@ end
 local pstart_rdm_original_job_aftercast = job_aftercast
 function job_aftercast(spell, spellMap, eventArgs)
     local pending = pstart_rdm.pending
-    if pending and spell and spell.id == pending.spell_id then
+    local completed_opener = pending and pending.kind == 'opener' and spell
+        and (spell.id == pending.action_id
+            or spell.recast_id == pending.action_id)
+    if completed_opener then
+        if not spell.interrupted then
+            local progress = pstart_rdm.opener_targets[pending.target_id]
+            if progress then progress.stage = pending.next_stage end
+        end
+        pstart_rdm.pending = nil
+    elseif pending and spell and spell.id == pending.spell_id then
         local retry = spell.interrupted and 3 or pending.duration
         if pending.kind == 'buff' then
             pstart_rdm.buff_timers[pending.key] = os.clock() + retry
