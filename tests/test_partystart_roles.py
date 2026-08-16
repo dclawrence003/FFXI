@@ -194,6 +194,13 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn(
             "priority_attackers = {'Dolomedes', 'Kickpuncher'}", v1
         )
+        self.assertIn(
+            "free_look_observers = {'Barneystinson'}", v1
+        )
+        self.assertIn("profile.free_look_observers or {}", self.addon)
+        self.assertIn(
+            "free-look support; no forced target/AutoWS2", self.addon
+        )
         self.assertIn("HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW", self.addon)
         self.assertIn("self_heal_hpp = 85", self.brd)
         self.assertIn("pstart_brd_cast_self_heal", self.brd)

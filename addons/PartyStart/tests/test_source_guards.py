@@ -332,6 +332,13 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertIn("profile.priority_target:gsub(' ', '_')", ADDON)
         self.assertIn("profile.priority_attackers or {}", ADDON)
+        self.assertIn(
+            "free_look_observers = {'Barneystinson'}", v1
+        )
+        self.assertIn("profile.free_look_observers or {}", ADDON)
+        self.assertIn(
+            "free-look support; no forced target/AutoWS2", ADDON
+        )
 
     def test_v1_uses_priority_silence_and_reserved_pld_cooldowns(self):
         self.assertIn("target_names={'Bozzetto Breadwinner'}", RDM)
@@ -389,7 +396,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.3.0'", ADDON)
+        self.assertIn("_addon.version = '1.3.1'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -406,7 +413,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','limbus','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.3.0'", ADDON)
+        self.assertIn("_addon.version = '1.3.1'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,

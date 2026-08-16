@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.3.0'
+_addon.version = '1.3.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -196,6 +196,11 @@ local profiles = {
         physical_offense = true,
         attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'},
         target_all = true,
+        -- Barney must watch Housemaker's staging area and move as soon as it
+        -- charges. Keep him out of PartyCombat's one-second observer target
+        -- reassertion; his support controller remains fully active, and Elegy
+        -- is opportunistic whenever the user manually targets Breadwinner.
+        free_look_observers = {'Barneystinson'},
         priority_target = 'Bozzetto Urchin',
         priority_attackers = {'Dolomedes', 'Kickpuncher'},
         cor = {'chaos', 'samurai'},
@@ -229,6 +234,7 @@ local profiles = {
             'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes and Kickpuncher attack from behind.',
             'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
             'V1: Barney must be BRD/WHM; he supplies Barstonra/Barsilencera and is the intended Housemaker bait. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
+            'V1: PartyCombat never forces Barney onto Breadwinner. His camera is user-owned for watching Housemaker; briefly target Breadwinner manually only when an Elegy attempt is wanted.',
             'V1: Barney, Smalls, and Achoo maintain self-Reraise. Dolomedes, Tackleberry, and Kickpuncher require Reraise items; each client warns while unprotected.',
             'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker movement/Earthshaker, and Hundred Fists.',
             'V1: Dolo and Kickpuncher automatically split to a visible Bozzetto Urchin and return to Breadwinner after it dies; Tackleberry and all supports remain anchored on Breadwinner.',
@@ -606,7 +612,16 @@ local function profile_targeters(profile, active_names, attackers)
     if profile and profile.target_all then
         local targeters = {}
         for _, name in ipairs(active_names or {}) do
-            if valid_name(name) then targeters[#targeters + 1] = name end
+            local free_look = list_contains_name(
+                profile.free_look_observers or {}, name)
+            -- Attackers always need target authority. Free-look exclusions
+            -- apply only to support observers whose cameras would otherwise
+            -- be reclaimed every second by PartyCombat.
+            if valid_name(name)
+                and (not free_look or list_contains_name(attackers, name))
+            then
+                targeters[#targeters + 1] = name
+            end
         end
         table.sort(targeters)
         return targeters
@@ -921,6 +936,8 @@ local function announce_validation(session, errors, warnings)
     local profile = profiles[session.profile]
     local attackers = composition and profile
         and composition_attackers(composition, session.names, profile) or {}
+    local targeters = profile
+        and profile_targeters(profile, session.names, attackers) or {}
     chat(207, ('%s / %s: %s')
         :format(session.composition, session.profile,
             composition and composition.label or 'unknown'))
@@ -934,9 +951,12 @@ local function announce_validation(session, errors, warnings)
             local offense_text = list_contains_name(attackers, name) and offense
                 and (offense.weapon_mode..' / '..offense.ws
                     ..' @ '..tostring(offense.tp or 1000))
-                or (profile and profile.target_all
+                or (list_contains_name(targeters, name)
                     and 'target-only support; no AutoWS2'
-                    or 'manual/no AutoWS2')
+                    or (profile and list_contains_name(
+                            profile.free_look_observers or {}, name)
+                        and 'free-look support; no forced target/AutoWS2'
+                        or 'manual/no AutoWS2'))
             chat(207, ('  %s %s/%s | %s | %s')
                 :format(name, record.main_job, record.sub_job,
                     composition and composition_role(composition, name)

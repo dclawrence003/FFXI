@@ -504,9 +504,10 @@ Tackleberry.
   Housemaker hate, and the support line loses its tested Reraise/status-removal
   coverage. Tackleberry remains `PLD/WAR` (or the composition's separately
   supported `/BLU` option outside this encounter).
-- Damage group: Dolomedes COR, Tackleberry PLD, and Kickpuncher DNC. Barney,
-  Smalls, and Achoo receive target-only synchronization and do not engage or
-  move under PartyCombat.
+- Damage group: Dolomedes COR, Tackleberry PLD, and Kickpuncher DNC. Smalls
+  and Achoo receive target-only synchronization and do not engage or move
+  under PartyCombat. Barney is a free-look observer: he likewise never
+  engages or moves, but PartyCombat does not force his target or camera.
 - If a `Bozzetto Urchin` becomes targetable, PartyCombat automatically splits
   Dolomedes and Kickpuncher to it. Their actions stay local to that kill group,
   so Tackleberry and all supports remain anchored on Breadwinner. The pair
@@ -522,8 +523,9 @@ Tackleberry.
   either JA is on recast, the controller skips it rather than delaying
   Silence. A confirmed resist receives a short recast-aware retry instead of
   the normal 45-second Silence timer.
-- Barney maintains self-Reraise, Barstonra, and Barsilencera and restricts
-  automatic Elegy to Breadwinner. His AoE barspells intentionally make him the
+- Barney maintains self-Reraise, Barstonra, and Barsilencera. If you manually
+  target Breadwinner on Barney, his controller can make its normal Elegy
+  attempt; otherwise it skips Elegy instead of taking camera control. His AoE barspells intentionally make him the
   Housemaker bait. Smalls and Achoo also maintain self-Reraise under this
   profile. Dolomedes, Tackleberry, and Kickpuncher cannot self-cast it with the
   tested subjobs and must use Reraiser/Hi-Reraiser or equivalent items; each
@@ -538,7 +540,8 @@ Tackleberry.
   coverage and healing until Housemaker charges; then move only Barney at
   least 20 yalms away. Earthshaker still deals its unavoidable 1,000 damage to
   Barney. Return him immediately afterward for Cure/Paralyna and renewed
-  Barspell coverage. Static Barstone is the safe default; the profile does not
+  Barspell coverage. PartyCombat will not recapture his target while you scan
+  for or track Housemaker. Static Barstone is the safe default; the profile does not
   attempt to infer each Warble element.
 - Barney's V1 GearSwap controller attempts a learned self-Cure below 85% HP as
   a last-resort backstop while he is isolated. Earthshaker's potent Paralyze
@@ -583,7 +586,7 @@ Tackleberry.
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
 | `safe` | March / Scherzo / Madrigal | Barrier / Frailty |
-| `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; Barstone / Barsilence; Breadwinner Elegy | Fury / Frailty; Entrust Wilt on PLD |
+| `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; Barstone / Barsilence; opportunistic Breadwinner Elegy only while manually targeted | Fury / Frailty; Entrust Wilt on PLD |
 | `ambuscade-v2` (`v2`) | March / Minuet / Madrigal; Barstone / Barsleep; Penelope Elegy | Fury / Frailty; Entrust Refresh |
 
 RDM enfeebles by profile:
@@ -639,7 +642,11 @@ AutoWS2 reservation, and total completed cures.
 - BRD, RDM, and DNC read the puller's target but cast only after PartyCombat has
   synchronized the same mob into local `<t>`. They never use `/assist`, and
   PartyStart never changes a client's target. An armed PartyCombat encounter
-  policy does reassert the boss target on target-only observers until it ends.
+  policy reasserts the boss target on target-only observers until it ends,
+  except for explicitly configured free-look observers. V1 assigns Barney
+  that exception so the user can continuously watch Housemaker; his songs,
+  barspells, self-heal, Reraise, and encounter alerts do not require a hostile
+  target.
 - PartyStart performs a one-time clearing of inherited HealBot follow and
   assist state when a profile is selected. It does not subsequently poll,
   move, engage, or disengage any character, and never sends FastFollow
