@@ -443,6 +443,11 @@ Tackleberry.
 - Damage group: Dolomedes COR, Tackleberry PLD, and Kickpuncher DNC. Barney,
   Smalls, and Achoo receive target-only synchronization and do not engage or
   move under PartyCombat.
+- If a `Bozzetto Urchin` becomes targetable, PartyCombat automatically splits
+  Dolomedes and Kickpuncher to it. Their actions stay local to that kill group,
+  so Tackleberry and all supports remain anchored on Breadwinner. The pair
+  resumes Breadwinner after the Urchin dies, then takes the next visible
+  Urchin if necessary.
 - Chaos/Samurai Roll; Victory March/Valor Minuet V/Blade Madrigal;
   Indi-Fury/Geo-Frailty; Entrusted Indi-Wilt, preferring Tackleberry so the
   aura remains centered on the tank and Breadwinner.
@@ -464,15 +469,22 @@ Tackleberry.
   Rampart are withheld before the 50% Hundred Fists/Gale Spikes transition;
   the threshold check runs ahead of routine cures so mitigation cannot be
   starved by the heal loop.
-- Manual: tank in the starting corner facing the wall, keep Dolomedes and
-  Kickpuncher behind the boss, move Barney away when Housemaker charges, and
-  sleep/kill any Urchins that activate. Static Barstone is the safe default;
-  the profile does not attempt to infer each Warble element.
+- Manual: tank in the starting corner facing the wall and keep Dolomedes and
+  Kickpuncher behind the boss. Barney stays with the group for Barspell
+  coverage and healing until Housemaker charges; then move only Barney at
+  least 20 yalms away. Earthshaker still deals its unavoidable 1,000 damage to
+  Barney. Return him immediately afterward for Cure/Paralyna and renewed
+  Barspell coverage. Static Barstone is the safe default; the profile does not
+  attempt to infer each Warble element.
+- Barney's V1 GearSwap controller attempts a learned self-Cure below 85% HP as
+  a last-resort backstop while he is isolated. Earthshaker's potent Paralyze
+  can interrupt it, so this does not replace returning to Smalls/Tackleberry.
 - Every V1 client polls Housemaker's position five times per second. The moment
   it leaves its staging point, all clients print a boxed warning telling Barney
   to separate while only the configured command-leader client plays a Windows
-  alarm. The tracker rearms when Housemaker returns, and the Earthshaker action
-  alert remains as a packet-backed fallback. Elemental Warble and Hundred Fists
+  alarm. The tracker rearms when Housemaker returns and prints a second boxed
+  alert telling Barney to return; the Earthshaker action alert remains as a
+  packet-backed fallback. Elemental Warble and Hundred Fists
   alerts remain packet-backed; Warble alerts identify the matching Barspell and
   expected ailments but do not change Barney's maintained Barstone policy.
 

@@ -170,7 +170,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
         self.assertIn("stationary = true", addon)
         self.assertEqual(3, self.addon.count("stationary = true"))
-        self.assertIn("pc policy %s %s %s %s %s %s", self.addon)
+        self.assertIn("pc policy %s %s %s %s %s %s %s %s", self.addon)
         self.assertIn("profile.stationary and 'stationary' or 'mobile'", self.addon)
         self.assertIn("targeter_csv, movement_mode", self.addon)
         self.assertIn("party_shell = true", rdm)
@@ -185,6 +185,18 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("Barwatera", brd)
         self.assertIn("apexcrabs=true", self.pld)
         self.assertIn("crabs = 'apexcrabs'", self.addon)
+
+    def test_v1_has_urchin_split_and_barney_recovery(self):
+        v1 = self.addon.split("['ambuscade-v1'] = {", 1)[1].split(
+            "['ambuscade-v2'] = {", 1
+        )[0]
+        self.assertIn("priority_target = 'Bozzetto Urchin'", v1)
+        self.assertIn(
+            "priority_attackers = {'Dolomedes', 'Kickpuncher'}", v1
+        )
+        self.assertIn("HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW", self.addon)
+        self.assertIn("self_heal_hpp = 85", self.brd)
+        self.assertIn("pstart_brd_cast_self_heal", self.brd)
 
     def test_every_unattended_xp_profile_is_stationary(self):
         master = self.addon.split("    master = {", 1)[1].split(

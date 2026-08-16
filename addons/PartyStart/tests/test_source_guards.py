@@ -28,7 +28,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("__zonerearm", ADDON)
         self.assertNotIn("pc on", ADDON.lower())
         self.assertNotIn("pc force", ADDON.lower())
-        self.assertIn("pc policy %s %s %s %s %s %s", ADDON)
+        self.assertIn("pc policy %s %s %s %s %s %s %s %s", ADDON)
 
     def test_physical_profile_is_the_lean_rdm_profile(self):
         physical = RDM.split("accuracy =", 1)[0]
@@ -319,8 +319,19 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertGreaterEqual(ADDON.count("target_all = true"), 2)
         self.assertIn("profile_targeters(profile, session.names, attackers)", ADDON)
-        self.assertIn("pc policy %s %s %s %s %s %s", ADDON)
+        self.assertIn("pc policy %s %s %s %s %s %s %s %s", ADDON)
         self.assertIn("stop_owned_autows2()", ADDON)
+
+    def test_v1_splits_urchins_to_two_attackers_only(self):
+        v1 = ADDON.split("['ambuscade-v1'] = {", 1)[1].split(
+            "['ambuscade-v2'] = {", 1
+        )[0]
+        self.assertIn("priority_target = 'Bozzetto Urchin'", v1)
+        self.assertIn(
+            "priority_attackers = {'Dolomedes', 'Kickpuncher'}", v1
+        )
+        self.assertIn("profile.priority_target:gsub(' ', '_')", ADDON)
+        self.assertIn("profile.priority_attackers or {}", ADDON)
 
     def test_v1_uses_priority_silence_and_reserved_pld_cooldowns(self):
         self.assertIn("target_names={'Bozzetto Breadwinner'}", RDM)
@@ -337,6 +348,9 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("{spell='Barsleepra', buff='Barsleep'}", BRD)
         self.assertIn("debuff_target_names = {'Bozzetto Breadwinner'}", BRD)
         self.assertIn("debuff_target_names = {'Popular Penelope'}", BRD)
+        self.assertIn("self_heal_hpp = 85", BRD)
+        self.assertIn("local function pstart_brd_cast_self_heal", BRD)
+        self.assertIn("emergency %s at %d%% HP", BRD)
 
     def test_v1_requires_support_subjobs_and_maintains_reraise(self):
         v1 = ADDON.split("['ambuscade-v1'] = {", 1)[1].split(
@@ -362,6 +376,8 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("housemaker_alert(message, false)", ADDON)
         self.assertIn("windower.play_sound", ADDON)
         self.assertIn("HOUSEMAKER_REARM_DISTANCE", ADDON)
+        self.assertIn("HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW", ADDON)
+        self.assertIn("BARNEY TAKES 1,000 EVEN WHEN ISOLATED", ADDON)
 
     def test_apex_bats_profile_is_sustained_and_status_aware(self):
         addon = ADDON.split("    apexbats = {", 1)[1].split(
@@ -373,7 +389,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.2.5'", ADDON)
+        self.assertIn("_addon.version = '1.2.6'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -390,7 +406,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.2.5'", ADDON)
+        self.assertIn("_addon.version = '1.2.6'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,

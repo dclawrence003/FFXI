@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.4.3'
+_addon.version = '0.5.0'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -42,6 +42,7 @@ local AUTHORITY_INTERVAL = 2
 local ENGAGE_RETRY_INTERVAL = 1.5
 local MOVEMENT_INTERVAL = 0.08
 local TARGET_SYNC_INTERVAL = 1
+local PRIORITY_SCAN_INTERVAL = 0.10
 local POST_ZONE_FOLLOW_DELAY = 3.5
 local POST_ZONE_FOLLOW_ATTEMPTS = 3
 local RECENT_FOLLOW_CLAIM_WINDOW = 60
@@ -111,11 +112,14 @@ local active_policy_name = 'settings'
 local armed = false
 local authorized = false
 local active_target_id = nil
+local shared_target_id = nil
+local priority_target_id = nil
 local active_mode = nil
 local pursuit_limit = nil
 local next_authority = 0
 local next_movement = 0
 local next_target_sync = 0
+local next_priority_scan = 0
 local last_engage_at = 0
 local running = false
 local last_ignore_target = nil
@@ -217,6 +221,24 @@ local function is_targeter()
     return targeter_configured(local_name())
 end
 
+local function is_priority_attacker()
+    local name = local_name()
+    if not valid_name(name)
+        or type(settings.priority_attackers) ~= 'table'
+    then
+        return false
+    end
+    for configured_name, enabled in pairs(settings.priority_attackers) do
+        local candidate = type(configured_name) == 'number'
+            and enabled or configured_name
+        local included = type(configured_name) == 'number' or enabled
+        if included and valid_name(candidate) and same_name(candidate, name) then
+            return true
+        end
+    end
+    return false
+end
+
 local function valid_policy_name(name)
     return type(name) == 'string'
         and name:match('^[A-Za-z0-9_-]+$') ~= nil
@@ -269,6 +291,40 @@ local function same_targeter_roster(configuration, requested)
     return true
 end
 
+local function configured_priority_attacker_names(configuration)
+    local names, seen = {}, {}
+    for configured_name, enabled in pairs(
+        configuration.priority_attackers or {})
+    do
+        local name = type(configured_name) == 'number'
+            and enabled or configured_name
+        local included = type(configured_name) == 'number' or enabled
+        if included and valid_name(name) and not seen[name:lower()] then
+            seen[name:lower()] = true
+            names[#names + 1] = name:lower()
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+local function same_priority_policy(configuration, target_name, requested)
+    local configured_target = configuration.priority_target
+    if configured_target ~= target_name
+        and (type(configured_target) ~= 'string'
+            or type(target_name) ~= 'string'
+            or configured_target:lower() ~= target_name:lower())
+    then
+        return false
+    end
+    local current = configured_priority_attacker_names(configuration)
+    if #current ~= #requested then return false end
+    for index, name in ipairs(current) do
+        if name ~= requested[index]:lower() then return false end
+    end
+    return true
+end
+
 local function distance_policy(name)
     local policy = attacker_settings(name) or defaults.attackers[name] or {}
     return {
@@ -305,6 +361,46 @@ local function valid_enemy(target)
         and target.valid_target
         and type(target.hpp) == 'number'
         and target.hpp > 0
+end
+
+local function priority_target_matches(target)
+    return valid_enemy(target)
+        and type(settings.priority_target) == 'string'
+        and type(target.name) == 'string'
+        and target.name:lower() == settings.priority_target:lower()
+end
+
+local function priority_distance_limit()
+    local policy = attacker_settings(local_name()) or {}
+    return tonumber(policy.force_distance) or 30
+end
+
+local function find_priority_target()
+    if not authorized or not is_priority_attacker()
+        or type(settings.priority_target) ~= 'string'
+    then
+        return nil
+    end
+
+    local limit = priority_distance_limit()
+    local current = priority_target_id
+        and windower.ffxi.get_mob_by_id(priority_target_id)
+        or nil
+    if priority_target_matches(current) and distance_to(current) <= limit then
+        return current
+    end
+
+    local selected = nil
+    for _, target in pairs(windower.ffxi.get_mob_array() or {}) do
+        local target_id = tonumber(target and target.id)
+        if target_id and priority_target_matches(target)
+            and distance_to(target) <= limit
+            and (not selected or target_id < tonumber(selected.id))
+        then
+            selected = target
+        end
+    end
+    return selected
 end
 
 local function stop_running()
@@ -361,9 +457,12 @@ local function stop_local(reason, revoke, hold_position)
     stop_running()
     disengage_if_needed()
     active_target_id = nil
+    shared_target_id = nil
+    priority_target_id = nil
     active_mode = nil
     pursuit_limit = nil
     last_engage_at = 0
+    next_priority_scan = 0
     if revoke then
         authorized = false
     end
@@ -426,6 +525,25 @@ local function accept_target(id, mode)
     local target = windower.ffxi.get_mob_by_id(tonumber(id))
     if not valid_enemy(target) then return end
 
+    local priority_mode = mode == 'priority'
+    local resume_mode = mode == 'resume'
+    if not priority_mode and not resume_mode then
+        shared_target_id = target.id
+    end
+
+    -- A normal synchronization update may refresh the encounter's shared
+    -- target while this attacker is killing an encounter-priority add. Keep
+    -- the local add target and use the refreshed ID only for the later return.
+    local active_priority = priority_target_id
+        and windower.ffxi.get_mob_by_id(priority_target_id)
+        or nil
+    if not priority_mode and not resume_mode
+        and is_priority_attacker()
+        and priority_target_matches(active_priority)
+    then
+        return
+    end
+
     -- Target-only observers need the same local <t> as the damage group so
     -- their GearSwap controllers can Silence, Elegy, or otherwise debuff.
     -- They never claim movement, stop FastFollow, face, engage, or approach.
@@ -441,7 +559,7 @@ local function accept_target(id, mode)
     local attacker = attacker_settings(local_name())
     if not attacker then return end
 
-    local force = mode == 'force'
+    local force = mode == 'force' or priority_mode or resume_mode
     local limit = tonumber(
         force and attacker.force_distance or attacker.auto_distance)
         or (force and 30 or 10)
@@ -464,11 +582,53 @@ local function accept_target(id, mode)
     zone_follow_restore_at = nil
     zone_follow_restore_remaining = 0
     claim_combat_movement()
+    if priority_mode then priority_target_id = target.id end
     active_target_id = target.id
-    active_mode = force and 'force' or 'auto'
+    active_mode = mode or (force and 'force' or 'auto')
     pursuit_limit = limit
     last_ignore_target = nil
     inject_combat_target(target)
+end
+
+local function update_priority_target(now)
+    if not authorized or not is_priority_attacker()
+        or type(settings.priority_target) ~= 'string'
+        or now < next_priority_scan
+    then
+        return
+    end
+    next_priority_scan = now + PRIORITY_SCAN_INTERVAL
+
+    local target = find_priority_target()
+    if target then
+        if priority_target_id ~= target.id
+            or active_target_id ~= target.id
+        then
+            priority_target_id = target.id
+            accept_target(target.id, 'priority')
+            chat(158, ('Priority target acquired: %s. Shared target remains %s.')
+                :format(target.name,
+                    shared_target_id
+                        and (windower.ffxi.get_mob_by_id(shared_target_id) or {}).name
+                        or 'none'))
+        end
+        return
+    end
+
+    if not priority_target_id then return end
+    local finished = settings.priority_target
+    priority_target_id = nil
+    local shared = shared_target_id
+        and windower.ffxi.get_mob_by_id(shared_target_id)
+        or nil
+    if valid_enemy(shared) then
+        accept_target(shared.id, 'resume')
+        chat(158, ('Priority target ended; resumed %s.'):format(shared.name))
+    else
+        stop_local(
+            ('Priority target %s ended; no living shared target remains.')
+                :format(finished), false, settings.stationary == true)
+    end
 end
 
 local function current_leader_target()
@@ -498,6 +658,12 @@ local function force_current_target()
         return
     end
     if not armed then arm() else broadcast_authority(true) end
+    if is_priority_attacker() and priority_target_matches(target) then
+        accept_target(target.id, 'priority')
+        chat(158, ('Priority engagement: %s; shared target unchanged.')
+            :format(target.name or target.id))
+        return
+    end
     if is_targeter() then
         accept_target(target.id, 'force')
     end
@@ -516,7 +682,8 @@ local function stop_all()
 end
 
 local function apply_runtime_policy(
-    policy_name, leader, puller, attacker_names, targeter_names, movement_mode)
+    policy_name, leader, puller, attacker_names, targeter_names, movement_mode,
+    priority_target, priority_attacker_names)
     movement_mode = type(movement_mode) == 'string'
         and movement_mode:lower()
         or 'mobile'
@@ -528,6 +695,15 @@ local function apply_runtime_policy(
     end
     if movement_mode ~= 'mobile' and movement_mode ~= 'stationary' then
         chat(123, 'Rejected invalid movement mode: '..tostring(movement_mode))
+        return false
+    end
+    if priority_target ~= nil
+        and (type(priority_target) ~= 'string'
+            or #priority_target > 64
+            or priority_target:match('^[A-Za-z0-9][A-Za-z0-9 _-]*$') == nil)
+    then
+        chat(123, 'Rejected invalid priority target: '
+            ..tostring(priority_target))
         return false
     end
     local stationary = movement_mode == 'stationary'
@@ -574,11 +750,43 @@ local function apply_runtime_policy(
         return left:lower() < right:lower()
     end)
 
+    local priority_seen = {}
+    local normalized_priority_attackers = {}
+    for _, name in ipairs(priority_attacker_names or {}) do
+        if not valid_name(name) then
+            chat(123, 'Rejected invalid priority attacker: '..tostring(name))
+            return false
+        end
+        local key = name:lower()
+        if not seen[key] then
+            chat(123, 'Rejected priority attacker outside attacker roster: '
+                ..name)
+            return false
+        end
+        if not priority_seen[key] then
+            priority_seen[key] = true
+            normalized_priority_attackers[#normalized_priority_attackers + 1]
+                = name
+        end
+    end
+    table.sort(normalized_priority_attackers, function(left, right)
+        return left:lower() < right:lower()
+    end)
+    if (priority_target == nil)
+        ~= (#normalized_priority_attackers == 0)
+    then
+        chat(123, 'A priority target and at least one priority attacker '
+            ..'must be configured together.')
+        return false
+    end
+
     local unchanged = active_policy_name == policy_name
         and same_name(settings.leader, leader)
         and same_name(settings.puller, puller)
         and same_attacker_roster(settings, normalized)
         and same_targeter_roster(settings, normalized_targeters)
+        and same_priority_policy(
+            settings, priority_target, normalized_priority_attackers)
         and (settings.stationary == true) == stationary
     if unchanged then
         active_policy_name = policy_name
@@ -603,19 +811,26 @@ local function apply_runtime_policy(
     for _, name in ipairs(normalized_targeters) do
         targeters[name] = true
     end
+    local priority_attackers = {}
+    for _, name in ipairs(normalized_priority_attackers) do
+        priority_attackers[name] = true
+    end
     settings = {
         leader = leader,
         puller = puller,
         stationary = stationary,
         attackers = attackers,
         targeters = targeters,
+        priority_target = priority_target,
+        priority_attackers = priority_attackers,
     }
     active_policy_name = policy_name
     next_authority = 0
     chat(158, ('Policy %s loaded inert: leader %s, puller %s, '
-        ..'%d attackers, %d synchronized targeters, %s movement.')
+        ..'%d attackers, %d synchronized targeters, %s movement, priority %s/%d.')
         :format(policy_name, leader, puller, #normalized,
-            #normalized_targeters, stationary and 'stationary' or 'mobile'))
+            #normalized_targeters, stationary and 'stationary' or 'mobile',
+            priority_target or 'none', #normalized_priority_attackers))
     return true
 end
 
@@ -665,6 +880,14 @@ windower.register_event('action', function(action)
     local target = damage_target(
         action, settings.stationary == true and puller_authority)
     if target then
+        -- Encounter-priority attackers may split from the shared target
+        -- without dragging the tank or support observers with them. In
+        -- particular, Dolomedes damaging an Urchin must not broadcast that
+        -- local add as Tackleberry's new Breadwinner target.
+        if is_priority_attacker() and priority_target_matches(target) then
+            if is_targeter() then accept_target(target.id, 'priority') end
+            return
+        end
         -- The puller may establish the next target, but cannot drag the party
         -- off a living synchronized target. The command leader can always
         -- override by dealing damage to a different enemy.
@@ -752,11 +975,22 @@ windower.register_event('prerender', function()
         broadcast_authority(true)
     end
 
+    update_priority_target(now)
+
     if not authorized or not active_target_id then
         return
     end
 
     local target = windower.ffxi.get_mob_by_id(active_target_id)
+    if not valid_enemy(target) and priority_target_id then
+        -- A priority target can die between the throttled 0.10-second scans.
+        -- Resolve the next add or shared-target return before the ordinary
+        -- invalid-target path clears the saved Breadwinner ID.
+        next_priority_scan = 0
+        update_priority_target(now)
+        if not active_target_id then return end
+        target = windower.ffxi.get_mob_by_id(active_target_id)
+    end
     if not valid_enemy(target) then
         stop_local(is_attacker()
             and 'Target ended; attacker stopped.'
@@ -844,7 +1078,7 @@ windower.register_event('addon command', function(command, ...)
         local target = active_target_id
             and windower.ffxi.get_mob_by_id(active_target_id)
             or nil
-        chat(207, ('Policy %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s')
+        chat(207, ('Policy %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s | priority %s')
             :format(
                 active_policy_name,
                 role,
@@ -854,7 +1088,11 @@ windower.register_event('addon command', function(command, ...)
                 armed and 'On' or 'Off',
                 authorized and 'Yes' or 'No',
                 target and target.name or 'none',
-                tostring(active_mode or 'none')))
+                tostring(active_mode or 'none'),
+                type(settings.priority_target) == 'string'
+                    and (settings.priority_target..'/'
+                        ..tostring(#configured_priority_attacker_names(settings)))
+                    or 'none'))
     elseif command == 'policy' then
         local policy_name = args[1]
         local leader = args[2]
@@ -862,9 +1100,12 @@ windower.register_event('addon command', function(command, ...)
         local attacker_csv = args[4]
         local targeter_csv = args[5]
         local movement_mode = args[6] or 'mobile'
+        local priority_target_token = args[7]
+        local priority_attacker_csv = args[8]
         if not attacker_csv then
             chat(123, 'Usage: //pc policy <name> <leader> <puller> '
-                ..'<attackers|-> [targeters|->] [mobile|stationary]')
+                ..'<attackers|-> [targeters|->] [mobile|stationary] '
+                ..'[priority_target|->] [priority_attackers|->]')
             return
         end
         local attacker_names = {}
@@ -883,9 +1124,29 @@ windower.register_event('addon command', function(command, ...)
                 targeter_names[#targeter_names + 1] = name
             end
         end
+        local priority_target = nil
+        if priority_target_token and priority_target_token ~= '-' then
+            priority_target = priority_target_token:gsub('_', ' ')
+        end
+        local priority_attacker_names = {}
+        if priority_target then
+            if priority_attacker_csv == nil then
+                for _, name in ipairs(attacker_names) do
+                    priority_attacker_names[#priority_attacker_names + 1] = name
+                end
+            elseif priority_attacker_csv ~= '-' then
+                for name in priority_attacker_csv:gmatch('[^,]+') do
+                    priority_attacker_names[#priority_attacker_names + 1] = name
+                end
+            end
+        elseif priority_attacker_csv and priority_attacker_csv ~= '-' then
+            for name in priority_attacker_csv:gmatch('[^,]+') do
+                priority_attacker_names[#priority_attacker_names + 1] = name
+            end
+        end
         apply_runtime_policy(
             policy_name, leader, puller, attacker_names, targeter_names,
-            movement_mode)
+            movement_mode, priority_target, priority_attacker_names)
     elseif command == 'on' or command == 'arm' or command == 'auto' then
         if not is_controller() then
             chat(123, 'Only the configured leader or puller can arm PartyCombat.')
@@ -912,7 +1173,8 @@ windower.register_event('addon command', function(command, ...)
     elseif command == 'help' then
         chat(207,
             'Commands: on | force | stop | status | policy <name> <leader> '
-            ..'<puller> <attackers> [targeters] [mobile|stationary]. '
+            ..'<puller> <attackers> [targeters] [mobile|stationary] '
+            ..'[priority_target] [priority_attackers]. '
             ..'Leader or puller may arm/force.')
     else
         chat(123, 'Unknown command. Use //pc help.')

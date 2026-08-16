@@ -138,7 +138,25 @@ def test_fastfollow_recovery_uses_puller_not_command_leader():
     assert "settings.puller" in anchor
     assert anchor.index("settings.puller") < anchor.index("settings.leader")
     assert "ffo follow '..settings.leader" not in SOURCE
-    assert "_addon.version = '0.4.3'" in SOURCE
+    assert "_addon.version = '0.5.0'" in SOURCE
+
+
+def test_priority_attackers_split_without_retargeting_the_tank():
+    assert "local shared_target_id = nil" in SOURCE
+    assert "local priority_target_id = nil" in SOURCE
+    assert "local function find_priority_target()" in SOURCE
+    assert "local function update_priority_target(now)" in SOURCE
+    assert "priority_target_matches(target)" in SOURCE
+    assert "accept_target(target.id, 'priority')" in SOURCE
+    assert "accept_target(shared.id, 'resume')" in SOURCE
+    assert "priority_attackers = priority_attackers" in SOURCE
+    action = SOURCE.split("windower.register_event('action'", 1)[1]
+    action = action.split("windower.register_event('ipc message'", 1)[0]
+    priority = action.split(
+        "if is_priority_attacker() and priority_target_matches(target)", 1
+    )[1].split("-- The puller may establish", 1)[0]
+    assert "return" in priority
+    assert "send_ipc('target'" not in priority
 
 
 def test_active_attackers_face_their_combat_target():

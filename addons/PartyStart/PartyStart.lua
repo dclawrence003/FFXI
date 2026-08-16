@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.5'
+_addon.version = '1.2.6'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -167,6 +167,8 @@ local profiles = {
         physical_offense = true,
         attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'},
         target_all = true,
+        priority_target = 'Bozzetto Urchin',
+        priority_attackers = {'Dolomedes', 'Kickpuncher'},
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
         brd_debuffs = {
@@ -197,10 +199,11 @@ local profiles = {
         advisories = {
             'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes and Kickpuncher attack from behind.',
             'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
-            'V1: Barney must be BRD/WHM; he supplies Barstonra/Barsilencera and is the intended Housemaker bait. Move only Barney away when the movement alarm fires.',
+            'V1: Barney must be BRD/WHM; he supplies Barstonra/Barsilencera and is the intended Housemaker bait. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
             'V1: Barney, Smalls, and Achoo maintain self-Reraise. Dolomedes, Tackleberry, and Kickpuncher require Reraise items; each client warns while unprotected.',
             'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker movement/Earthshaker, and Hundred Fists.',
-            'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold; sleep and kill any activated Urchins manually.',
+            'V1: Dolo and Kickpuncher automatically split to a visible Bozzetto Urchin and return to Breadwinner after it dies; Tackleberry and all supports remain anchored on Breadwinner.',
+            'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold.',
         },
     },
     ['ambuscade-v2'] = {
@@ -399,6 +402,9 @@ local function v1_poll_housemaker(now)
                 then
                     -- It returned to its staging point. Arm the next charge.
                     tracked.away = false
+                    housemaker_alert(
+                        'HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW; '
+                        ..'CURE/PARALYNA, THEN RESTORE BAR COVERAGE.', false)
                 end
             end
         end
@@ -475,7 +481,7 @@ local function v1_encounter_alert(action)
         and type(ability.en) == 'string'
         and ability.en:find('Earthshaker', 1, true)
     then
-        message = 'HOUSEMAKER EARTHSHAKER: BARNEY must be isolated from every player, pet, and luopan.'
+        message = 'HOUSEMAKER EARTHSHAKER: BARNEY TAKES 1,000 EVEN WHEN ISOLATED. RETURN TO GROUP NOW FOR CURE/PARALYNA.'
     end
     if not message then return end
 
@@ -1215,13 +1221,28 @@ local function apply_combat_policy(session, composition, profile)
     local targeter_csv = #targeters > 0 and table.concat(targeters, ',') or '-'
     local policy_name = session.composition..'-'..session.profile
     local movement_mode = profile.stationary and 'stationary' or 'mobile'
-    issue(('pc policy %s %s %s %s %s %s')
+    local priority_attackers = {}
+    for _, name in ipairs(profile.priority_attackers or {}) do
+        if list_contains_name(attackers, name) then
+            priority_attackers[#priority_attackers + 1] = name
+        end
+    end
+    table.sort(priority_attackers)
+    local priority_target = type(profile.priority_target) == 'string'
+        and #priority_attackers > 0
+        and profile.priority_target:gsub(' ', '_') or '-'
+    local priority_attacker_csv = #priority_attackers > 0
+        and table.concat(priority_attackers, ',') or '-'
+    issue(('pc policy %s %s %s %s %s %s %s %s')
         :format(policy_name, composition.command_leader,
-            puller, attacker_csv, targeter_csv, movement_mode))
+            puller, attacker_csv, targeter_csv, movement_mode,
+            priority_target, priority_attacker_csv))
     session.target_source = puller
     session.attackers = attackers
     session.targeters = targeters
     session.movement_mode = movement_mode
+    session.priority_target = profile.priority_target
+    session.priority_attackers = priority_attackers
 end
 
 local function apply_profile(session)

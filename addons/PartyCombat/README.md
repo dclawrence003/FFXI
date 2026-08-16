@@ -31,6 +31,11 @@ PartyCombat follows combat actions, not cursor movement:
 - The puller cannot redirect the party while a different synchronized target
   is still alive. Dolomedes remains the command authority and can override the
   puller by damaging another target.
+- A runtime profile may name one encounter-priority enemy and a subset of its
+  attackers. When that enemy becomes targetable, only those attackers split
+  to it. Their attacks do not overwrite the shared tank/support target, and
+  they resume that shared target after the priority enemy dies. Priority
+  acquisition uses the existing 30-yalm forced-pursuit safety limit.
 - Automatic target changes are accepted only when the enemy is within each
   follower's configured 10-yalm limit.
 - `force` explicitly targets and engages the invoking controller's current
@@ -128,7 +133,9 @@ puller. Other clients can stop only their own local attacker.
 - `stop`: Disarms synchronization, stops movement, and disengages attackers.
 - `status`: Displays role, movement policy, authorization, target, and mode.
 - `policy <name> <leader> <puller> <attackers> [targeters]
-  [mobile|stationary]`: Validates and installs an in-memory role policy.
+  [mobile|stationary] [priority_target] [priority_attackers]`: Validates and
+  installs an in-memory role policy. Spaces in a priority target are encoded
+  as underscores, for example `Bozzetto_Urchin`; use `-` for no priority.
   `targeters` defaults to the attacker list and movement defaults to `mobile`
   for backward compatibility. Every attacker is automatically included even if
   the optional targeter list omits it. PartyStart uses this command. Changing
@@ -175,8 +182,9 @@ return {
 
 Attackers can be added or removed as character-named entries. Each client must
 read the same configuration. PartyStart can replace the leader, puller,
-attacker roster, synchronized targeter roster, and movement policy in memory
-through a validated composition/profile policy; distance limits are retained
+attacker roster, synchronized targeter roster, movement policy, and an
+optional named-priority attacker subset in memory through a validated
+composition/profile policy; distance limits are retained
 from the matching static character entries. Static settings without a `targeters`
 table retain the old behavior in which targeters equal attackers. The old
 `data\settings.xml` is ignored and may be retained as a historical backup.
@@ -199,6 +207,10 @@ fixed-camp unattended profiles should explicitly set `stationary = true`. A
 direct `policy` command that omits the final field remains mobile for backward
 compatibility.
 
+The supplied Ambuscade V1 profile assigns `Bozzetto Urchin` to Dolomedes and
+Kickpuncher. Tackleberry and the target-only supports remain synchronized to
+Bozzetto Breadwinner while those two kill the add.
+
 ## Safety and limitations
 
 - This is a live-test prototype. Begin on harmless enemies in an open area.
@@ -211,6 +223,10 @@ compatibility.
   leader.
 - Damaging area-of-effect actions select the first valid enemy reported in the
   action packet.
+- Priority matching is exact and requires a living valid target in Windower's
+  mob array. Invisible or dormant encounter entities are ignored until the
+  game exposes them as targetable. If several exact matches are active, the
+  current one is retained; otherwise the lowest entity ID is chosen.
 - Non-damaging enfeebles do not change the automatic combat target, except a
   completed puller Flash in stationary mode.
 - Target-only observers have their local target reasserted while an armed,

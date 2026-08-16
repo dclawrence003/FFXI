@@ -98,6 +98,7 @@ local pstart_brd_profiles = {
     },
     ['ambuscade-v1'] = {
         song_mode = 'Melee',
+        self_heal_hpp = 85,
         self_buffs = {
             {spell='Reraise', buff='Reraise'},
         },
@@ -267,6 +268,37 @@ local function pstart_brd_ready(spell)
         and silent_can_use(spell.id)
 end
 
+local function pstart_brd_cast_self_heal(profile)
+    local threshold = tonumber(profile and profile.self_heal_hpp)
+    local hpp = tonumber(player and player.hpp)
+    if not threshold or not hpp or hpp <= 0 or hpp >= threshold then
+        return false
+    end
+
+    -- Earthshaker's selected target always takes 1,000 damage and can be
+    -- outside every other healer's cast range. Retry a learned self-Cure as
+    -- the isolated BRD's last-resort backstop; potent Paralyze may interrupt
+    -- an attempt, so the normal maintenance heartbeat deliberately retries.
+    local choices = hpp < 65
+        and {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
+        or {'Cure III', 'Cure IV', 'Cure II', 'Cure'}
+    for _, name in ipairs(choices) do
+        local spell = pstart_brd_spell(name)
+        if spell and pstart_brd_ready(spell) then
+            pstart_brd.pending = {
+                kind = 'self_heal',
+                spell_id = spell.id,
+            }
+            windower.chat.input('/ma "'..spell.en..'" <me>')
+            tickdelay = os.clock() + 3
+            add_to_chat(158, ('PartyStart BRD: emergency %s at %d%% HP.')
+                :format(spell.en, hpp))
+            return true
+        end
+    end
+    return false
+end
+
 local function pstart_brd_target()
     local leader = pstart_brd.leader
         and windower.ffxi.get_mob_by_name(pstart_brd.leader)
@@ -361,6 +393,7 @@ local function pstart_brd_cast_debuff(profile)
 end
 
 local function pstart_brd_maintenance(profile)
+    if pstart_brd_cast_self_heal(profile) then return true end
     if pstart_brd_cast_self_buff(profile) then return true end
     if pstart_brd_cast_party_buff(profile) then return true end
     return pstart_brd_cast_debuff(profile)
@@ -403,6 +436,9 @@ function user_job_self_command(commandArgs, eventArgs)
             :format(#(profile.self_buffs or {})))
         add_to_chat(122, ('PartyStart BRD encounter barspells: %d')
             :format(#(profile.party_buffs or {})))
+        add_to_chat(122, ('PartyStart BRD emergency self-Cure: %s')
+            :format(profile.self_heal_hpp
+                and ('below '..profile.self_heal_hpp..'% HP') or 'Off'))
         pstart_brd_report_instrument()
         return
     end
@@ -456,6 +492,7 @@ function check_song()
     -- Encounter Reraise must be established before the multi-song startup
     -- rotation. It is a one-time self buff, so this does not interfere with
     -- the character GearSwap's continuing ownership of party songs.
+    if pstart_brd_cast_self_heal(profile) then return true end
     if pstart_brd_cast_self_buff(profile) then return true end
     if pstart_brd_original_check_song
         and pstart_brd_original_check_song()

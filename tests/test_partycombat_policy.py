@@ -54,6 +54,17 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertIn("target-only observer", self.addon)
         self.assertIn("local unchanged = active_policy_name == policy_name", self.addon)
 
+    def test_priority_split_preserves_and_resumes_shared_target(self):
+        self.assertIn("local shared_target_id = nil", self.addon)
+        self.assertIn("local priority_target_id = nil", self.addon)
+        self.assertIn("local function find_priority_target()", self.addon)
+        self.assertIn("local function update_priority_target(now)", self.addon)
+        self.assertIn("accept_target(target.id, 'priority')", self.addon)
+        self.assertIn("accept_target(shared.id, 'resume')", self.addon)
+        self.assertIn("priority_attackers = priority_attackers", self.addon)
+        self.assertIn("[priority_target|->]", self.addon)
+        self.assertIn("[priority_attackers|->]", self.addon)
+
     def test_stationary_policy_disables_approach_but_keeps_engagement(self):
         self.assertIn("stationary = false", self.settings)
         self.assertIn("settings.stationary and 'stationary' or 'mobile'", self.addon)
