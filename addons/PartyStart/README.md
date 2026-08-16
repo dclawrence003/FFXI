@@ -337,20 +337,23 @@ turn, target, and engage without approaching it.
 The matching EasyFarm pull profile for any stationary unattended-XP camp must
 use:
 
-- Detection Distance: `12` (Flash's maximum range)
+- Detection Distance: `20.9` (maximum reliable Flash casting distance)
 - Wander Distance: `0`
 - Approach: off
 - exactly one enabled Pull action: `Flash`
 - Flash row Distance: `50` (EasyFarm's UI maximum)
 - Battle, Job Ability, and Weaponskill lists: all disabled
 
-Detection Distance controls how far away EasyFarm can acquire a fresh pull;
-setting it to 12 exposes Flash's full legal range. The Flash-row value remains
-an intentional no-movement guard, not the spell's real range. EasyFarm
-otherwise walks into a pull action's configured range even when Approach is
-off, and already-aggroed mobs bypass its Detection Distance. With the row at
-50, FFXI still enforces Flash's real 12-yalm casting limit while EasyFarm has
-no reason to navigate.
+Detection Distance controls how far away EasyFarm can acquire a fresh pull.
+Windower's `range=12` value for Flash is a resource range code, not twelve
+yalms; EasyFarm copies that code directly into its generated action metadata.
+The player spell-casting boundary is approximately 20.9 yalms, so the detection
+value exposes Flash's full practical range. The Flash-row value remains an
+intentional no-movement guard, not the spell's real range. EasyFarm otherwise
+walks into a pull action's configured range even when Approach is off, and
+already-aggroed mobs bypass its Detection Distance. With the row at 50, FFXI
+still enforces Flash's real casting limit while EasyFarm has no reason to
+navigate.
 
 `//pstart crabs`, `//pstart crab`, `//pstart apexcrab`, and
 `//pstart apex-crabs` are equivalent short forms. The profile retains the
