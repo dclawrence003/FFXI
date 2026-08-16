@@ -7,7 +7,8 @@
 --     include('Common/PartyStart_BRD.lua')
 --
 -- PartyStart drives it with:
---     gs c pstartbrd <master|apexbats|apexcrabs|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
+--     gs c pstartbrd <master|apexbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
+--     gs c pstartbrd sleep
 --     gs c pstartbrd off
 
 local pstart_brd_profiles = {
@@ -46,6 +47,18 @@ local pstart_brd_profiles = {
         party_buffs = {
             {spell='Barwatera', buff='Barwater'},
         },
+        debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+    },
+    limbus = {
+        song_mode = 'Melee',
+        songs = {
+            {spell='Victory March', buff='march'},
+            {spell='Valor Minuet V', buff='minuet'},
+            {spell='Blade Madrigal', buff='madrigal'},
+        },
+        debuff_min_target_hpp = 45,
         debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
         },
@@ -143,9 +156,14 @@ local pstart_brd = {
     leader = nil,
     pending = nil,
     debuff_timers = {},
+    sleep_requested_until = 0,
 }
 
 local PSTART_BRD_DEBUFF_RETRY = 90
+local PSTART_BRD_SLEEP_WINDOW = 8
+local PSTART_BRD_SLEEP_CHOICES = {
+    'Horde Lullaby II', 'Horde Lullaby', 'Foe Lullaby II', 'Foe Lullaby',
+}
 
 local function pstart_brd_valid_name(name)
     return type(name) == 'string'
@@ -325,6 +343,56 @@ local function pstart_brd_target_allowed(target, names)
     return false
 end
 
+-- A Limbus sleep request is a single deliberate cast, not a maintained
+-- debuff. Horde Lullaby is centered on the synchronized active target: melee
+-- immediately wakes that one enemy while linked enemies around it remain
+-- asleep. The short queue lets the request survive a song already in flight
+-- without creating an autonomous sleep loop.
+local function pstart_brd_cast_sleep()
+    local deadline = tonumber(pstart_brd.sleep_requested_until) or 0
+    if not pstart_brd.active or pstart_brd.profile ~= 'limbus'
+        or deadline <= 0
+    then
+        return false
+    end
+
+    local now = os.clock()
+    if now > deadline then
+        pstart_brd.sleep_requested_until = 0
+        add_to_chat(123,
+            'PartyStart BRD: pack-sleep request expired before target/recast was ready.')
+        return false
+    end
+
+    local target, leader = pstart_brd_target()
+    local local_target = windower.ffxi.get_mob_by_target('t')
+    if not target or not leader or not local_target
+        or local_target.id ~= target.id
+    then
+        return false
+    end
+
+    local spell = pstart_brd_first_spell(PSTART_BRD_SLEEP_CHOICES)
+    if not spell then
+        pstart_brd.sleep_requested_until = 0
+        add_to_chat(123,
+            'PartyStart BRD: no learned Lullaby spell is available; request cancelled.')
+        return false
+    end
+    if not pstart_brd_ready(spell) then return false end
+
+    pstart_brd.pending = {
+        kind = 'sleep',
+        spell_id = spell.id,
+        target_id = target.id,
+    }
+    windower.chat.input('/ma "'..spell.en..'" <t>')
+    tickdelay = os.clock() + 3
+    add_to_chat(158, ('PartyStart BRD: %s -> %s; linked pack sleep attempted.')
+        :format(spell.en, target.name))
+    return true
+end
+
 local function pstart_brd_cast_buff_tasks(tasks)
     for _, task in ipairs(tasks or {}) do
         local spell = pstart_brd_spell(task.spell)
@@ -361,6 +429,9 @@ local function pstart_brd_cast_debuff(profile)
     if not pstart_brd_target_allowed(target, profile.debuff_target_names) then
         return false
     end
+    if target.hpp < (profile.debuff_min_target_hpp or 0) then
+        return false
+    end
     -- PartyCombat owns target synchronization. A server mob ID is not a
     -- valid text-command target, so cast only once local <t> matches the
     -- leader's mob.
@@ -394,6 +465,7 @@ end
 
 local function pstart_brd_maintenance(profile)
     if pstart_brd_cast_self_heal(profile) then return true end
+    if pstart_brd_cast_sleep() then return true end
     if pstart_brd_cast_self_buff(profile) then return true end
     if pstart_brd_cast_party_buff(profile) then return true end
     return pstart_brd_cast_debuff(profile)
@@ -419,6 +491,18 @@ function user_job_self_command(commandArgs, eventArgs)
             pstart_brd_maintenance(profile)
         end
         return
+    elseif requested == 'sleep' then
+        if not pstart_brd.active or pstart_brd.profile ~= 'limbus' then
+            add_to_chat(123,
+                'PartyStart BRD: pack sleep requires the active Limbus profile.')
+        else
+            pstart_brd.sleep_requested_until =
+                os.clock() + PSTART_BRD_SLEEP_WINDOW
+            add_to_chat(122,
+                'PartyStart BRD: one pack sleep queued for the synchronized target.')
+            pstart_brd_cast_sleep()
+        end
+        return
     elseif not requested then
         local target = pstart_brd_target()
         local target_text = target
@@ -439,6 +523,10 @@ function user_job_self_command(commandArgs, eventArgs)
         add_to_chat(122, ('PartyStart BRD emergency self-Cure: %s')
             :format(profile.self_heal_hpp
                 and ('below '..profile.self_heal_hpp..'% HP') or 'Off'))
+        add_to_chat(122, ('PartyStart BRD Limbus pack sleep: %s')
+            :format((pstart_brd.sleep_requested_until or 0) > os.clock()
+                and 'Queued' or (pstart_brd.profile == 'limbus'
+                    and 'Ready on request' or 'Off')))
         pstart_brd_report_instrument()
         return
     end
@@ -446,6 +534,7 @@ function user_job_self_command(commandArgs, eventArgs)
     if requested == 'off' then
         pstart_brd.active = false
         pstart_brd.pending = nil
+        pstart_brd.sleep_requested_until = 0
         state.AutoSongMode:set(false)
         add_to_chat(122, 'PartyStart BRD song and debuff maintenance is Off.')
     elseif pstart_brd_profiles[requested]
@@ -456,6 +545,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_brd.leader = commandArgs[3]
         pstart_brd.pending = nil
         pstart_brd.debuff_timers = {}
+        pstart_brd.sleep_requested_until = 0
         state.SongMode:set(pstart_brd_profiles[requested].song_mode)
         state.AutoSongMode:set(true)
         tickdelay = 0
@@ -467,8 +557,8 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
-            ..'<master|apexbats|apexcrabs|physical|accuracy|magic|safe|ambuscade-v1|'
-            ..'ambuscade-v2|off> <leader>')
+            ..'<master|apexbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'ambuscade-v2|off> <leader>; or gs c pstartbrd sleep')
     end
 
     if state.DisplayMode and state.DisplayMode.value then
@@ -493,6 +583,7 @@ function check_song()
     -- rotation. It is a one-time self buff, so this does not interfere with
     -- the character GearSwap's continuing ownership of party songs.
     if pstart_brd_cast_self_heal(profile) then return true end
+    if pstart_brd_cast_sleep() then return true end
     if pstart_brd_cast_self_buff(profile) then return true end
     if pstart_brd_original_check_song
         and pstart_brd_original_check_song()
@@ -512,6 +603,16 @@ function job_aftercast(spell, spellMap, eventArgs)
             else
                 pstart_brd.debuff_timers[pending.key]
                     = os.clock() + PSTART_BRD_DEBUFF_RETRY
+            end
+        elseif pending.kind == 'sleep' then
+            if spell.interrupted then
+                pstart_brd.sleep_requested_until = math.max(
+                    pstart_brd.sleep_requested_until or 0,
+                    os.clock() + 4)
+                add_to_chat(123,
+                    'PartyStart BRD: Lullaby interrupted; short retry remains queued.')
+            else
+                pstart_brd.sleep_requested_until = 0
             end
         end
         pstart_brd.pending = nil

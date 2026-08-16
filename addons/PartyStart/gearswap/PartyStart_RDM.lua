@@ -84,6 +84,30 @@ local pstart_rdm_profiles = {
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
         },
     },
+    limbus = {
+        -- Mixed-family Limbus floors reward broad, low-overhead support. Keep
+        -- every physical contributor hasted, establish long Shell once, and
+        -- spend offensive casting time only on cheap defense-down.
+        gain = {
+            spells={'Gain-MND', 'Gain-STR'},
+            buff='MND Boost',
+            buffs={['Gain-MND']='MND Boost', ['Gain-STR']='STR Boost'},
+        },
+        temper = true,
+        lean = true,
+        party_shell = true,
+        party_protect = false,
+        routine_buff_mp_floor = 30,
+        tank_buff_mp_floor = 15,
+        debuff_mp_floor = 35,
+        debuff_min_target_hpp = 45,
+        healing = true,
+        heal_hpp = 50,
+        heal_mp_floor = 25,
+        debuffs = {
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=45},
+        },
+    },
     physical = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,

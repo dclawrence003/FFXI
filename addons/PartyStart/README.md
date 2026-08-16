@@ -31,6 +31,9 @@ PartyStart establishes clear ownership:
   Shell V pass. V1 also owns Stymie/Saboteur/Silence and Paralyze II on
   Breadwinner. Silence uses the authoritative action result and retries a
   resist instead of assuming every completed cast landed.
+  `limbus` keeps GearSwap healing ownership, gives every attacker Haste and
+  every MP job Refresh, applies Phalanx II to PLD, establishes one long Shell
+  pass, and limits routine enfeebling to low-cost Dia.
 - PLD GearSwap is the primary healer in sustained profiles. It evaluates HP
   before the
   native PLD tick, maintains Majesty through the native controller, casts
@@ -55,6 +58,8 @@ PartyStart establishes clear ownership:
 - The character's native BRD GearSwap controller is the sole owner of party
   songs. PartyStart selects its Melee, Sustain, Tank, or Mage preset and
   separately maintains hostile songs plus encounter-specific AoE barspells.
+  In `limbus`, `//pstart sleep` queues exactly one best-learned Lullaby on the
+  synchronized active target; it is never maintained automatically.
 - GEO supplies the selected Indi/Geo bubbles and Entrust effect. Sustained
   profiles suppress its redundant native Haste/Refresh/Aurorastorm loop while
   Fury/Frailty/Entrust automation remains active. Encounter profiles that set
@@ -70,12 +75,14 @@ PartyStart establishes clear ownership:
 - RDM GearSwap maintains Temper II while engaged and tracks its Multi Strikes
   status effect directly.
 
-RDM, BRD, and DNC GearSwap read the target index of the active composition's
-puller (falling back to its command leader when the puller is absent). They use
+RDM, BRD, and DNC GearSwap read the active profile's synchronized target
+source (normally the composition puller; Limbus deliberately uses its command
+leader, with the leader also serving as fallback). They use
 only a synchronized local target and never engage it themselves. RDM selects the best learned tier of
 each profile's enfeebles. BRD uses Carnage Elegy (falling back to Battlefield
-Elegy); `magic` and `safe` also use Pining Nocturne. Lullaby and Threnody remain
-manual/content-specific because indiscriminate automation would be
+Elegy); `magic` and `safe` also use Pining Nocturne. Threnody remains
+manual/content-specific. Lullaby is likewise manual except for Limbus's
+explicit one-cast pack-sleep command; indiscriminate periodic sleep would be
 counterproductive.
 PartyCombat 0.4+ can synchronize a local `<t>` to an observer without
 engaging, facing, approaching, or stopping FastFollow.
@@ -147,6 +154,11 @@ For the V1 encounter update, `//exec reload_ambuv1_safe.txt` reloads Barney,
 Smalls, and Achoo's GearSwap one at a time with ten-second gaps, then refreshes
 PartyStart one client at a time. It never reloads Dolo's GearSwap and should be
 run out of combat before reapplying `progression/ambuscade-v1`.
+For the Limbus profile, `//exec reload_limbus_safe.txt` reloads only
+Tackleberry, Kickpuncher, Barney, and Smalls's changed GearSwap controllers,
+with ten-second gaps, then refreshes PartyStart one client at a time. It never
+reloads Dolo's GearSwap. Run it out of combat, then preview and apply
+`progression/limbus`.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -162,6 +174,8 @@ Run from any character in the party:
 //pstart use progression apexbats
 //pstart preview progression apexcrabs
 //pstart use progression apexcrabs
+//pstart preview progression limbus
+//pstart use progression limbus
 //pstart progression ambuv1
 //pstart preview legacy master
 //pstart use legacy master
@@ -171,6 +185,8 @@ Run from any character in the party:
 //pstart master
 //pstart bats
 //pstart crabs
+//pstart limbus
+//pstart sleep
 //pstart accuracy
 //pstart magic
 //pstart safe
@@ -189,6 +205,12 @@ validation and applies the complete policy only if every active member passes;
 a missing client, unexpected main job, or missing offense policy blocks the
 entire activation. An unexpected subjob is reported as a warning because some
 supported jobs have several viable subjobs.
+
+`//pstart sleep` is the exception to "run from any character": issue it from
+the active composition's command leader (Dolomedes in `progression`). It is
+accepted only while `limbus` is active and asks the BRD client for one queued
+Lullaby cast; it does not select a target, engage, or create a recurring sleep
+rotation.
 
 Choosing a tactical profile by itself (for example `//pstart bats` or
 `//pstart v1`) applies it to the last selected composition. `on` reapplies the
@@ -215,11 +237,16 @@ Barneystinson, Smalls, and Achoo. Composition data lives in
 buffs and debuffs and may narrow the composition's authorized attackers, while
 the composition determines expected jobs, roles, puller, and offense
 assignments. PartyStart loads the matching PartyCombat policy inert. General
-sustained/general physical profiles retain all six composition attackers. The Ambuscade
+sustained/general physical and Limbus profiles retain all six composition attackers. The Ambuscade
 profiles authorize only Dolomedes, Tackleberry, and Kickpuncher to engage,
 while all six receive the synchronized target. Explicitly use `//pc on` or
 `//pc force` from either the configured leader or puller when combat should
 begin.
+
+Profiles normally synchronize from the composition's configured puller.
+`limbus` overrides only that runtime target source to the command leader, so
+Dolo drives mobile floor-clearing while Tackleberry remains the puller for
+unattended Apex profiles. The composition file itself is not changed.
 
 The BLU compositions call Dolomedes' already-existing `TizThib` weapon state
 and configure AutoWS2 for Expiacion/level-3 aftermath. PartyStart does not
@@ -388,6 +415,43 @@ MP. At 60% MP he pre-reserves 1000 TP for Chivalry, continues all needed cures
 while building it, and uses Chivalry at 55% MP. Smalls provides a last-resort
 backup cure below 45% HP while preserving 25% MP.
 
+## Limbus speed profile
+
+`limbus` is a mobile, mixed-family floor-clearing profile for the current
+progression composition. It deliberately avoids family-specific barspells,
+Dispel rules, and long enfeeble rotations. Dolo is the synchronized target
+source, all six characters are authorized attackers, and each uses the weapon,
+weapon skill, and 1000-TP threshold in `data/compositions.lua`.
+
+```text
+//pstart preview progression limbus
+//pstart use progression limbus
+//pc on
+```
+
+The support stack is Chaos/Samurai, March/Minuet/Madrigal,
+Fury/Frailty/Entrust Refresh on PLD, Haste II on all six attackers, Refresh on
+all MP jobs, Phalanx II on PLD, one long Shell pass, Haste Samba/Box Step,
+Dia III with learned fallback, and Elegy. Smalls skips Dia below 45% target HP
+or below 35% MP. Barney likewise skips a new Elegy below 45% target HP. PLD
+uses the responsive linked-pack/AoE cure policy shared with Apex Crabs, while
+Smalls supplies a backup Cure below 50% HP and Kickpuncher retains emergency
+Waltz ownership.
+
+From Dolo, `//pstart sleep` queues one cast for up to eight seconds. Barney
+prefers Horde Lullaby II, then Horde Lullaby; Foe Lullaby II/I are safe
+learned-spell fallbacks but are single-target rather than pack control. The
+cast is centered on Dolo's synchronized current target. The party continues
+damaging that target while nearby links sleep, which is the useful shape for
+"kill just enough, get the floor item, then leave." An interrupted cast gets a
+short retry window; a completed cast is never automatically refreshed.
+
+The supplied `init.txt` bindings are Alt-I for `pstart limbus`, Alt-L for one
+pack sleep, Alt-P for PartyCombat force, Alt-O for PartyCombat stop, and Alt-U
+for PartyStart stop. Applying a PartyStart profile only loads PartyCombat's
+policy; it remains inert until `//pc on`, `//pc force`, Alt-P, or an authorized
+combat event arms it.
+
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.
 
@@ -514,6 +578,7 @@ Tackleberry.
 | `master` | March / Ballad / Madrigal; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `apexbats` (`bats`) | March / Ballad / Madrigal; Barwatera; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `apexcrabs` (`crabs`) | March / Ballad / Madrigal; Barwatera; Carnage Elegy | Fury / Frailty; Entrust Refresh |
+| `limbus` (`lim`) | March / Minuet / Madrigal; on-demand Lullaby; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `physical` | March / Minuet / Madrigal | Fury / Frailty |
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
@@ -528,6 +593,7 @@ RDM enfeebles by profile:
 | `master` | Dia only (suspended below 55% MP or below 65% target HP) |
 | `apexbats` | Dia only (suspended below 55% MP or below 65% target HP) |
 | `apexcrabs` | Dia plus event-driven Dispel after crab self-buffs; both are suspended below 55% current MP, and Dispel also preserves that post-cast floor |
+| `limbus` (`lim`) | Dia only (suspended below 35% MP or below 45% target HP) |
 | `physical` | Dia, Distract (suspended below 45% MP or below 50% target HP) |
 | `accuracy` | Frazzle, Dia, Distract |
 | `magic` | Frazzle, Dia, Addle |
@@ -596,6 +662,10 @@ AutoWS2 reservation, and total completed cures.
   and Nocturne after 90 seconds because enemy debuff icons are not exposed to
   GearSwap. Encounter barspells use Barney's own `buffactive` state and are
   recast only after the corresponding local effect disappears.
+- Limbus pack sleep is a one-shot, eight-second request queue. It requires the
+  active Limbus profile, the command leader as requester, and Barney's local
+  target to match the synchronized live enemy. It does not find enemies,
+  retarget the party, judge sleep immunity, or maintain Lullaby.
 - RDM party-buff and enemy-debuff timers are maintained locally. Incoming
   action packets invalidate the exact party-buff timer when Haste, Refresh,
   Phalanx, Shell, or Protect is removed, allowing targeted repair after Geist

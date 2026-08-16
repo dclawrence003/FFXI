@@ -198,6 +198,31 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("self_heal_hpp = 85", self.brd)
         self.assertIn("pstart_brd_cast_self_heal", self.brd)
 
+    def test_limbus_profile_is_mobile_and_dolo_driven(self):
+        addon = self.addon.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        rdm = self.rdm.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        brd = self.brd.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        self.assertIn("target_source = 'command_leader'", addon)
+        self.assertIn("physical_offense = true", addon)
+        self.assertIn("pld_controller = true", addon)
+        self.assertNotIn("stationary = true", addon)
+        self.assertIn("profile.target_source == 'command_leader'", self.addon)
+        self.assertIn("elseif command == 'sleep' then", self.addon)
+        self.assertIn("elseif kind == 'sleep' then", self.addon)
+        self.assertIn("Horde Lullaby II", self.brd)
+        self.assertIn("PSTART_BRD_SLEEP_WINDOW = 8", self.brd)
+        self.assertIn("debuff_min_target_hpp = 45", brd)
+        self.assertIn("party_shell = true", rdm)
+        self.assertIn("healing = true", rdm)
+        self.assertIn("heal_hpp = 50", rdm)
+        self.assertIn("limbus=true", self.pld)
+
     def test_every_unattended_xp_profile_is_stationary(self):
         master = self.addon.split("    master = {", 1)[1].split(
             "    apexbats = {", 1

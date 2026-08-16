@@ -66,6 +66,7 @@ local PSTART_PLD_PROFILES = {
     master=true,
     apexbats=true,
     apexcrabs=true,
+    limbus=true,
     ['ambuscade-v1']=true,
     ['ambuscade-v2']=true,
 }
@@ -119,7 +120,8 @@ local PSTART_PLD_CRAB_HEAL_POLICY = {
 }
 
 local function pstart_pld_heal_policy()
-    return pstart_pld.profile == 'apexcrabs'
+    return (pstart_pld.profile == 'apexcrabs'
+            or pstart_pld.profile == 'limbus')
         and PSTART_PLD_CRAB_HEAL_POLICY
         or PSTART_PLD_DEFAULT_HEAL_POLICY
 end
@@ -760,7 +762,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart PLD usage: gs c pstartpld '
-            ..'<master|apexbats|apexcrabs|ambuscade-v1|ambuscade-v2|status|off> <leader>')
+            ..'<master|apexbats|apexcrabs|limbus|ambuscade-v1|ambuscade-v2|status|off> <leader>')
     end
 end
 

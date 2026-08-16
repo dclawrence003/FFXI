@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.6'
+_addon.version = '1.3.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -97,6 +97,35 @@ local profiles = {
             'Apex Crabs: Smalls makes one MP-reserved Dispel attempt after each observed Bubble Curtain, Metallic Body, or Scissor Guard; it does not poll blindly.',
             'Apex Crabs: Tackleberry uses the aggressive AoE-heal policy and pre-reserves 1000 TP for Chivalry without suspending needed cures.',
             'Apex Crabs: Blade Madrigal is retained for the Dho Gates 1113 accuracy target. The G-11 Crab Bowl supports an independent infinite chain.',
+        },
+    },
+    limbus = {
+        label = 'Limbus 119: Mobile Speed Floors',
+        -- Limbus is manually driven from Dolo.  The progression composition
+        -- keeps Tackleberry as its unattended-XP puller, so override only the
+        -- active target source for this tactical profile.
+        target_source = 'command_leader',
+        physical_offense = true,
+        pld_controller = true,
+        cor = {'chaos', 'samurai'},
+        brd = {'Victory March', 'Valor Minuet V', 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh', lean=true,
+            entrust_jobs={'PLD','RUN','RDM','COR'}},
+        rdm = {
+            haste_scope='attackers', refresh_scope='mp',
+            phalanx_scope='tank', defense_scope='party',
+            gearswap_healing=true,
+        },
+        rdm_debuffs = {
+            {'Dia III', 'Dia II', 'Dia'},
+        },
+        advisories = {
+            'Limbus: Dolomedes is the mobile target source; all six attackers follow that synchronized target and use their configured AutoWS2 offense.',
+            'Limbus: use //pstart sleep (Alt-L in the supplied init binding) for one queued Horde Lullaby centered on the active target; the current target stays awake under melee while linked enemies are slept.',
+            'Limbus: sleep is deliberate, not periodic. Fire it on a linked pack or once the floor item is secured, then move to the exit without waiting for unnecessary kills.',
         },
     },
     physical = {
@@ -243,6 +272,9 @@ local profile_aliases = {
     apexcrab = 'apexcrabs',
     ['apex-crab'] = 'apexcrabs',
     ['apex-crabs'] = 'apexcrabs',
+    lim = 'limbus',
+    limbus119 = 'limbus',
+    ['limbus-119'] = 'limbus',
     efts = 'master',
     apexefts = 'master',
     ['apex-efts'] = 'master',
@@ -1203,11 +1235,17 @@ local function apply_cor(profile)
     issue('hb db off; hb as off; hb as attack off; hb off')
 end
 
-local function runtime_puller(composition, active_names)
-    if valid_name(composition.puller)
-        and list_contains_name(active_names, composition.puller)
+local function runtime_puller(composition, active_names, profile)
+    local target_source = composition.puller
+    if profile and profile.target_source == 'command_leader' then
+        target_source = composition.command_leader
+    elseif profile and valid_name(profile.target_source) then
+        target_source = profile.target_source
+    end
+    if valid_name(target_source)
+        and list_contains_name(active_names, target_source)
     then
-        return composition.puller
+        return target_source
     end
     return composition.command_leader
 end
@@ -1216,7 +1254,7 @@ local function apply_combat_policy(session, composition, profile)
     local attackers = composition_attackers(
         composition, session.names, profile)
     local targeters = profile_targeters(profile, session.names, attackers)
-    local puller = runtime_puller(composition, session.names)
+    local puller = runtime_puller(composition, session.names, profile)
     local attacker_csv = #attackers > 0 and table.concat(attackers, ',') or '-'
     local targeter_csv = #targeters > 0 and table.concat(targeters, ',') or '-'
     local policy_name = session.composition..'-'..session.profile
@@ -1534,6 +1572,27 @@ windower.register_event('ipc message', function(message)
         local player = windower.ffxi.get_player()
         if player and player.name:lower() == source:lower() then return end
         queue_job_revalidation(composition_name, profile_name, false)
+    elseif kind == 'sleep' then
+        local composition_name = normalize_composition(fields[4])
+        local profile_name = normalize_profile(fields[5])
+        local source = fields[6]
+        local composition = composition_name and compositions[composition_name]
+            or nil
+        local player = windower.ffxi.get_player()
+        if profile_name ~= 'limbus'
+            or not composition or not valid_name(source)
+            or source:lower() ~= composition.command_leader:lower()
+            or not active_session
+            or current_composition ~= composition_name
+            or current_profile ~= profile_name
+            or active_session.composition ~= composition_name
+            or active_session.profile ~= profile_name
+            or not player or player.main_job ~= 'BRD'
+            or not contains_name(active_session.names, player.name)
+        then
+            return
+        end
+        issue('gs c pstartbrd sleep')
     end
 end)
 
@@ -1664,6 +1723,21 @@ windower.register_event('addon command', function(command, ...)
     elseif command == 'stop' or command == 'off' then
         send_ipc{PREFIX, 'stop', new_nonce(windower.ffxi.get_player())}
         stop_local()
+    elseif command == 'sleep' then
+        local player = windower.ffxi.get_player()
+        if current_profile ~= 'limbus' or not active_session then
+            chat(123, 'Pack sleep requires an active Limbus profile.')
+        elseif not local_command_leader() then
+            chat(123, 'Use //pstart sleep from the configured command leader.')
+        elseif not player or not valid_name(player.name) then
+            chat(123, 'No active player; pack sleep was not sent.')
+        else
+            send_ipc{
+                PREFIX, 'sleep', new_nonce(player),
+                active_session.composition, active_session.profile, player.name,
+            }
+            chat(158, 'Queued one Limbus pack sleep on the active target.')
+        end
     elseif command == 'status' then
         chat(207, ('Active: %s/%s | Selected: %s/%s')
             :format(current_composition or 'off', current_profile or 'off',
@@ -1678,12 +1752,12 @@ windower.register_event('addon command', function(command, ...)
         chat(207, 'Compositions: '..table.concat(names, ', '))
         chat(207, 'Profiles: master (Apex Efts), apexbats (bats), '
             ..'apexcrabs (crabs), '
-            ..'physical, accuracy, magic, safe, '
+            ..'limbus (lim), physical, accuracy, magic, safe, '
             ..'ambuscade-v1 (v1), ambuscade-v2 (v2)')
     else
         chat(207, 'Commands: use <composition> <profile> | preview '
             ..'<composition> <profile> | on | off | master | apexbats | '
-            ..'apexcrabs | '
+            ..'apexcrabs | limbus | sleep | '
             ..'physical | accuracy | magic | safe | v1 | v2 | status | '
             ..'version | list')
     end
@@ -1691,7 +1765,7 @@ end)
 
 chat(158, 'Loaded v'.._addon.version..'. Sustained aliases: '
     ..'//pstart efts, bats, or crabs. '
-    ..'Ambuscade aliases: //pstart v1 or v2.')
+    ..'Limbus: //pstart limbus; Ambuscade: //pstart v1 or v2.')
 if composition_warning then
     chat(167, 'Composition policy unavailable; activation is blocked. '
         ..composition_warning)

@@ -389,7 +389,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.2.6'", ADDON)
+        self.assertIn("_addon.version = '1.3.0'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -403,10 +403,10 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("{spell='Barwatera', buff='Barwater'}", brd)
         self.assertIn("apexbats=true", PLD)
         self.assertIn("PSTART_PLD_SUSTAINED_PROFILES", PLD)
-        self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
+        self.assertIn("'master','apexbats','apexcrabs','limbus','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.2.6'", ADDON)
+        self.assertIn("_addon.version = '1.3.0'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -481,6 +481,38 @@ class PartyStartSourceGuards(unittest.TestCase):
             self.assertIn("stationary = true", profile)
         self.assertEqual(3, ADDON.count("stationary = true"))
         self.assertIn("profile.stationary and 'stationary' or 'mobile'", ADDON)
+
+    def test_limbus_is_mobile_dolo_driven_and_has_one_shot_pack_sleep(self):
+        addon = ADDON.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        rdm = RDM.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        brd = BRD.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        self.assertIn("Limbus 119: Mobile Speed Floors", addon)
+        self.assertIn("target_source = 'command_leader'", addon)
+        self.assertIn("physical_offense = true", addon)
+        self.assertIn("pld_controller = true", addon)
+        self.assertNotIn("stationary = true", addon)
+        self.assertIn("runtime_puller(composition, active_names, profile)", ADDON)
+        self.assertIn("elseif kind == 'sleep' then", ADDON)
+        self.assertIn("elseif command == 'sleep' then", ADDON)
+        self.assertIn("current_profile ~= 'limbus'", ADDON)
+        self.assertIn("'Horde Lullaby II', 'Horde Lullaby'", BRD)
+        self.assertIn("PSTART_BRD_SLEEP_WINDOW = 8", BRD)
+        self.assertIn("local function pstart_brd_cast_sleep()", BRD)
+        self.assertIn("pstart_brd.sleep_requested_until = 0", BRD)
+        self.assertIn("debuff_min_target_hpp = 45", brd)
+        self.assertIn("party_shell = true", rdm)
+        self.assertIn("healing = true", rdm)
+        self.assertIn("heal_hpp = 50", rdm)
+        self.assertIn("debuff_mp_floor = 35", rdm)
+        self.assertIn("limbus=true", PLD)
+        self.assertIn("pstart_pld.profile == 'limbus'", PLD)
+        self.assertIn("'apexcrabs','limbus','physical'", DNC)
 
 
 if __name__ == "__main__":
