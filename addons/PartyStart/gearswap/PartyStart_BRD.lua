@@ -98,6 +98,9 @@ local pstart_brd_profiles = {
     },
     ['ambuscade-v1'] = {
         song_mode = 'Melee',
+        self_buffs = {
+            {spell='Reraise', buff='Reraise'},
+        },
         songs = {
             {spell='Victory March', buff='march'},
             {spell='Valor Minuet V', buff='minuet'},
@@ -114,6 +117,9 @@ local pstart_brd_profiles = {
     },
     ['ambuscade-v2'] = {
         song_mode = 'Melee',
+        self_buffs = {
+            {spell='Reraise', buff='Reraise'},
+        },
         songs = {
             {spell='Victory March', buff='march'},
             {spell='Valor Minuet V', buff='minuet'},
@@ -287,8 +293,8 @@ local function pstart_brd_target_allowed(target, names)
     return false
 end
 
-local function pstart_brd_cast_party_buff(profile)
-    for _, task in ipairs(profile.party_buffs or {}) do
+local function pstart_brd_cast_buff_tasks(tasks)
+    for _, task in ipairs(tasks or {}) do
         local spell = pstart_brd_spell(task.spell)
         if spell and not buffactive[task.buff] and pstart_brd_ready(spell) then
             pstart_brd.pending = {
@@ -301,6 +307,14 @@ local function pstart_brd_cast_party_buff(profile)
         end
     end
     return false
+end
+
+local function pstart_brd_cast_self_buff(profile)
+    return pstart_brd_cast_buff_tasks(profile.self_buffs)
+end
+
+local function pstart_brd_cast_party_buff(profile)
+    return pstart_brd_cast_buff_tasks(profile.party_buffs)
 end
 
 local function pstart_brd_timer_key(target, spell)
@@ -347,6 +361,7 @@ local function pstart_brd_cast_debuff(profile)
 end
 
 local function pstart_brd_maintenance(profile)
+    if pstart_brd_cast_self_buff(profile) then return true end
     if pstart_brd_cast_party_buff(profile) then return true end
     return pstart_brd_cast_debuff(profile)
 end
@@ -384,6 +399,8 @@ function user_job_self_command(commandArgs, eventArgs)
                 tostring(pstart_brd.leader or 'none')))
         add_to_chat(122, 'PartyStart BRD debuff target: '..target_text)
         local profile = pstart_brd_profiles[pstart_brd.profile] or {}
+        add_to_chat(122, ('PartyStart BRD encounter self-buffs: %d')
+            :format(#(profile.self_buffs or {})))
         add_to_chat(122, ('PartyStart BRD encounter barspells: %d')
             :format(#(profile.party_buffs or {})))
         pstart_brd_report_instrument()
@@ -436,6 +453,10 @@ function check_song()
     if not profile or not state.AutoSongMode.value then
         return false
     end
+    -- Encounter Reraise must be established before the multi-song startup
+    -- rotation. It is a one-time self buff, so this does not interfere with
+    -- the character GearSwap's continuing ownership of party songs.
+    if pstart_brd_cast_self_buff(profile) then return true end
     if pstart_brd_original_check_song
         and pstart_brd_original_check_song()
     then

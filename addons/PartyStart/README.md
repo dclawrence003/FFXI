@@ -55,10 +55,10 @@ PartyStart establishes clear ownership:
 - The character's native BRD GearSwap controller is the sole owner of party
   songs. PartyStart selects its Melee, Sustain, Tank, or Mage preset and
   separately maintains hostile songs plus encounter-specific AoE barspells.
-- GEO supplies the selected Indi/Geo bubbles and Entrust effect. In sustained
-  profiles,
-  its redundant native Haste/Refresh/Aurorastorm/Reraise loop is suppressed
-  while Fury/Frailty/Entrust automation remains active.
+- GEO supplies the selected Indi/Geo bubbles and Entrust effect. Sustained
+  profiles suppress its redundant native Haste/Refresh/Aurorastorm loop while
+  Fury/Frailty/Entrust automation remains active. Encounter profiles that set
+  `reraise=true` preserve Reraise as the sole native GEO self-buff.
 - COR maintains the selected pair of rolls through Roller2.
 - BLU enables its existing GearSwap self-buff mode.
 - AutoWS2 owns configured weapon skills in physical profiles, including
@@ -143,10 +143,10 @@ PartyStart across all six. It deliberately does not reload Dolo's GearSwap.
 For the healing hotfix, `//exec reload_apexcrabs_healing_safe.txt` is narrower:
 it reloads only Tackleberry and Smalls, ten seconds apart, before refreshing
 PartyStart across the team. Dolo's GearSwap remains untouched.
-For the V1 encounter update, `//exec reload_ambuv1_safe.txt` reloads only
-Smalls' GearSwap, waits ten seconds, then refreshes PartyStart one client at a
-time. It never reloads Dolo's GearSwap and should be run out of combat before
-reapplying `progression/ambuscade-v1`.
+For the V1 encounter update, `//exec reload_ambuv1_safe.txt` reloads Barney,
+Smalls, and Achoo's GearSwap one at a time with ten-second gaps, then refreshes
+PartyStart one client at a time. It never reloads Dolo's GearSwap and should be
+run out of combat before reapplying `progression/ambuscade-v1`.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -434,6 +434,12 @@ Tackleberry.
 
 ### V1: Bozzetto Breadwinner
 
+- Required support subjobs are Barney `BRD/WHM`, Smalls `RDM/WHM`, and Achoo
+  `GEO/WHM`. Activation is blocked if any of those three is on another subjob;
+  Barney otherwise cannot cast the AoE Barspells that deliberately assign him
+  Housemaker hate, and the support line loses its tested Reraise/status-removal
+  coverage. Tackleberry remains `PLD/WAR` (or the composition's separately
+  supported `/BLU` option outside this encounter).
 - Damage group: Dolomedes COR, Tackleberry PLD, and Kickpuncher DNC. Barney,
   Smalls, and Achoo receive target-only synchronization and do not engage or
   move under PartyCombat.
@@ -447,8 +453,13 @@ Tackleberry.
   either JA is on recast, the controller skips it rather than delaying
   Silence. A confirmed resist receives a short recast-aware retry instead of
   the normal 45-second Silence timer.
-- Barney maintains Barstonra and Barsilencera and restricts automatic Elegy to
-  Breadwinner. His AoE barspells intentionally make him the Housemaker bait.
+- Barney maintains self-Reraise, Barstonra, and Barsilencera and restricts
+  automatic Elegy to Breadwinner. His AoE barspells intentionally make him the
+  Housemaker bait. Smalls and Achoo also maintain self-Reraise under this
+  profile. Dolomedes, Tackleberry, and Kickpuncher cannot self-cast it with the
+  tested subjobs and must use Reraiser/Hi-Reraiser or equivalent items; each
+  local client prints a prominent warning while unprotected. PartyStart never
+  consumes those items automatically.
 - Tackleberry retains Majesty healing and native Flash/Provoke. Sentinel and
   Rampart are withheld before the 50% Hundred Fists/Gale Spikes transition;
   the threshold check runs ahead of routine cures so mitigation cannot be
@@ -457,10 +468,13 @@ Tackleberry.
   Kickpuncher behind the boss, move Barney away when Housemaker charges, and
   sleep/kill any Urchins that activate. Static Barstone is the safe default;
   the profile does not attempt to infer each Warble element.
-- Every V1 client prints a prominent readying alert for elemental Warbles,
-  Housemaker's Earthshaker, and Hundred Fists. Warble alerts identify the
-  matching Barspell and expected ailments; they observe only and do not yet
-  change Barney's maintained Barstone policy.
+- Every V1 client polls Housemaker's position five times per second. The moment
+  it leaves its staging point, all clients print a boxed warning telling Barney
+  to separate while only the configured command-leader client plays a Windows
+  alarm. The tracker rearms when Housemaker returns, and the Earthshaker action
+  alert remains as a packet-backed fallback. Elemental Warble and Hundred Fists
+  alerts remain packet-backed; Warble alerts identify the matching Barspell and
+  expected ailments but do not change Barney's maintained Barstone policy.
 
 ### V2: Popular Penelope
 

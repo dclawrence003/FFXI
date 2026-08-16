@@ -135,6 +135,7 @@ local pstart_rdm_profiles = {
         gain = {spells={'Gain-MND'}, buff='MND Boost'},
         temper = false,
         lean = true,
+        reraise = true,
         party_shell = true,
         party_protect = false,
         routine_buff_mp_floor = 25,
@@ -164,6 +165,7 @@ local pstart_rdm_profiles = {
         gain = {spells={'Gain-MND'}, buff='MND Boost'},
         temper = false,
         lean = true,
+        reraise = true,
         party_shell = true,
         party_protect = false,
         routine_buff_mp_floor = 25,
@@ -817,8 +819,10 @@ local function pstart_rdm_cast_self_buffs(profile)
             {spells={'Aquaveil'}, buff='Aquaveil'}
         self_buffs[#self_buffs + 1] =
             {spells={'Phalanx'}, buff='Phalanx'}
-        self_buffs[#self_buffs + 1] =
-            {spells={'Reraise'}, buff='Reraise'}
+        if not profile.reraise then
+            self_buffs[#self_buffs + 1] =
+                {spells={'Reraise'}, buff='Reraise'}
+        end
     end
     for _, task in ipairs(self_buffs) do
         if not buffactive[task.buff]
@@ -838,6 +842,13 @@ local function pstart_rdm_cast_self_buffs(profile)
         return true
     end
     return false
+end
+
+local function pstart_rdm_cast_reraise(profile)
+    if not profile.reraise or buffactive['Reraise'] then return false end
+    return pstart_rdm_cast_buff(
+        player.name, {'Reraise'}, 'Reraise', 0,
+        profile.routine_buff_mp_floor or 0)
 end
 
 local function pstart_rdm_cast_composure()
@@ -1068,6 +1079,7 @@ local function pstart_rdm_action()
     if profile.priority_debuff and pstart_rdm_cast_debuff(profile) then
         return true
     end
+    if pstart_rdm_cast_reraise(profile) then return true end
     if pstart_rdm_cast_reactive_repair() then return true end
     if pstart_rdm_cast_dispel(profile) then return true end
     if pstart_rdm_cast_party_buffs() then return true end

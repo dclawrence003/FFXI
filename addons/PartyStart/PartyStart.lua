@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.4'
+_addon.version = '1.2.5'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -34,6 +34,10 @@ local job_revalidate_at = nil
 local pending_revalidation = nil
 local nonce_counter = 0
 local encounter_alerts = {}
+local housemaker_tracker = {next_poll=0, mobs={}}
+local reraise_guard = {
+    active=false, profile=nil, next_check=0, had=false, warned=false,
+}
 
 local profiles = {
     master = {
@@ -159,6 +163,7 @@ local profiles = {
     },
     ['ambuscade-v1'] = {
         label = 'August 2026 V1: Bozzetto Breadwinner',
+        reraise = true,
         physical_offense = true,
         attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'},
         target_all = true,
@@ -175,16 +180,32 @@ local profiles = {
             gearswap_healing=true,
         },
         pld_controller = true,
+        required_sub_jobs = {
+            Barneystinson = {
+                jobs={'WHM'},
+                reason='Barstonra/Barsilencera Housemaker bait and Reraise',
+            },
+            Smalls = {
+                jobs={'WHM'},
+                reason='status removal, backup cures, and Reraise',
+            },
+            Achoo = {
+                jobs={'WHM'},
+                reason='Paralyna/Erase support, backup cures, and Reraise',
+            },
+        },
         advisories = {
             'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes and Kickpuncher attack from behind.',
             'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
-            'V1: Barney supplies Barstonra/Barsilencera and is the intended Housemaker bait. Move him away when Housemaker begins charging.',
-            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker Earthshaker, and Hundred Fists.',
+            'V1: Barney must be BRD/WHM; he supplies Barstonra/Barsilencera and is the intended Housemaker bait. Move only Barney away when the movement alarm fires.',
+            'V1: Barney, Smalls, and Achoo maintain self-Reraise. Dolomedes, Tackleberry, and Kickpuncher require Reraise items; each client warns while unprotected.',
+            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker movement/Earthshaker, and Hundred Fists.',
             'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold; sleep and kill any activated Urchins manually.',
         },
     },
     ['ambuscade-v2'] = {
         label = 'August 2026 V2: Popular Penelope',
+        reraise = true,
         physical_offense = true,
         attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'},
         target_all = true,
@@ -295,6 +316,131 @@ local V1_WARBLE_ALERTS = {
         'WARBLE ready: element was not exposed by the action resource.',
 }
 
+local HOUSEMAKER_POLL_INTERVAL = 0.20
+local HOUSEMAKER_ACTIVATION_DISTANCE = 0.75
+local HOUSEMAKER_REARM_DISTANCE = 0.35
+local RERAISE_CHECK_INTERVAL = 1.0
+local RERAISE_BUFF = res.buffs:with('en', 'Reraise')
+
+local function is_housemaker(mob)
+    return type(mob) == 'table' and type(mob.name) == 'string'
+        and mob.name:lower():find('housemaker', 1, true) ~= nil
+end
+
+local function local_command_leader()
+    local player = windower.ffxi.get_player()
+    local composition = current_composition and compositions[current_composition]
+        or nil
+    return player and composition
+        and type(composition.command_leader) == 'string'
+        and player.name:lower() == composition.command_leader:lower()
+end
+
+local function housemaker_alert(message, audible)
+    chat(167, '********************************************************')
+    chat(167, '*** '..message..' ***')
+    chat(167, '********************************************************')
+    if audible and local_command_leader() then
+        -- PartyStart runs on every client on one Windows host. Play one alarm
+        -- from the configured command leader instead of six overlapping copies.
+        pcall(windower.play_sound, 'C:\\Windows\\Media\\Alarm03.wav')
+    end
+end
+
+local function reset_encounter_guards(profile_name)
+    encounter_alerts = {}
+    housemaker_tracker = {next_poll=0, mobs={}}
+    reraise_guard = {
+        active=profile_name ~= nil and profiles[profile_name]
+            and profiles[profile_name].reraise == true or false,
+        profile=profile_name,
+        next_check=os.clock() + 6,
+        had=false,
+        warned=false,
+    }
+end
+
+local function v1_poll_housemaker(now)
+    if current_profile ~= 'ambuscade-v1'
+        or now < (housemaker_tracker.next_poll or 0)
+    then
+        return
+    end
+    housemaker_tracker.next_poll = now + HOUSEMAKER_POLL_INTERVAL
+
+    for index, mob in pairs(windower.ffxi.get_mob_array() or {}) do
+        if is_housemaker(mob) and tonumber(mob.x) and tonumber(mob.y) then
+            local key = tostring(mob.id or index)
+            local x, y = tonumber(mob.x), tonumber(mob.y)
+            local tracked = housemaker_tracker.mobs[key]
+            if not tracked then
+                -- The entity is present at its staging point well before it
+                -- attacks. That first position is the stable home reference.
+                housemaker_tracker.mobs[key] = {
+                    home_x=x, home_y=y, away=false, last_seen=now,
+                }
+            else
+                local dx, dy = x - tracked.home_x, y - tracked.home_y
+                local distance = math.sqrt(dx * dx + dy * dy)
+                tracked.last_seen = now
+                if not tracked.away
+                    and distance >= HOUSEMAKER_ACTIVATION_DISTANCE
+                then
+                    tracked.away = true
+                    local alert_key = 'housemaker-moving:'..key
+                    if now - (encounter_alerts[alert_key] or 0) >= 8 then
+                        encounter_alerts[alert_key] = now
+                        housemaker_alert(
+                            'HOUSEMAKER MOVING: BARNEY SEPARATE NOW; '
+                            ..'EVERYONE ELSE STAY PUT.', true)
+                    end
+                elseif tracked.away
+                    and distance <= HOUSEMAKER_REARM_DISTANCE
+                then
+                    -- It returned to its staging point. Arm the next charge.
+                    tracked.away = false
+                end
+            end
+        end
+    end
+end
+
+local function local_has_reraise()
+    local player = windower.ffxi.get_player()
+    if not player or not RERAISE_BUFF then return false end
+    for _, buff_id in ipairs(player.buffs or {}) do
+        if buff_id == RERAISE_BUFF.id then return true end
+    end
+    return false
+end
+
+local function check_reraise_guard(now)
+    if not reraise_guard.active
+        or now < (reraise_guard.next_check or 0)
+    then
+        return
+    end
+    reraise_guard.next_check = now + RERAISE_CHECK_INTERVAL
+    if local_has_reraise() then
+        reraise_guard.had = true
+        reraise_guard.warned = false
+        return
+    end
+    if reraise_guard.warned then return end
+
+    local player = windower.ffxi.get_player()
+    local caster = player and S{'BRD','RDM','GEO'}:contains(player.main_job)
+    local remedy = caster
+        and ((reraise_guard.profile or 'encounter')
+            ..' support casters must use /WHM; self-Reraise should restore automatically.')
+        or 'Use a Reraiser/Hi-Reraiser before the pull.'
+    chat(167, ('*** NO RERAISE: %s (%s/%s). %s ***')
+        :format(player and player.name or 'local player',
+            player and player.main_job or 'NON',
+            player and player.sub_job or 'NON', remedy))
+    reraise_guard.warned = true
+end
+
 local function monster_ability_from_action(action)
     if type(action) ~= 'table' then return nil end
     if action.category == 7 then
@@ -325,11 +471,11 @@ local function v1_encounter_alert(action)
         if ability.en == 'Hundred Fists' then
             message = 'HUNDRED FISTS: reserved PLD mitigation is activating; Gale Spikes can reflect damage and overwrite Haste II.'
         end
-    elseif actor.name == 'Bozzetto Housemaker'
+    elseif actor.name:lower():find('housemaker', 1, true)
         and type(ability.en) == 'string'
         and ability.en:find('Earthshaker', 1, true)
     then
-        message = 'HOUSEMAKER EARTHSHAKER: move Barney away from every player, pet, and luopan now.'
+        message = 'HOUSEMAKER EARTHSHAKER: BARNEY must be isolated from every player, pet, and luopan.'
     end
     if not message then return end
 
@@ -337,7 +483,11 @@ local function v1_encounter_alert(action)
     local now = os.clock()
     if now - (encounter_alerts[key] or 0) < 6 then return end
     encounter_alerts[key] = now
-    chat(167, '*** '..message..' ***')
+    if actor.name:lower():find('housemaker', 1, true) then
+        housemaker_alert(message, false)
+    else
+        chat(167, '*** '..message..' ***')
+    end
 end
 
 windower.register_event('action', v1_encounter_alert)
@@ -633,6 +783,16 @@ local function expected_job(composition, wanted)
     return nil
 end
 
+local function profile_subjob_policy(policies, wanted)
+    if not valid_name(wanted) then return nil end
+    for name, policy in pairs(policies or {}) do
+        if valid_name(name) and name:lower() == wanted:lower() then
+            return policy
+        end
+    end
+    return nil
+end
+
 local function roster_complete(session)
     for _, name in ipairs(session.names or {}) do
         if not roster_record(session.roster, name) then return false end
@@ -671,6 +831,17 @@ local function validate_session(session)
         then
             warnings[#warnings + 1] = ('%s subjob %s is outside the tested set (%s)')
                 :format(name, record.sub_job, table.concat(expected.sub_jobs, '/'))
+        end
+
+        local required_sub = profile and profile_subjob_policy(
+            profile.required_sub_jobs, name) or nil
+        if record and required_sub
+            and not list_contains_value(required_sub.jobs or {}, record.sub_job)
+        then
+            errors[#errors + 1] = ('%s is %s/%s; %s requires /%s (%s)')
+                :format(name, record.main_job, record.sub_job,
+                    session.profile, table.concat(required_sub.jobs or {}, '/'),
+                    required_sub.reason or 'encounter support policy')
         end
 
         if record and expected and profile and profile.physical_offense
@@ -972,7 +1143,9 @@ local function apply_geo(player, profile_name, profile, roster)
     local geo = profile.geo
     local entrustee = first_jobs(roster, geo.entrust_jobs)
         or player.name
-    if profile.sustained or geo.lean then
+    if profile.reraise and (profile.sustained or geo.lean) then
+        issue('gs c pstartgeo leanrr')
+    elseif profile.sustained or geo.lean then
         issue('gs c pstartgeo lean')
     else
         issue('gs c pstartgeo restore')
@@ -1099,6 +1272,7 @@ local function apply_profile(session)
     active_session = session
     last_profile = session.profile
     last_composition = session.composition
+    reset_encounter_guards(current_profile)
     chat(158, ('%s/%s ready as %s/%s; AutoWS2 %s; PartyCombat policy %s.')
         :format(session.composition, session.profile,
             player.main_job, player.sub_job,
@@ -1228,7 +1402,7 @@ local function stop_local(options)
     current_profile = nil
     current_composition = nil
     active_session = nil
-    encounter_alerts = {}
+    reset_encounter_guards(nil)
     zone_rearm_at = nil
     zone_epoch = zone_epoch + 1
     next_maintenance = 0
@@ -1344,6 +1518,8 @@ end)
 
 windower.register_event('prerender', function()
     local now = os.clock()
+    v1_poll_housemaker(now)
+    check_reraise_guard(now)
     if zone_rearm_at and now >= zone_rearm_at then
         zone_rearm_at = nil
         if active_session then

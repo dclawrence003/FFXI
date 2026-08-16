@@ -4,7 +4,8 @@
 -- GEO's native Auto mode maintains Haste, Refresh, Aurorastorm, and Reraise
 -- in addition to colures. PartyStart's RDM already supplies stronger Haste II
 -- and Refresh III, so the sustained profile replaces that self-buff list with
--- an empty one while leaving native Indi/Geo/Entrust logic untouched.
+-- either an empty list or Reraise-only list while leaving native
+-- Indi/Geo/Entrust logic untouched.
 -- Load at the end of a participating character's GEO gear file:
 --     include('Common/PartyStart_GEO.lua')
 
@@ -15,6 +16,16 @@ local function pstart_geo_set_autobuff(value)
     if state and state.AutoBuffMode then
         state.AutoBuffMode:set(value)
     end
+end
+
+local function pstart_geo_reraise_only()
+    local result = {}
+    for _, task in pairs(pstart_geo_saved_auto or buff_spell_lists.Auto or {}) do
+        if task.Buff == 'Reraise' then
+            result[#result + 1] = task
+        end
+    end
+    return result
 end
 
 -- Character/shared GEO setup files historically enabled AutoBuff one second
@@ -44,6 +55,15 @@ function user_job_self_command(commandArgs, eventArgs)
         add_to_chat(122,
             'PartyStart GEO: redundant native Haste/Refresh/Aurorastorm/'
             ..'Reraise maintenance suppressed; colure automation unchanged.')
+    elseif requested == 'leanrr' then
+        if pstart_geo_saved_auto == nil then
+            pstart_geo_saved_auto = buff_spell_lists.Auto
+        end
+        buff_spell_lists.Auto = pstart_geo_reraise_only()
+        pstart_geo_active = true
+        add_to_chat(122,
+            'PartyStart GEO: lean mode retains self-Reraise; redundant native '
+            ..'Haste/Refresh/Aurorastorm suppressed; colures unchanged.')
     elseif requested == 'bootidle' then
         if not pstart_geo_active then
             pstart_geo_set_autobuff('Off')
@@ -75,6 +95,6 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart GEO usage: gs c pstartgeo '
-            ..'<lean|restore|idle|off|status>')
+            ..'<lean|leanrr|restore|idle|off|status>')
     end
 end

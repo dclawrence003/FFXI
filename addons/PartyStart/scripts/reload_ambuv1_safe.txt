@@ -1,5 +1,9 @@
 echo Staggered Ambuscade V1 tuning reload beginning. Dolo GearSwap is untouched.
+send Barneystinson gs reload
+wait 10
 send Smalls gs reload
+wait 10
+send Achoo gs reload
 wait 10
 send Dolomedes lua r PartyStart
 wait 3

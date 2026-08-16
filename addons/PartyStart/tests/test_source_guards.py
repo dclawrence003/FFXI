@@ -338,6 +338,31 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("debuff_target_names = {'Bozzetto Breadwinner'}", BRD)
         self.assertIn("debuff_target_names = {'Popular Penelope'}", BRD)
 
+    def test_v1_requires_support_subjobs_and_maintains_reraise(self):
+        v1 = ADDON.split("['ambuscade-v1'] = {", 1)[1].split(
+            "['ambuscade-v2'] = {", 1
+        )[0]
+        self.assertIn("reraise = true", v1)
+        self.assertIn("required_sub_jobs", v1)
+        for name in ("Barneystinson", "Smalls", "Achoo"):
+            self.assertIn(f"{name} = {{", v1)
+        self.assertGreaterEqual(v1.count("jobs={'WHM'}"), 3)
+        self.assertIn("profile.required_sub_jobs", ADDON)
+        self.assertIn("pstart_rdm_cast_reraise(profile)", RDM)
+        self.assertIn("{spell='Reraise', buff='Reraise'}", BRD)
+        self.assertIn("requested == 'leanrr'", GEO)
+        self.assertIn("gs c pstartgeo leanrr", ADDON)
+        self.assertIn("NO RERAISE", ADDON)
+
+    def test_v1_housemaker_alerts_before_earthshaker(self):
+        self.assertIn("HOUSEMAKER_ACTIVATION_DISTANCE", ADDON)
+        self.assertIn("v1_poll_housemaker(now)", ADDON)
+        self.assertIn("get_mob_array()", ADDON)
+        self.assertIn("HOUSEMAKER MOVING: BARNEY SEPARATE NOW", ADDON)
+        self.assertIn("housemaker_alert(message, false)", ADDON)
+        self.assertIn("windower.play_sound", ADDON)
+        self.assertIn("HOUSEMAKER_REARM_DISTANCE", ADDON)
+
     def test_apex_bats_profile_is_sustained_and_status_aware(self):
         addon = ADDON.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
@@ -348,7 +373,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.2.3'", ADDON)
+        self.assertIn("_addon.version = '1.2.5'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -365,7 +390,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.2.3'", ADDON)
+        self.assertIn("_addon.version = '1.2.5'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
