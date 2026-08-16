@@ -525,10 +525,13 @@ Tackleberry.
   either JA is on recast, the controller skips it rather than delaying
   Silence. A confirmed resist receives a short recast-aware retry instead of
   the normal 45-second Silence timer.
-- Barney maintains self-Reraise, Barstonra, and Barsilencera. If you manually
-  target Breadwinner on Barney, his controller can make its normal Elegy
-  attempt; otherwise it skips Elegy instead of taking camera control. His AoE barspells intentionally make him the
-  Housemaker bait. Smalls and Achoo also maintain self-Reraise under this
+- Barney maintains self-Reraise, Barsilencera, and Barstonra as the safe idle
+  default. A Breadwinner Warble ready packet immediately reserves his next cast
+  for the matching elemental `Bar-ara`; this reaction outranks songs, cures,
+  Elegy, and default-Barstone restoration. If you manually target Breadwinner
+  on Barney, his controller can make its normal Elegy attempt; otherwise it
+  skips Elegy instead of taking camera control. His AoE barspells intentionally
+  make him the Housemaker bait. Smalls and Achoo also maintain self-Reraise under this
   profile. Dolomedes, Tackleberry, and Kickpuncher cannot self-cast it with the
   tested subjobs and must use Reraiser/Hi-Reraiser or equivalent items; each
   local client prints a prominent warning while unprotected. PartyStart never
@@ -543,9 +546,9 @@ Tackleberry.
   least 20 yalms away. Earthshaker still deals its unavoidable 1,000 damage to
   Barney. Return him immediately afterward for Cure/Paralyna and renewed
   Barspell coverage. PartyCombat will not recapture his target while you scan
-  for or track Housemaker. Static Barstone is the safe default; the profile does not
-  attempt to infer each Warble element. A simultaneous radial party hit is most
-  likely an unblocked non-Earth Warble. Drill Claw instead is a frontal cone
+  for or track Housemaker. Static Barstone is restored after each reaction as
+  the fallback between Warbles. A simultaneous radial party hit means the
+  matching Barspell was blocked, interrupted, out of range, or late. Drill Claw instead is a frontal cone
   with 75% Max HP Down; several affected characters indicate Breadwinner faced
   the stack, and the profile now prints a specific Drill Claw warning.
 - Barney's V1 GearSwap controller attempts a learned self-Cure below 85% HP as
@@ -556,9 +559,18 @@ Tackleberry.
   to separate while only the configured command-leader client plays a Windows
   alarm. The tracker rearms when Housemaker returns and prints a second boxed
   alert telling Barney to return; the Earthshaker action alert remains as a
-  packet-backed fallback. Elemental Warble and Hundred Fists
-  alerts remain packet-backed; Warble alerts identify the matching Barspell and
-  expected ailments but do not change Barney's maintained Barstone policy.
+  packet-backed fallback. Elemental Warble and Hundred Fists alerts remain
+  packet-backed; each Warble alert now describes the Barspell Barney is actively
+  attempting.
+- A completed Warble opens a 15-second scan for newly targetable `Bozzetto
+  Urchin` mobs. When one appears, Barney makes exactly one Horde Lullaby II/I
+  attempt; single-target Foe Lullaby is deliberately not used for this group
+  response. The sleep action prefers `<bt>` or an already safe selected target.
+  If neither exists, it briefly uses PartyCombat's non-engaging observer-target
+  packet on the nearest Urchin and restores Barney's prior selected target after
+  the cast. This does not engage, move, or turn him. Every subsequent Warble
+  wakes sleeping Urchins and opens a fresh one-shot sleep scan. Dolomedes and
+  Kickpuncher remain responsible for switching to and killing the adds.
 
 ### V2: Popular Penelope
 

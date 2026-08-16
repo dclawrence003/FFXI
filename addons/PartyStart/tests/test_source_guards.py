@@ -350,14 +350,57 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("Rampart follow-up during Breadwinner Hundred Fists", PLD)
 
     def test_brd_encounter_bars_and_exact_boss_debuffs(self):
-        self.assertIn("{spell='Barstonra', buff='Barstone'}", BRD)
+        v1 = BRD.split("    ['ambuscade-v1'] = {", 1)[1].split(
+            "    ['ambuscade-v2'] = {", 1
+        )[0]
+        self.assertIn("default_bar = {spell='Barstonra', buff='Barstone'}", v1)
         self.assertIn("{spell='Barsilencera', buff='Barsilence'}", BRD)
         self.assertIn("{spell='Barsleepra', buff='Barsleep'}", BRD)
+        self.assertIn("warble_reactions = true", v1)
+        self.assertIn("auto_urchin_sleep = true", v1)
         self.assertIn("debuff_target_names = {'Bozzetto Breadwinner'}", BRD)
         self.assertIn("debuff_target_names = {'Popular Penelope'}", BRD)
         self.assertIn("self_heal_hpp = 85", BRD)
         self.assertIn("local function pstart_brd_cast_self_heal", BRD)
         self.assertIn("emergency %s at %d%% HP", BRD)
+
+    def test_brd_reacts_to_each_warble_before_routine_maintenance(self):
+        expected = {
+            "Fire Meeble Warble": ("Barfira", "Barfire"),
+            "Blizzard Meeble Warble": ("Barblizzara", "Barblizzard"),
+            "Aero Meeble Warble": ("Baraera", "Baraero"),
+            "Stone Meeble Warble": ("Barstonra", "Barstone"),
+            "Thunder Meeble Warble": ("Barthundra", "Barthunder"),
+            "Water Meeble Warble": ("Barwatera", "Barwater"),
+        }
+        for ability, (spell, buff) in expected.items():
+            self.assertIn(
+                f"['{ability}'] = {{spell='{spell}', buff='{buff}'}}", BRD
+            )
+        self.assertIn("action.category == 7", BRD)
+        self.assertIn("action.category == 6 or action.category == 11", BRD)
+        self.assertIn(
+            "windower.raw_register_event('action', pstart_brd_handle_warble)", BRD
+        )
+        maintenance = BRD.split("local function pstart_brd_maintenance", 1)[1]
+        maintenance = maintenance.split("\nend", 1)[0]
+        self.assertLess(
+            maintenance.index("pstart_brd_cast_warble_bar"),
+            maintenance.index("pstart_brd_cast_self_heal"),
+        )
+
+    def test_brd_auto_sleeps_visible_urchins_once_per_warble(self):
+        self.assertIn("PSTART_BRD_URCHIN_SLEEP_WINDOW = 15", BRD)
+        self.assertIn("PSTART_BRD_URCHIN_SLEEP_CHOICES", BRD)
+        choices = BRD.split("local PSTART_BRD_URCHIN_SLEEP_CHOICES", 1)[1]
+        choices = choices.split("}", 1)[0]
+        self.assertIn("'Horde Lullaby II', 'Horde Lullaby'", choices)
+        self.assertNotIn("Foe Lullaby", choices)
+        self.assertIn("windower.ffxi.get_mob_array()", BRD)
+        self.assertIn("mob.name == 'Bozzetto Urchin'", BRD)
+        self.assertIn("pstart_brd_set_observer_target(urchin)", BRD)
+        self.assertIn("pstart_brd_restore_sleep_target(pending)", BRD)
+        self.assertIn("kind = 'urchin_sleep'", BRD)
 
     def test_v1_requires_support_subjobs_and_maintains_reraise(self):
         v1 = ADDON.split("['ambuscade-v1'] = {", 1)[1].split(
@@ -397,7 +440,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.3.3'", ADDON)
+        self.assertIn("_addon.version = '1.3.4'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -414,7 +457,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','limbus','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.3.3'", ADDON)
+        self.assertIn("_addon.version = '1.3.4'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,

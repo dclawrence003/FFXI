@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.3.3'
+_addon.version = '1.3.4'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -221,7 +221,7 @@ local profiles = {
         required_sub_jobs = {
             Barneystinson = {
                 jobs={'WHM'},
-                reason='Barstonra/Barsilencera Housemaker bait and Reraise',
+                reason='dynamic Barspells/Barsilencera, Urchin Lullaby, Housemaker bait, and Reraise',
             },
             Smalls = {
                 jobs={'WHM'},
@@ -235,11 +235,11 @@ local profiles = {
         advisories = {
             'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes, Kickpuncher, Smalls, and Achoo attack from behind.',
             'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
-            'V1: Barney must be BRD/WHM; he supplies Barstonra/Barsilencera and is the intended Housemaker bait. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
+            'V1: Barney must be BRD/WHM; he maintains Barsilencera and default Barstonra, reacts to each elemental Warble with its matching Barspell, and is the intended Housemaker bait. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
             'V1: PartyCombat never forces Barney onto Breadwinner. His camera is user-owned for watching Housemaker; briefly target Breadwinner manually only when an Elegy attempt is wanted.',
             'V1: Barney, Smalls, and Achoo maintain self-Reraise. Dolomedes, Tackleberry, and Kickpuncher require Reraise items; each client warns while unprotected.',
-            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Encounter alerts identify Warble elements, Housemaker movement/Earthshaker, and Hundred Fists.',
-            'V1: Dolo and Kickpuncher automatically split to a visible Bozzetto Urchin and return to Breadwinner after it dies; Tackleberry, Smalls, and Achoo keep attacking Breadwinner while Barney remains free-look.',
+            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Warble ready packets make Barney prioritize the matching elemental Barspell over songs, cures, Elegy, and routine Barstone; Housemaker movement/Earthshaker and Hundred Fists remain alerted.',
+            'V1: Each completed Warble makes Barney attempt one Horde Lullaby on visible Bozzetto Urchins; each later Warble wakes them and rearms that sleep. Dolo and Kickpuncher automatically split to an Urchin and return to Breadwinner after it dies; Tackleberry, Smalls, and Achoo keep attacking Breadwinner while Barney remains free-look.',
             'V1: Drill Claw is a frontal cone with damage and -75% Max HP; keep Breadwinner facing the wall. An unblocked elemental Warble is radial party-wide magic damage.',
             'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold.',
         },
@@ -347,17 +347,17 @@ local function chat(color, message)
 end
 
 local V1_WARBLE_ALERTS = {
-    ['Fire Meeble Warble'] = 'FIRE WARBLE: Barfira; expect Plague/Burn.',
+    ['Fire Meeble Warble'] = 'FIRE WARBLE: Barney -> Barfira; expect Plague/Burn.',
     ['Blizzard Meeble Warble'] =
-        'ICE WARBLE: Barblizzara; expect Paralyze/Frost.',
+        'ICE WARBLE: Barney -> Barblizzara; expect Paralyze/Frost.',
     ['Thunder Meeble Warble'] =
-        'THUNDER WARBLE: Barthundra; expect Stun/Shock.',
+        'THUNDER WARBLE: Barney -> Barthundra; expect Stun/Shock.',
     ['Stone Meeble Warble'] =
-        'STONE WARBLE: Barstonra is already maintained; expect Petrify/Rasp.',
+        'STONE WARBLE: Barney -> Barstonra (normally already active); expect Petrify/Rasp.',
     ['Water Meeble Warble'] =
-        'WATER WARBLE: Barwatera; expect Poison/Drown.',
+        'WATER WARBLE: Barney -> Barwatera; expect Poison/Drown.',
     ['Aero Meeble Warble'] =
-        'WIND WARBLE: Baraera; expect Silence/Choke.',
+        'WIND WARBLE: Barney -> Baraera; expect Silence/Choke.',
     ['Meeble Warble'] =
         'WARBLE ready: element was not exposed by the action resource.',
 }

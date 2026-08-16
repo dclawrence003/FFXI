@@ -204,6 +204,14 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW", self.addon)
         self.assertIn("self_heal_hpp = 85", self.brd)
         self.assertIn("pstart_brd_cast_self_heal", self.brd)
+        self.assertIn("warble_reactions = true", self.brd)
+        self.assertIn("auto_urchin_sleep = true", self.brd)
+        self.assertIn(
+            "windower.raw_register_event('action', pstart_brd_handle_warble)",
+            self.brd,
+        )
+        self.assertIn("PSTART_BRD_URCHIN_SLEEP_WINDOW = 15", self.brd)
+        self.assertIn("kind = 'urchin_sleep'", self.brd)
 
     def test_limbus_profile_is_mobile_and_dolo_driven(self):
         addon = self.addon.split("    limbus = {", 1)[1].split(
