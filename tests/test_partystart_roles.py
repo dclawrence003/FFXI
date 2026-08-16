@@ -122,7 +122,7 @@ class PartyStartRolePolicy(unittest.TestCase):
             self.assertIn(f"['{profile}']=true", self.pld)
         self.assertGreaterEqual(
             self.addon.count(
-                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'}"
+                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Achoo'}"
             ),
             2,
         )

@@ -313,7 +313,7 @@ class PartyStartSourceGuards(unittest.TestCase):
     def test_ambuscade_profiles_limit_engagement_but_share_targets(self):
         self.assertGreaterEqual(
             ADDON.count(
-                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher'}"
+                "attackers = {'Dolomedes', 'Tackleberry', 'Kickpuncher', 'Achoo'}"
             ),
             2,
         )
@@ -396,7 +396,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.3.1'", ADDON)
+        self.assertIn("_addon.version = '1.3.2'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -413,7 +413,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','limbus','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.3.1'", ADDON)
+        self.assertIn("_addon.version = '1.3.2'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
