@@ -1,0 +1,13 @@
+echo Staggered PartyStart-only reload beginning. GearSwap will not be reloaded.
+send Dolomedes lua r PartyStart
+wait 3
+send Tackleberry lua r PartyStart
+wait 3
+send Kickpuncher lua r PartyStart
+wait 3
+send Barneystinson lua r PartyStart
+wait 3
+send Smalls lua r PartyStart
+wait 3
+send Achoo lua r PartyStart
+echo PartyStart-only reload complete. Run //pstart version, then select a profile.

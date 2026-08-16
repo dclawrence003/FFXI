@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.1.0'
+_addon.version = '1.1.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -1341,8 +1341,12 @@ windower.register_event('addon command', function(command, ...)
         return
     end
 
+    local direct_composition = normalize_composition(command)
     local direct_profile = normalize_profile(command)
-    if direct_profile and profiles[direct_profile] then
+    if direct_composition and compositions[direct_composition] and args[1] then
+        -- Friendly shorthand: //pstart progression v1
+        begin(direct_composition, normalize_profile(args[1]), false)
+    elseif direct_profile and profiles[direct_profile] then
         begin(last_composition, direct_profile, false)
     elseif command == 'on' or command == 'start' then
         begin(last_composition, last_profile, false)
@@ -1359,6 +1363,9 @@ windower.register_event('addon command', function(command, ...)
         chat(207, ('Active: %s/%s | Selected: %s/%s')
             :format(current_composition or 'off', current_profile or 'off',
                 last_composition, last_profile))
+    elseif command == 'version' then
+        chat(207, ('Version %s | selected %s/%s')
+            :format(_addon.version, last_composition, last_profile))
     elseif command == 'list' then
         local names = {}
         for name, _ in pairs(compositions) do names[#names + 1] = name end
@@ -1370,11 +1377,13 @@ windower.register_event('addon command', function(command, ...)
     else
         chat(207, 'Commands: use <composition> <profile> | preview '
             ..'<composition> <profile> | on | off | master | apexbats | '
-            ..'physical | accuracy | magic | safe | v1 | v2 | status | list')
+            ..'physical | accuracy | magic | safe | v1 | v2 | status | '
+            ..'version | list')
     end
 end)
 
-chat(158, 'Loaded. Sustained aliases: //pstart efts or bats. '
+chat(158, 'Loaded v'.._addon.version..'. Sustained aliases: '
+    ..'//pstart efts or bats. '
     ..'Ambuscade aliases: //pstart v1 or v2.')
 if composition_warning then
     chat(167, 'Composition policy unavailable; activation is blocked. '

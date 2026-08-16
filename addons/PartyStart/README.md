@@ -121,9 +121,11 @@ each configured participant.
 
 Do not stack `send @all` reloads for PartyCombat, PartyStart, and GearSwap.
 Six simultaneous GearSwap rebuilds can hang or crash Windower's `Hook.dll`.
-Copy `scripts\reload_party_stack_safe.txt` into `Windower\scripts` and run
-`//exec reload_party_stack_safe.txt` between fights when only PartyCombat or
-PartyStart changed. It reloads one client at a time and never reloads GearSwap.
+Copy the scripts in `scripts` into `Windower\scripts`. Run
+`//exec reload_partystart_safe.txt` when only PartyStart changed. Run
+`//exec reload_party_stack_safe.txt` when either PartyCombat or PartyStart
+changed and both should be refreshed. Both reload one client at a time and
+never reload GearSwap.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -137,6 +139,7 @@ Run from any character in the party:
 //pstart use progression master
 //pstart preview progression apexbats
 //pstart use progression apexbats
+//pstart progression ambuv1
 //pstart preview legacy master
 //pstart use legacy master
 //pstart preview progression-blu master
@@ -152,6 +155,7 @@ Run from any character in the party:
 //pstart on
 //pstart off
 //pstart status
+//pstart version
 ```
 
 `preview <composition> <profile>` gathers the same live six-client job report
@@ -164,7 +168,10 @@ supported jobs have several viable subjobs.
 
 Choosing a tactical profile by itself (for example `//pstart bats` or
 `//pstart v1`) applies it to the last selected composition. `on` reapplies the
-last selected composition/profile pair. Defaults are `progression/master`.
+last selected composition/profile pair. The shorthand
+`//pstart <composition> <profile>` is also accepted, so
+`//pstart progression ambuv1` is equivalent to
+`//pstart use progression ambuv1`. Defaults are `progression/master`.
 `off` and `stop`
 disable HealBot support, Roller2 on COR, and applicable GearSwap automation.
 They disable AutoWS2 only on an instance that PartyStart enabled. They neither

@@ -321,7 +321,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.1.0'", ADDON)
+        self.assertIn("_addon.version = '1.1.1'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -336,6 +336,19 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("apexbats=true", PLD)
         self.assertIn("PSTART_PLD_SUSTAINED_PROFILES", PLD)
         self.assertIn("'master','apexbats','physical'", DNC)
+
+    def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
+        self.assertIn("_addon.version = '1.1.1'", ADDON)
+        self.assertIn(
+            "direct_composition and compositions[direct_composition] and args[1]",
+            ADDON,
+        )
+        self.assertIn(
+            "begin(direct_composition, normalize_profile(args[1]), false)",
+            ADDON,
+        )
+        self.assertIn("elseif command == 'version' then", ADDON)
+        self.assertIn("Loaded v'.._addon.version", ADDON)
 
 
 if __name__ == "__main__":
