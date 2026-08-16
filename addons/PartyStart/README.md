@@ -381,12 +381,11 @@ direbat`, `//pstart direbats`, `//pstart tombbat`, `//pstart tombbats`, and
 `//pstart ranperre` select the same profile on the last composition. The old
 `//pstart bats` alias intentionally remains mapped to `apexbats`.
 
-The listed 95%-hit accuracy requirement is 1,264. This profile begins with
-Chaos + Hunter's Roll, Victory March + Mage's Ballad III + Blade Madrigal, and
-MP-reserved Distract before Dia. Hunter's replaces Samurai Roll only here;
-Fury/Frailty remains in place so the profile does not sacrifice both attack
-support layers. If live parser results show every attacker already capped,
-Samurai Roll is the first setting to restore.
+This profile uses Corsair's Roll for its Exemplar Point bonus and Samurai Roll
+to accelerate the party's 1,000-TP weapon-skill cycle. Victory March + Mage's
+Ballad III + Blade Madrigal and MP-reserved Distract before Dia supply its
+accuracy support against the listed 1,264 requirement for a 95% hit rate.
+Fury/Frailty remains in place as the attack and defense-down support layer.
 
 The bat's only listed moves are Ultrasonics and Blood Drain. Barney maintains
 Barblizzara for Ice-aligned Ultrasonics, which applies AoE Evasion Down; normal

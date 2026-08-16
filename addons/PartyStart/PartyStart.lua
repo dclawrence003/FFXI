@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.0'
+_addon.version = '1.4.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -81,11 +81,10 @@ local profiles = {
         sustained = true,
         stationary = true,
         physical_offense = true,
-        -- These level 133-135 bats need roughly 1264 accuracy for a 95% hit
-        -- rate. Start with Hunter's rather than Samurai Roll; the party keeps
-        -- March, Ballad, and Madrigal so accuracy does not consume its MP
-        -- recovery song.
-        cor = {'chaos', 'hunter'},
+        -- Corsair's Roll prioritizes Exemplar Point gain while Samurai Roll
+        -- accelerates the party's 1000-TP weapon-skill cycle. March, Madrigal,
+        -- and MP-reserved Distract remain the profile's accuracy coverage.
+        cor = {'corsair', 'samurai'},
         brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
         brd_debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
@@ -98,7 +97,7 @@ local profiles = {
         },
         advisories = {
             "Locus Dire Bats: stationary camp mode is active; PartyCombat engages and faces but never approaches. Tackleberry's EasyFarm target list must contain the exact name Locus Dire Bat.",
-            "Locus Dire Bats: Hunter's Roll, Blade Madrigal, and MP-reserved Distract cover the 1264 accuracy target. Return to Samurai Roll only after live hit-rate evidence shows the party is capped.",
+            "Locus Dire Bats: Corsair's Roll increases Exemplar Point gain and Samurai Roll accelerates weapon skills. Blade Madrigal plus MP-reserved Distract cover the 1264 accuracy target.",
             'Locus Dire Bats: Barblizzara helps resist Ice-aligned Ultrasonics (AoE Evasion Down). Blood Drain is single-target Dark damage, so a six-character Shell rotation is intentionally omitted.',
             'Locus Dire Bats are passive but detect by sound. PartyStart controls support and stationary combat; EasyFarm and camp placement remain responsible for pulls.',
         },

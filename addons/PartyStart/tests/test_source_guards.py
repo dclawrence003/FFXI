@@ -442,7 +442,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.0'", ADDON)
+        self.assertIn("_addon.version = '1.4.1'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -462,7 +462,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.0'", ADDON)
+        self.assertIn("_addon.version = '1.4.1'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -487,7 +487,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("Sustained Locus Dire Bats: King Ranperre's Tomb", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("stationary = true", addon)
-        self.assertIn("cor = {'chaos', 'hunter'}", addon)
+        self.assertIn("cor = {'corsair', 'samurai'}", addon)
         self.assertIn("1264 accuracy target", addon)
         self.assertIn("locus = 'locusbats'", ADDON)
         self.assertIn("direbats = 'locusbats'", ADDON)

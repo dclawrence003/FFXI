@@ -170,7 +170,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("Sustained Locus Dire Bats", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("stationary = true", addon)
-        self.assertIn("cor = {'chaos', 'hunter'}", addon)
+        self.assertIn("cor = {'corsair', 'samurai'}", addon)
         self.assertIn("1264 accuracy target", addon)
         self.assertIn("party_shell = false", rdm)
         self.assertLess(rdm.index("'Distract III'"), rdm.index("'Dia III'"))
