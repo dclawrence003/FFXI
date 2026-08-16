@@ -7,7 +7,7 @@
 --     include('Common/PartyStart_BRD.lua')
 --
 -- PartyStart drives it with:
---     gs c pstartbrd <master|apexbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
+--     gs c pstartbrd <master|apexbats|locusbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
 --     gs c pstartbrd sleep
 --     gs c pstartbrd off
 
@@ -34,6 +34,23 @@ local pstart_brd_profiles = {
         },
         party_buffs = {
             {spell='Barwatera', buff='Barwater'},
+        },
+        debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+    },
+    locusbats = {
+        song_mode = 'Sustain',
+        songs = {
+            {spell='Victory March', buff='march'},
+            {spell="Mage's Ballad III", buff='ballad'},
+            {spell='Blade Madrigal', buff='madrigal'},
+        },
+        -- Ultrasonics is Ice-aligned AoE Evasion Down. This inexpensive,
+        -- long-duration ward reduces status landings without sacrificing the
+        -- Ballad needed for an unattended camp.
+        party_buffs = {
+            {spell='Barblizzara', buff='Barblizzard'},
         },
         debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
@@ -174,6 +191,7 @@ local PSTART_BRD_SLEEP_WINDOW = 8
 local PSTART_BRD_WARBLE_WINDOW = 4.25
 local PSTART_BRD_URCHIN_SLEEP_WINDOW = 15
 local PSTART_BRD_URCHIN_APPEAR_DELAY = 0.15
+local PSTART_BRD_HORDE_MAX_RADIUS = 8
 local PSTART_BRD_REISSUE_DELAY = 1.25
 local PSTART_BRD_SLEEP_CHOICES = {
     'Horde Lullaby II', 'Horde Lullaby', 'Foe Lullaby II', 'Foe Lullaby',
@@ -551,6 +569,12 @@ local function pstart_brd_cast_urchin_sleep()
 
     local urchins = pstart_brd_visible_urchins()
     if #urchins == 0 then return false end
+    local closest_distance = math.sqrt(math.max(0,
+        tonumber(urchins[1].distance) or math.huge))
+    -- Horde Lullaby's AoE is centered on Barney, not on the selected mob. Even
+    -- the maximum String-skill radius is eight yalms, so wait for Barney to
+    -- return from Housemaker rather than spending the one-shot cast out of range.
+    if closest_distance > PSTART_BRD_HORDE_MAX_RADIUS then return false end
 
     local spell = pstart_brd_first_spell(PSTART_BRD_URCHIN_SLEEP_CHOICES)
     if not spell then
@@ -664,10 +688,9 @@ end
 windower.raw_register_event('action', pstart_brd_handle_warble)
 
 -- A Limbus sleep request is a single deliberate cast, not a maintained
--- debuff. Horde Lullaby is centered on the synchronized active target: melee
--- immediately wakes that one enemy while linked enemies around it remain
--- asleep. The short queue lets the request survive a song already in flight
--- without creating an autonomous sleep loop.
+-- debuff. It uses the synchronized active target while Horde Lullaby's actual
+-- area is centered on Barney. The short queue lets the request survive a song
+-- already in flight without creating an autonomous sleep loop.
 local function pstart_brd_cast_sleep()
     local deadline = tonumber(pstart_brd.sleep_requested_until) or 0
     if not pstart_brd.active or pstart_brd.profile ~= 'limbus'
@@ -894,7 +917,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
-            ..'<master|apexbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'<master|apexbats|locusbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
             ..'ambuscade-v2|off> <leader>; or gs c pstartbrd sleep')
     end
 
@@ -969,12 +992,9 @@ function job_aftercast(spell, spellMap, eventArgs)
             pstart_brd_restore_sleep_target(pending)
             if spell.interrupted then
                 pstart_brd.urchin_sleep_issued_at = 0
-                pstart_brd.urchin_sleep_requested_until = math.max(
-                    pstart_brd.urchin_sleep_requested_until or 0,
-                    os.clock() + 4)
                 tickdelay = 0
                 add_to_chat(123,
-                    'PartyStart BRD: Urchin Lullaby interrupted; retry remains queued.')
+                    'PartyStart BRD: Urchin Lullaby interrupted; retry remains queued inside the original scan window.')
             else
                 pstart_brd.urchin_sleep_requested_until = 0
                 pstart_brd.urchin_sleep_not_before = 0

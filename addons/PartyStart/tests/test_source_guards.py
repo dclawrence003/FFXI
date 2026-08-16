@@ -391,6 +391,7 @@ class PartyStartSourceGuards(unittest.TestCase):
 
     def test_brd_auto_sleeps_visible_urchins_once_per_warble(self):
         self.assertIn("PSTART_BRD_URCHIN_SLEEP_WINDOW = 15", BRD)
+        self.assertIn("PSTART_BRD_HORDE_MAX_RADIUS = 8", BRD)
         self.assertIn("PSTART_BRD_URCHIN_SLEEP_CHOICES", BRD)
         choices = BRD.split("local PSTART_BRD_URCHIN_SLEEP_CHOICES", 1)[1]
         choices = choices.split("}", 1)[0]
@@ -398,6 +399,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertNotIn("Foe Lullaby", choices)
         self.assertIn("windower.ffxi.get_mob_array()", BRD)
         self.assertIn("mob.name == 'Bozzetto Urchin'", BRD)
+        self.assertIn("closest_distance > PSTART_BRD_HORDE_MAX_RADIUS", BRD)
         self.assertIn("pstart_brd_set_observer_target(urchin)", BRD)
         self.assertIn("pstart_brd_restore_sleep_target(pending)", BRD)
         self.assertIn("kind = 'urchin_sleep'", BRD)
@@ -432,15 +434,15 @@ class PartyStartSourceGuards(unittest.TestCase):
 
     def test_apex_bats_profile_is_sustained_and_status_aware(self):
         addon = ADDON.split("    apexbats = {", 1)[1].split(
-            "    physical = {", 1
+            "    locusbats = {", 1
         )[0]
         rdm = RDM.split("    apexbats = {", 1)[1].split(
-            "    physical = {", 1
+            "    locusbats = {", 1
         )[0]
         brd = BRD.split("    apexbats = {", 1)[1].split(
-            "    physical = {", 1
+            "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.3.4'", ADDON)
+        self.assertIn("_addon.version = '1.4.0'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -454,10 +456,13 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("{spell='Barwatera', buff='Barwater'}", brd)
         self.assertIn("apexbats=true", PLD)
         self.assertIn("PSTART_PLD_SUSTAINED_PROFILES", PLD)
-        self.assertIn("'master','apexbats','apexcrabs','limbus','physical'", DNC)
+        self.assertIn(
+            "'master','apexbats','locusbats','apexcrabs','limbus','physical'",
+            DNC,
+        )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.3.4'", ADDON)
+        self.assertIn("_addon.version = '1.4.0'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -468,6 +473,32 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertIn("elseif command == 'version' then", ADDON)
         self.assertIn("Loaded v'.._addon.version", ADDON)
+
+    def test_locus_dire_bats_profile_is_accuracy_first_and_sustainable(self):
+        addon = ADDON.split("    locusbats = {", 1)[1].split(
+            "    apexcrabs = {", 1
+        )[0]
+        rdm = RDM.split("    locusbats = {", 1)[1].split(
+            "    apexcrabs = {", 1
+        )[0]
+        brd = BRD.split("    locusbats = {", 1)[1].split(
+            "    apexcrabs = {", 1
+        )[0]
+        self.assertIn("Sustained Locus Dire Bats: King Ranperre's Tomb", addon)
+        self.assertIn("sustained = true", addon)
+        self.assertIn("stationary = true", addon)
+        self.assertIn("cor = {'chaos', 'hunter'}", addon)
+        self.assertIn("1264 accuracy target", addon)
+        self.assertIn("locus = 'locusbats'", ADDON)
+        self.assertIn("direbats = 'locusbats'", ADDON)
+        self.assertIn("tombbats = 'locusbats'", ADDON)
+        self.assertIn("party_shell = false", rdm)
+        self.assertIn("debuff_mp_floor = 55", rdm)
+        self.assertLess(rdm.index("'Distract III'"), rdm.index("'Dia III'"))
+        self.assertIn("{spell='Barblizzara', buff='Barblizzard'}", brd)
+        self.assertNotIn("Barwatera", brd)
+        self.assertIn("locusbats=true", PLD)
+        self.assertIn("'apexbats','locusbats','apexcrabs'", DNC)
 
     def test_apex_crabs_profile_is_sustained_and_event_driven(self):
         addon = ADDON.split("    apexcrabs = {", 1)[1].split(
@@ -522,15 +553,18 @@ class PartyStartSourceGuards(unittest.TestCase):
             "    apexbats = {", 1
         )[0]
         bats = ADDON.split("    apexbats = {", 1)[1].split(
+            "    locusbats = {", 1
+        )[0]
+        locus_bats = ADDON.split("    locusbats = {", 1)[1].split(
             "    apexcrabs = {", 1
         )[0]
         crabs = ADDON.split("    apexcrabs = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        for profile in (master, bats, crabs):
+        for profile in (master, bats, locus_bats, crabs):
             self.assertIn("sustained = true", profile)
             self.assertIn("stationary = true", profile)
-        self.assertEqual(3, ADDON.count("stationary = true"))
+        self.assertEqual(4, ADDON.count("stationary = true"))
         self.assertIn("profile.stationary and 'stationary' or 'mobile'", ADDON)
 
     def test_limbus_is_mobile_dolo_driven_and_has_one_shot_pack_sleep(self):

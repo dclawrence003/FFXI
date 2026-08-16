@@ -49,6 +49,30 @@ local pstart_rdm_profiles = {
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
         },
     },
+    locusbats = {
+        sustained = true,
+        -- King Ranperre's Tomb Locus Dire Bats have a 1264 accuracy target.
+        -- Distract is therefore the first bounded offensive cast, while the
+        -- usual MP floors keep it from threatening the overnight reserve.
+        -- Blood Drain is single-target, so a six-target Shell pass costs more
+        -- than it prevents in this stationary PLD-led camp.
+        gain = {
+            spells={'Gain-MND', 'Gain-STR'},
+            buff='MND Boost',
+            buffs={['Gain-MND']='MND Boost', ['Gain-STR']='STR Boost'},
+        },
+        temper = true,
+        lean = true,
+        party_shell = false,
+        routine_buff_mp_floor = 35,
+        tank_buff_mp_floor = 20,
+        debuff_mp_floor = 55,
+        debuff_min_target_hpp = 65,
+        debuffs = {
+            {spells={'Distract III', 'Distract II', 'Distract'}, duration=150},
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
+        },
+    },
     apexcrabs = {
         sustained = true,
         -- Bubble Shower deals Water damage and applies STR Down, so the

@@ -159,6 +159,10 @@ Tackleberry, Kickpuncher, Barney, and Smalls's changed GearSwap controllers,
 with ten-second gaps, then refreshes PartyStart one client at a time. It never
 reloads Dolo's GearSwap. Run it out of combat, then preview and apply
 `progression/limbus`.
+For the Locus Dire Bat profile, `//exec reload_locusbats_safe.txt` uses the
+same four-client stagger, then refreshes PartyStart across all six. It never
+reloads Dolo's GearSwap. Run it out of combat before applying
+`progression/locusbats`.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -172,6 +176,8 @@ Run from any character in the party:
 //pstart use progression master
 //pstart preview progression apexbats
 //pstart use progression apexbats
+//pstart preview progression locusbats
+//pstart use progression locusbats
 //pstart preview progression apexcrabs
 //pstart use progression apexcrabs
 //pstart preview progression limbus
@@ -184,6 +190,7 @@ Run from any character in the party:
 //pstart physical
 //pstart master
 //pstart bats
+//pstart locus
 //pstart crabs
 //pstart limbus
 //pstart sleep
@@ -266,7 +273,7 @@ seconds after GearSwap loads unless a PartyStart profile has already activated
 during that window. PartyStart enables it only when a profile is applied, and
 `//pstart off` returns GEO to the same idle state.
 
-## Sustained Apex profiles
+## Sustained XP profiles
 
 `master` is the default for sustained COR/PLD/DNC/BRD/RDM/GEO grinding. It is
 currently tuned for Apex Efts: their AoE damage and buff dispel favor clustered
@@ -274,7 +281,8 @@ Majesty curing plus continuously maintained, non-redundant support.
 `//pstart efts`, `//pstart apexefts`, and `//pstart apex-efts` are aliases that
 preserve this established profile without changing its canonical name.
 
-All supplied unattended XP profiles (`master`, `apexbats`, and `apexcrabs`)
+All supplied unattended XP profiles (`master`, `apexbats`, `locusbats`, and
+`apexcrabs`)
 install PartyCombat's **stationary** movement policy. Attackers still receive
 the synchronized target, turn to face it, and engage; PartyCombat never changes
 their map position. The external puller must bring each enemy to the planted
@@ -354,6 +362,45 @@ route or replace the external pull loop, so camp placement and the puller's
 unattended configuration remain operational prerequisites. Like the Eft and
 Crab profiles, this profile keeps the party planted while allowing every
 attacker to turn toward and engage the synchronized target.
+
+### `locusbats` (`locus`, `direbats`, `tombbats`)
+
+This stationary sustained profile targets the level 133–135 `Locus Dire Bat`
+in King Ranperre's Tomb. It reuses the proven PLD pull/heal, DNC emergency
+Waltz, RDM Convert, and GEO Fury/Frailty/Entrust-Refresh controls, but it is not
+just an alias for the lower-level Dho Gates bat profile:
+
+```text
+//pstart preview progression locusbats
+//pstart use progression locusbats
+//pc on
+```
+
+`//pstart locus`, `//pstart locusbat`, `//pstart locus-bats`, `//pstart
+direbat`, `//pstart direbats`, `//pstart tombbat`, `//pstart tombbats`, and
+`//pstart ranperre` select the same profile on the last composition. The old
+`//pstart bats` alias intentionally remains mapped to `apexbats`.
+
+The listed 95%-hit accuracy requirement is 1,264. This profile begins with
+Chaos + Hunter's Roll, Victory March + Mage's Ballad III + Blade Madrigal, and
+MP-reserved Distract before Dia. Hunter's replaces Samurai Roll only here;
+Fury/Frailty remains in place so the profile does not sacrifice both attack
+support layers. If live parser results show every attacker already capped,
+Samurai Roll is the first setting to restore.
+
+The bat's only listed moves are Ultrasonics and Blood Drain. Barney maintains
+Barblizzara for Ice-aligned Ultrasonics, which applies AoE Evasion Down; normal
+HealBot status removal remains the fallback when it lands. Blood Drain is
+single-target Dark damage, so Smalls deliberately skips the expensive
+six-character Shell pass. There are no crab-style self-buffs to Dispel and no
+flock-bat Sonic Boom, so the profile adds neither periodic Dispel nor
+Barwatera.
+
+Tackleberry's EasyFarm profile must contain the exact target name `Locus Dire
+Bat`. The supplied local profile keeps Approach off, Wander at zero, detection
+at 20.9, and Flash's action distance at 50, so the party stays planted and the
+puller uses Flash at its practical maximum range. PartyStart does not start
+EasyFarm or choose a safe Tomb camp.
 
 ### `apexcrabs` (`crabs`)
 
@@ -442,8 +489,8 @@ Waltz ownership.
 From Dolo, `//pstart sleep` queues one cast for up to eight seconds. Barney
 prefers Horde Lullaby II, then Horde Lullaby; Foe Lullaby II/I are safe
 learned-spell fallbacks but are single-target rather than pack control. The
-cast is centered on Dolo's synchronized current target. The party continues
-damaging that target while nearby links sleep, which is the useful shape for
+  target is Dolo's synchronized current target, while Horde Lullaby's area is
+  centered on Barney. The party continues damaging that target while nearby links sleep, which is the useful shape for
 "kill just enough, get the floor item, then leave." An interrupted cast gets a
 short retry window; a completed cast is never automatically refreshed.
 
@@ -568,7 +615,10 @@ Tackleberry.
   response. The sleep action prefers `<bt>` or an already safe selected target.
   If neither exists, it briefly uses PartyCombat's non-engaging observer-target
   packet on the nearest Urchin and restores Barney's prior selected target after
-  the cast. This does not engage, move, or turn him. Every subsequent Warble
+  the cast. This does not engage, move, or turn him. Because Horde Lullaby's
+  radius is centered on Barney, the controller waits if every Urchin is more
+  than the maximum eight-yalm radius away; the 15-second queue lets him return
+  from Housemaker first. Every subsequent Warble
   wakes sleeping Urchins and opens a fresh one-shot sleep scan. Dolomedes and
   Kickpuncher remain responsible for switching to and killing the adds.
 
@@ -597,13 +647,14 @@ Tackleberry.
 | --- | --- | --- |
 | `master` | March / Ballad / Madrigal; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `apexbats` (`bats`) | March / Ballad / Madrigal; Barwatera; Carnage Elegy | Fury / Frailty; Entrust Refresh |
+| `locusbats` (`locus`, `direbats`, `tombbats`) | March / Ballad / Madrigal; Barblizzara; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `apexcrabs` (`crabs`) | March / Ballad / Madrigal; Barwatera; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `limbus` (`lim`) | March / Minuet / Madrigal; on-demand Lullaby; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `physical` | March / Minuet / Madrigal | Fury / Frailty |
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
 | `safe` | March / Scherzo / Madrigal | Barrier / Frailty |
-| `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; Barstone / Barsilence; opportunistic Breadwinner Elegy only while manually targeted | Fury / Frailty; Entrust Wilt on PLD |
+| `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; default Barstone / Barsilence; packet-reactive elemental Bars and one Horde Lullaby per activated Urchin wave; opportunistic Breadwinner Elegy only while manually targeted | Fury / Frailty; Entrust Wilt on PLD |
 | `ambuscade-v2` (`v2`) | March / Minuet / Madrigal; Barstone / Barsleep; Penelope Elegy | Fury / Frailty; Entrust Refresh |
 
 RDM enfeebles by profile:
@@ -612,6 +663,7 @@ RDM enfeebles by profile:
 | --- | --- |
 | `master` | Dia only (suspended below 55% MP or below 65% target HP) |
 | `apexbats` | Dia only (suspended below 55% MP or below 65% target HP) |
+| `locusbats` | Distract, then Dia (suspended below 55% MP or below 65% target HP) |
 | `apexcrabs` | Dia plus event-driven Dispel after crab self-buffs; both are suspended below 55% current MP, and Dispel also preserves that post-cast floor |
 | `limbus` (`lim`) | Dia only (suspended below 35% MP or below 45% target HP) |
 | `physical` | Dia, Distract (suspended below 45% MP or below 50% target HP) |
@@ -714,7 +766,7 @@ AutoWS2 reservation, and total completed cures.
 - PLD similarly pauses only its own AutoWS2 when Chivalry is ready and MP falls
   below 45%; it resumes after Chivalry, if Chivalry ceases to be available, or
   when MP has already recovered above 55%. `//pstart off` never re-enables it.
-- In `master`, `apexbats`, and `apexcrabs`, Sentinel is attempted only after Flash lands on
+- In `master`, `apexbats`, `locusbats`, and `apexcrabs`, Sentinel is attempted only after Flash lands on
   the current target or after a five-second establishment fallback. V1 suppresses that
   pull-time Sentinel and all pre-threshold automated tank cooldowns, then uses
   Sentinel at 52% Breadwinner HP and Rampart after Sentinel's window. V2 never

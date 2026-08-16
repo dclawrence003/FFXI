@@ -179,6 +179,8 @@ end
 selected_target = housemaker
 battle_target = nil
 mob_array = {urchin_two, urchin_one}
+urchin_one.distance = 100
+urchin_two.distance = 121
 fake_now = fake_now + 1
 callbacks.action({
     category=11,
@@ -186,6 +188,20 @@ callbacks.action({
     param=warbles[#warbles].id,
 })
 fake_now = fake_now + 0.2
+check_song()
+assert(commands[#commands] ~= '/ma "Horde Lullaby II" <t>',
+    'Horde Lullaby was spent while Barney was outside its maximum radius')
+assert(#injected == 0, 'out-of-radius Urchin changed Barney target')
+if commands[#commands] == '/ma "Barstonra" <me>' then
+    job_aftercast({
+        id=spells_by_name.Barstonra.id,
+        interrupted=false,
+    }, nil, {})
+    buffactive.Barstone = true
+end
+urchin_one.distance = 4
+urchin_two.distance = 9
+fake_now = fake_now + 0.5
 check_song()
 assert(commands[#commands] == '/ma "Horde Lullaby II" <t>',
     'visible Urchins did not trigger Horde Lullaby II')

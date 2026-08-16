@@ -320,7 +320,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_dnc.autows_paused = false
         add_to_chat(122, 'PartyStart DNC support is Off.')
     elseif requested and S{
-        'master','apexbats','apexcrabs','limbus','physical','accuracy','magic','safe',
+        'master','apexbats','locusbats','apexcrabs','limbus','physical','accuracy','magic','safe',
         'ambuscade-v1','ambuscade-v2'
     }:contains(requested)
         and pstart_dnc_valid_name(commandArgs[3])
@@ -342,7 +342,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart DNC usage: gs c pstartdnc '
-            ..'<master|apexbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'<master|apexbats|locusbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
             ..'ambuscade-v2|status|off> <leader>')
     end
 end

@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.3.4'
+_addon.version = '1.4.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -74,6 +74,33 @@ local profiles = {
             'Apex Bats: Barwatera is maintained for Water-aligned Sonic Boom; HealBot removes Attack Down only from physical jobs by default.',
             'Apex Bats: Blade Madrigal is retained for the Dho Gates 1113 accuracy target; switch profiles only after live hit-rate evidence supports it.',
             'Apex Bats detect by sound. PartyStart configures support/offense only; pulling and camp safety remain external responsibilities.',
+        },
+    },
+    locusbats = {
+        label = "Sustained Locus Dire Bats: King Ranperre's Tomb",
+        sustained = true,
+        stationary = true,
+        physical_offense = true,
+        -- These level 133-135 bats need roughly 1264 accuracy for a 95% hit
+        -- rate. Start with Hunter's rather than Samurai Roll; the party keeps
+        -- March, Ballad, and Madrigal so accuracy does not consume its MP
+        -- recovery song.
+        cor = {'chaos', 'hunter'},
+        brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh',
+            entrust_jobs={'PLD','RUN','RDM','COR'}},
+        rdm_debuffs = {
+            {'Distract III', 'Distract II', 'Distract'},
+            {'Dia III', 'Dia II', 'Dia'},
+        },
+        advisories = {
+            "Locus Dire Bats: stationary camp mode is active; PartyCombat engages and faces but never approaches. Tackleberry's EasyFarm target list must contain the exact name Locus Dire Bat.",
+            "Locus Dire Bats: Hunter's Roll, Blade Madrigal, and MP-reserved Distract cover the 1264 accuracy target. Return to Samurai Roll only after live hit-rate evidence shows the party is capped.",
+            'Locus Dire Bats: Barblizzara helps resist Ice-aligned Ultrasonics (AoE Evasion Down). Blood Drain is single-target Dark damage, so a six-character Shell rotation is intentionally omitted.',
+            'Locus Dire Bats are passive but detect by sound. PartyStart controls support and stationary combat; EasyFarm and camp placement remain responsible for pulls.',
         },
     },
     apexcrabs = {
@@ -278,6 +305,15 @@ local profile_aliases = {
     bats = 'apexbats',
     apexbat = 'apexbats',
     ['apex-bats'] = 'apexbats',
+    locus = 'locusbats',
+    locusbat = 'locusbats',
+    ['locus-bat'] = 'locusbats',
+    ['locus-bats'] = 'locusbats',
+    direbat = 'locusbats',
+    direbats = 'locusbats',
+    tombbat = 'locusbats',
+    tombbats = 'locusbats',
+    ranperre = 'locusbats',
     crabs = 'apexcrabs',
     crab = 'apexcrabs',
     apexcrab = 'apexcrabs',
@@ -1778,13 +1814,13 @@ windower.register_event('addon command', function(command, ...)
         table.sort(names)
         chat(207, 'Compositions: '..table.concat(names, ', '))
         chat(207, 'Profiles: master (Apex Efts), apexbats (bats), '
-            ..'apexcrabs (crabs), '
+            ..'locusbats (locus/direbats/tombbats), apexcrabs (crabs), '
             ..'limbus (lim), physical, accuracy, magic, safe, '
             ..'ambuscade-v1 (v1), ambuscade-v2 (v2)')
     else
         chat(207, 'Commands: use <composition> <profile> | preview '
             ..'<composition> <profile> | on | off | master | apexbats | '
-            ..'apexcrabs | limbus | sleep | '
+            ..'locusbats | apexcrabs | limbus | sleep | '
             ..'physical | accuracy | magic | safe | v1 | v2 | status | '
             ..'version | list')
     end
