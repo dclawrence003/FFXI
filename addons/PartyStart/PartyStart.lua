@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.1.1'
+_addon.version = '1.2.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -67,6 +67,26 @@ local profiles = {
             'Apex Bats: Barwatera is maintained for Water-aligned Sonic Boom; HealBot removes Attack Down only from physical jobs by default.',
             'Apex Bats: Blade Madrigal is retained for the Dho Gates 1113 accuracy target; switch profiles only after live hit-rate evidence supports it.',
             'Apex Bats detect by sound. PartyStart configures support/offense only; pulling and camp safety remain external responsibilities.',
+        },
+    },
+    apexcrabs = {
+        label = 'Sustained Apex Crabs: Dho Gates',
+        sustained = true,
+        physical_offense = true,
+        cor = {'chaos', 'samurai'},
+        brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh',
+            entrust_jobs={'PLD','RUN','RDM','COR'}},
+        rdm_debuffs = {
+            {'Dia III', 'Dia II', 'Dia'},
+        },
+        advisories = {
+            'Apex Crabs: Barwatera and Shell cover Water-aligned Bubble Shower; HealBot removes STR Down only from physical jobs by default.',
+            'Apex Crabs: Smalls makes one MP-reserved Dispel attempt after each observed Bubble Curtain, Metallic Body, or Scissor Guard; it does not poll blindly.',
+            'Apex Crabs: Blade Madrigal is retained for the Dho Gates 1113 accuracy target. The G-11 Crab Bowl supports an independent infinite chain.',
         },
     },
     physical = {
@@ -187,6 +207,11 @@ local profile_aliases = {
     bats = 'apexbats',
     apexbat = 'apexbats',
     ['apex-bats'] = 'apexbats',
+    crabs = 'apexcrabs',
+    crab = 'apexcrabs',
+    apexcrab = 'apexcrabs',
+    ['apex-crab'] = 'apexcrabs',
+    ['apex-crabs'] = 'apexcrabs',
     efts = 'master',
     apexefts = 'master',
     ['apex-efts'] = 'master',
@@ -1372,18 +1397,20 @@ windower.register_event('addon command', function(command, ...)
         table.sort(names)
         chat(207, 'Compositions: '..table.concat(names, ', '))
         chat(207, 'Profiles: master (Apex Efts), apexbats (bats), '
+            ..'apexcrabs (crabs), '
             ..'physical, accuracy, magic, safe, '
             ..'ambuscade-v1 (v1), ambuscade-v2 (v2)')
     else
         chat(207, 'Commands: use <composition> <profile> | preview '
             ..'<composition> <profile> | on | off | master | apexbats | '
+            ..'apexcrabs | '
             ..'physical | accuracy | magic | safe | v1 | v2 | status | '
             ..'version | list')
     end
 end)
 
 chat(158, 'Loaded v'.._addon.version..'. Sustained aliases: '
-    ..'//pstart efts or bats. '
+    ..'//pstart efts, bats, or crabs. '
     ..'Ambuscade aliases: //pstart v1 or v2.')
 if composition_warning then
     chat(167, 'Composition policy unavailable; activation is blocked. '

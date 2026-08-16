@@ -55,12 +55,14 @@ local PSTART_PLD_V1_HUNDRED_FISTS_HPP = 52
 local PSTART_PLD_PROFILES = {
     master=true,
     apexbats=true,
+    apexcrabs=true,
     ['ambuscade-v1']=true,
     ['ambuscade-v2']=true,
 }
 local PSTART_PLD_SUSTAINED_PROFILES = {
     master=true,
     apexbats=true,
+    apexcrabs=true,
 }
 
 local function pstart_pld_valid_name(name)
@@ -553,7 +555,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart PLD usage: gs c pstartpld '
-            ..'<master|apexbats|ambuscade-v1|ambuscade-v2|status|off> <leader>')
+            ..'<master|apexbats|apexcrabs|ambuscade-v1|ambuscade-v2|status|off> <leader>')
     end
 end
 

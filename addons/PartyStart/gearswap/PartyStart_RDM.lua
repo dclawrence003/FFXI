@@ -49,6 +49,39 @@ local pstart_rdm_profiles = {
             {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
         },
     },
+    apexcrabs = {
+        sustained = true,
+        -- Bubble Shower deals Water damage and applies STR Down, so the
+        -- one-time Shell rotation has real value here in addition to
+        -- Barwatera and HealBot's job-aware Erase policy.
+        gain = {
+            spells={'Gain-MND', 'Gain-STR'},
+            buff='MND Boost',
+            buffs={['Gain-MND']='MND Boost', ['Gain-STR']='STR Boost'},
+        },
+        temper = true,
+        lean = true,
+        party_shell = true,
+        routine_buff_mp_floor = 35,
+        tank_buff_mp_floor = 20,
+        debuff_mp_floor = 55,
+        debuff_min_target_hpp = 65,
+        dispel = {
+            target_names={'Apex Crab'},
+            moves={
+                ['Bubble Curtain']=true,
+                ['Metallic Body']=true,
+                ['Scissor Guard']=true,
+            },
+            mp_floor=55,
+            min_target_hpp=15,
+            ttl=30,
+            max_pending=3,
+        },
+        debuffs = {
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
+        },
+    },
     physical = {
         gain = {spells={'Gain-STR'}, buff='STR Boost'},
         temper = true,
@@ -161,6 +194,9 @@ local pstart_rdm = {
     reactive_repairs = {},
     opener_targets = {},
     last_heal_at = 0,
+    dispel_targets = {},
+    dispel_count = 0,
+    last_dispel = 'none',
 }
 
 local PSTART_RDM_LOSE_EFFECT_MESSAGES = {
@@ -350,6 +386,48 @@ end
 -- authoritative action packet so it is recast without giving HealBot buff
 -- ownership or restarting the whole six-character rotation.
 windower.raw_register_event('action', function(action)
+    local profile = pstart_rdm.active
+        and pstart_rdm_profiles[pstart_rdm.profile]
+        or nil
+    local policy = profile and profile.dispel or nil
+    -- Category 7 announces the readying move and stores its ID inside the
+    -- first target result. Category 11 is the completed move and exposes the
+    -- same ID in action.param. Queue only on completion so one move cannot
+    -- create two Dispel attempts or survive an interrupted readying action.
+    local ability = policy and action and action.category == 11
+        and res.monster_abilities[action.param]
+        or nil
+    local actor = ability and windower.ffxi.get_mob_by_id(action.actor_id)
+        or nil
+    local local_target = actor and windower.ffxi.get_mob_by_target('t')
+        or nil
+    if actor and type(actor.name) == 'string'
+        and local_target and local_target.id == actor.id
+        and pstart_rdm_name_in(policy.target_names, actor.name)
+        and policy.moves[ability.en]
+    then
+        local now = os.clock()
+        local queue = pstart_rdm.dispel_targets[actor.id]
+        if not queue then
+            queue = {entries={}}
+        end
+        queue.entries = queue.entries or {}
+        for index = #queue.entries, 1, -1 do
+            if (queue.entries[index].expires or 0) <= now then
+                table.remove(queue.entries, index)
+            end
+        end
+        if #queue.entries < (tonumber(policy.max_pending) or 3) then
+            queue.entries[#queue.entries + 1] = {
+                move = ability.en,
+                expires = now + (tonumber(policy.ttl) or 30),
+            }
+        end
+        queue.name = actor.name
+        pstart_rdm.dispel_targets[actor.id] = #queue.entries > 0
+            and queue or nil
+    end
+
     for _, target in ipairs((action and action.targets) or {}) do
         for _, result in ipairs(target.actions or {}) do
             pstart_rdm_register_remote_buff_loss(
@@ -732,6 +810,68 @@ local function pstart_rdm_target_allowed(target, names)
     return false
 end
 
+local function pstart_rdm_cast_dispel(profile)
+    local policy = profile.dispel
+    if not policy then return false end
+
+    local target, leader = pstart_rdm_enemy()
+    if not target or not leader
+        or not pstart_rdm_target_allowed(target, policy.target_names)
+    then
+        return false
+    end
+    local queue = pstart_rdm.dispel_targets[target.id]
+    if not queue then return false end
+    queue.entries = queue.entries or {}
+    local now = os.clock()
+    for index = #queue.entries, 1, -1 do
+        if (queue.entries[index].expires or 0) <= now then
+            table.remove(queue.entries, index)
+        end
+    end
+    local entry = queue.entries[1]
+    if not entry then
+        pstart_rdm.dispel_targets[target.id] = nil
+        return false
+    end
+
+    local local_target = windower.ffxi.get_mob_by_target('t')
+    if not local_target or local_target.id ~= target.id then return false end
+    if player.mpp < (policy.mp_floor or 0)
+        or target.hpp < (policy.min_target_hpp or 0)
+    then
+        return false
+    end
+
+    local spell = pstart_rdm_spell({'Dispel'})
+    if spell and pstart_rdm_can_spend(spell, policy.mp_floor)
+        and pstart_rdm_ready(spell)
+    then
+        -- Consume the observation when issuing the command, not aftercast.
+        -- This guarantees one command attempt per observed move even if the
+        -- cast is interrupted or the client never produces an aftercast.
+        table.remove(queue.entries, 1)
+        if #queue.entries == 0 then
+            pstart_rdm.dispel_targets[target.id] = nil
+        end
+        pstart_rdm.pending = {
+            kind = 'dispel',
+            spell_id = spell.id,
+            target_id = target.id,
+            entry = entry,
+            move = entry.move,
+            target_name = target.name,
+        }
+        pstart_rdm.dispel_count = pstart_rdm.dispel_count + 1
+        pstart_rdm.last_dispel = (entry.move or 'buff')
+            ..' -> '..(target.name or 'target')
+        windower.chat.input('/ma "'..spell.en..'" <t>')
+        tickdelay = os.clock() + 3
+        return true
+    end
+    return false
+end
+
 local function pstart_rdm_cast_opener(profile)
     local opener = profile.opener
     if not opener then return false end
@@ -846,6 +986,7 @@ local function pstart_rdm_action()
         return true
     end
     if pstart_rdm_cast_reactive_repair() then return true end
+    if pstart_rdm_cast_dispel(profile) then return true end
     if pstart_rdm_cast_party_buffs() then return true end
     if pstart_rdm_cast_self_buffs(profile) then return true end
     if not profile.priority_debuff then
@@ -895,6 +1036,10 @@ function user_job_self_command(commandArgs, eventArgs)
                 profile.routine_buff_mp_floor or 0,
                 profile.party_shell and 'On' or 'Off',
                 profile.heal_hpp or (profile.sustained and 25 or 0)))
+        add_to_chat(122,
+            ('PartyStart RDM bounded Dispels: %d / last %s')
+            :format(pstart_rdm.dispel_count,
+                tostring(pstart_rdm.last_dispel)))
         return
     elseif requested == 'off' then
         pstart_rdm.active = false
@@ -904,6 +1049,9 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.reactive_repairs = {}
         pstart_rdm.opener_targets = {}
         pstart_rdm.last_heal_at = 0
+        pstart_rdm.dispel_targets = {}
+        pstart_rdm.dispel_count = 0
+        pstart_rdm.last_dispel = 'none'
         state.AutoBuffMode:set('Off')
         add_to_chat(122, 'PartyStart RDM buff and debuff maintenance is Off.')
         return
@@ -928,6 +1076,9 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_rdm.reactive_repairs = {}
         pstart_rdm.opener_targets = {}
         pstart_rdm.last_heal_at = 0
+        pstart_rdm.dispel_targets = {}
+        pstart_rdm.dispel_count = 0
+        pstart_rdm.last_dispel = 'none'
         state.AutoBuffMode:set('Off')
         tickdelay = 0
         add_to_chat(122, ('PartyStart RDM: %s / leader %s / GearSwap owns magic.')
@@ -963,6 +1114,10 @@ function job_aftercast(spell, spellMap, eventArgs)
             local progress = pstart_rdm.opener_targets[pending.target_id]
             if progress then progress.stage = pending.next_stage end
         end
+        pstart_rdm.pending = nil
+    elseif pending and pending.kind == 'dispel'
+        and spell and spell.id == pending.spell_id
+    then
         pstart_rdm.pending = nil
     elseif pending and spell and spell.id == pending.spell_id then
         local retry = spell.interrupted and 3 or pending.duration

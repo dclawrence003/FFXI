@@ -22,7 +22,8 @@ PartyStart establishes clear ownership:
 - RDM GearSwap maintains Haste II, the best learned Refresh tier on itself and
   PLD/RUN, self-offense buffs, Phalanx II on PLD, low-cost Dia, and
   final-resort emergency healing. The sustained `master` and `apexbats`
-  profiles omit a wasteful six-target Shell rotation; richer profiles retain it.
+  profiles omit a wasteful six-target Shell rotation. `apexcrabs` retains it
+  for Bubble Shower's actual Water damage and adds event-driven Dispel.
   HealBot remains enabled on RDM only for packet-backed status removal in
   sustained profiles; its cure queue is disabled.
   The Ambuscade profiles give GearSwap backup-cure ownership, full MP-job
@@ -126,6 +127,9 @@ Copy the scripts in `scripts` into `Windower\scripts`. Run
 `//exec reload_party_stack_safe.txt` when either PartyCombat or PartyStart
 changed and both should be refreshed. Both reload one client at a time and
 never reload GearSwap.
+For the `apexcrabs` update, `//exec reload_apexcrabs_safe.txt` reloads only the
+four changed follower GearSwap clients, one every eight seconds, then refreshes
+PartyStart across all six. It deliberately does not reload Dolo's GearSwap.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -139,6 +143,8 @@ Run from any character in the party:
 //pstart use progression master
 //pstart preview progression apexbats
 //pstart use progression apexbats
+//pstart preview progression apexcrabs
+//pstart use progression apexcrabs
 //pstart progression ambuv1
 //pstart preview legacy master
 //pstart use legacy master
@@ -147,6 +153,7 @@ Run from any character in the party:
 //pstart physical
 //pstart master
 //pstart bats
+//pstart crabs
 //pstart accuracy
 //pstart magic
 //pstart safe
@@ -292,6 +299,34 @@ Apex Bats detect by sound. PartyStart and PartyCombat do not select a safe pull
 route or replace the external pull loop, so camp placement and the puller's
 unattended configuration remain operational prerequisites.
 
+### `apexcrabs` (`crabs`)
+
+This sustained profile targets the level 128-130 PLD-class Apex Crabs in Dho
+Gates. The dedicated G-11 "Crab Bowl" has enough spawns for an independent
+infinite chain when the mixed bat/crab camp is occupied.
+
+```text
+//pstart preview progression apexcrabs
+//pstart use progression apexcrabs
+//pc on
+```
+
+`//pstart crabs`, `//pstart crab`, `//pstart apexcrab`, and
+`//pstart apex-crabs` are equivalent short forms. The profile retains the
+1113-accuracy Blade Madrigal policy and the same Chaos/Samurai,
+Fury/Frailty/Entrust Refresh, Majesty, Chivalry, Convert, and emergency-Waltz
+controls as the other sustained camps.
+
+Bubble Shower deals Water damage and inflicts STR Down. Barney maintains
+Barwatera, Smalls makes the long-duration Shell pass, and HealBot's standard
+job-aware Erase policy removes STR Down from the COR, PLD, and DNC while
+ignoring it on the caster-support jobs. Apex Crabs also use Bubble Curtain
+(Shell), Metallic Body (Stoneskin), and Scissor Guard (Defense Bonus). Smalls
+queues one Dispel only after observing one of those three moves on the current
+synchronized Apex Crab. Each observation expires after 30 seconds, produces
+at most one attempt, is skipped below 55% MP or below 15% target HP, and never
+creates a blind periodic Dispel loop.
+
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.
 
@@ -384,6 +419,7 @@ Tackleberry.
 | --- | --- | --- |
 | `master` | March / Ballad / Madrigal; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `apexbats` (`bats`) | March / Ballad / Madrigal; Barwatera; Carnage Elegy | Fury / Frailty; Entrust Refresh |
+| `apexcrabs` (`crabs`) | March / Ballad / Madrigal; Barwatera; Carnage Elegy | Fury / Frailty; Entrust Refresh |
 | `physical` | March / Minuet / Madrigal | Fury / Frailty |
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
@@ -397,6 +433,7 @@ RDM enfeebles by profile:
 | --- | --- |
 | `master` | Dia only (suspended below 55% MP or below 65% target HP) |
 | `apexbats` | Dia only (suspended below 55% MP or below 65% target HP) |
+| `apexcrabs` | Dia plus event-driven Dispel after crab self-buffs; both are suspended below 55% current MP, and Dispel also preserves that post-cast floor |
 | `physical` | Dia, Distract (suspended below 45% MP or below 50% target HP) |
 | `accuracy` | Frazzle, Dia, Distract |
 | `magic` | Frazzle, Dia, Addle |
@@ -406,7 +443,7 @@ RDM enfeebles by profile:
 
 On Smalls, `//gs c pstartrdm status` reports current MP,
 Haste/Refresh/Phalanx/defense target counts, the routine MP reserve, party
-Shell ownership, and the active backup-cure threshold.
+Shell ownership, the active backup-cure threshold, and bounded Dispel count.
 
 ## Safety and limitations
 
@@ -448,6 +485,8 @@ Shell ownership, and the active backup-cure threshold.
 - RDM prioritizes Refresh (self first, then PLD/RUN), then Haste and Phalanx,
   then offensive enfeebles. Sustained profiles omit party Shell, limit Refresh
   to the RDM and PLD/RUN, and guard routine buff spending with a 35% MP reserve.
+  `apexcrabs` is the sustained Shell exception because Bubble Shower deals
+  Water damage; its Dispel queue reacts only to three observed crab self-buffs.
   Routine `physical` mode conserves MP by omitting Frazzle, refusing new
   enfeebles below 45% MP, and ignoring targets already below 50% HP. The
   heavier profiles retain party Shell, Frazzle, and a 35% enfeeble floor.
@@ -482,7 +521,7 @@ Shell ownership, and the active backup-cure threshold.
 - PLD similarly pauses only its own AutoWS2 when Chivalry is ready and MP falls
   below 45%; it resumes after Chivalry, if Chivalry ceases to be available, or
   when MP has already recovered above 55%. `//pstart off` never re-enables it.
-- In `master` and `apexbats`, Sentinel is attempted only after Flash lands on
+- In `master`, `apexbats`, and `apexcrabs`, Sentinel is attempted only after Flash lands on
   the current target or after a five-second establishment fallback. V1 suppresses that
   pull-time Sentinel and all pre-threshold automated tank cooldowns, then uses
   Sentinel at 52% Breadwinner HP and Rampart after Sentinel's window. V2 never

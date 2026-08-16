@@ -156,6 +156,27 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("apexbats=true", self.pld)
         self.assertIn("bats = 'apexbats'", self.addon)
 
+    def test_apex_crabs_profile_reacts_to_self_buffs_without_blind_spam(self):
+        addon = self.addon.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        rdm = self.rdm.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        brd = self.brd.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
+        self.assertIn("party_shell = true", rdm)
+        self.assertIn("target_names={'Apex Crab'}", rdm)
+        self.assertIn("ttl=30", rdm)
+        self.assertIn("max_pending=3", rdm)
+        self.assertIn("pstart_rdm.dispel_targets[actor.id]", self.rdm)
+        self.assertIn("pstart_rdm.dispel_targets[target.id]", self.rdm)
+        self.assertIn("Barwatera", brd)
+        self.assertIn("apexcrabs=true", self.pld)
+        self.assertIn("crabs = 'apexcrabs'", self.addon)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,21 @@
+echo Staggered Apex Crabs support reload beginning. Dolo GearSwap is untouched.
+send Tackleberry gs reload
+wait 8
+send Kickpuncher gs reload
+wait 8
+send Barneystinson gs reload
+wait 8
+send Smalls gs reload
+wait 8
+send Dolomedes lua r PartyStart
+wait 3
+send Tackleberry lua r PartyStart
+wait 3
+send Kickpuncher lua r PartyStart
+wait 3
+send Barneystinson lua r PartyStart
+wait 3
+send Smalls lua r PartyStart
+wait 3
+send Achoo lua r PartyStart
+echo Apex Crabs reload complete. Preview and apply progression/apexcrabs, then arm PartyCombat.

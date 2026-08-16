@@ -321,7 +321,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.1.1'", ADDON)
+        self.assertIn("_addon.version = '1.2.0'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -335,10 +335,10 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("{spell='Barwatera', buff='Barwater'}", brd)
         self.assertIn("apexbats=true", PLD)
         self.assertIn("PSTART_PLD_SUSTAINED_PROFILES", PLD)
-        self.assertIn("'master','apexbats','physical'", DNC)
+        self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.1.1'", ADDON)
+        self.assertIn("_addon.version = '1.2.0'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -349,6 +349,41 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertIn("elseif command == 'version' then", ADDON)
         self.assertIn("Loaded v'.._addon.version", ADDON)
+
+    def test_apex_crabs_profile_is_sustained_and_event_driven(self):
+        addon = ADDON.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        rdm = RDM.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        brd = BRD.split("    apexcrabs = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
+        self.assertIn("sustained = true", addon)
+        self.assertIn("crabs = 'apexcrabs'", ADDON)
+        self.assertIn("party_shell = true", rdm)
+        self.assertIn("['Bubble Curtain']=true", rdm)
+        self.assertIn("['Metallic Body']=true", rdm)
+        self.assertIn("['Scissor Guard']=true", rdm)
+        self.assertIn("mp_floor=55", rdm)
+        self.assertIn("min_target_hpp=15", rdm)
+        self.assertIn("pstart_rdm_cast_dispel(profile)", RDM)
+        self.assertIn("action.category == 11", RDM)
+        self.assertIn("res.monster_abilities[action.param]", RDM)
+        self.assertIn("actor and type(actor.name) == 'string'", RDM)
+        self.assertIn("queue = {entries={}}", RDM)
+        self.assertIn("entry = entry", RDM)
+        self.assertIn("table.remove(queue.entries, 1)", RDM)
+        self.assertIn("Consume the observation when issuing the command", RDM)
+        action_handler = RDM.split(
+            "windower.raw_register_event('action'", 1
+        )[1].split("windower.raw_register_event('action message'", 1)[0]
+        self.assertNotIn("pstart_rdm_valid_name(actor.name)", action_handler)
+        self.assertNotIn("queue.expires =", action_handler)
+        self.assertIn("Barwatera", brd)
+        self.assertIn("apexcrabs=true", PLD)
 
 
 if __name__ == "__main__":
