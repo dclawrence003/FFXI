@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.4.2'
+_addon.version = '0.4.3'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -357,7 +357,7 @@ local function disengage_if_needed()
     end
 end
 
-local function stop_local(reason, revoke)
+local function stop_local(reason, revoke, hold_position)
     stop_running()
     disengage_if_needed()
     active_target_id = nil
@@ -367,7 +367,9 @@ local function stop_local(reason, revoke)
     if revoke then
         authorized = false
     end
-    restore_fastfollow()
+    if not hold_position then
+        restore_fastfollow()
+    end
     if reason then
         chat(207, reason)
     end
@@ -758,7 +760,8 @@ windower.register_event('prerender', function()
     if not valid_enemy(target) then
         stop_local(is_attacker()
             and 'Target ended; attacker stopped.'
-            or 'Target ended; observer target cleared.', false)
+            or 'Target ended; observer target cleared.', false,
+            settings.stationary == true)
         return
     end
 

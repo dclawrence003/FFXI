@@ -138,7 +138,7 @@ def test_fastfollow_recovery_uses_puller_not_command_leader():
     assert "settings.puller" in anchor
     assert anchor.index("settings.puller") < anchor.index("settings.leader")
     assert "ffo follow '..settings.leader" not in SOURCE
-    assert "_addon.version = '0.4.2'" in SOURCE
+    assert "_addon.version = '0.4.3'" in SOURCE
 
 
 def test_active_attackers_face_their_combat_target():
@@ -181,6 +181,13 @@ def test_stationary_policy_is_explicit_and_blocks_translation():
     assert movement.index("if settings.stationary then") < movement.index(
         "windower.ffxi.run(dx / length, dy / length)"
     )
+    stop = SOURCE.split("local function stop_local", 1)[1]
+    stop = stop.split("local function inject_combat_target", 1)[0]
+    assert "reason, revoke, hold_position" in stop
+    assert "if not hold_position then" in stop
+    target_end = movement.split("if not valid_enemy(target) then", 1)[1]
+    target_end = target_end.split("if not is_attacker() then", 1)[0]
+    assert "settings.stationary == true)" in target_end
 
 
 def test_no_all_character_attack_command():

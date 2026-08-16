@@ -323,6 +323,8 @@ This profile deliberately installs PartyCombat's **stationary** movement
 policy. Every attacker still receives the target, faces it, and engages, but
 none of them approaches it. Tackleberry's Flash brings the crab to the planted
 party. All other supplied profiles remain mobile.
+FastFollow remains suppressed between target deaths; `//pc stop`, a profile
+change, or zoning releases PartyCombat's stationary position claim.
 
 The matching EasyFarm profile must use:
 

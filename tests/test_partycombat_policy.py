@@ -65,6 +65,9 @@ class PartyCombatPolicy(unittest.TestCase):
             movement.index("if settings.stationary then"),
             movement.index("windower.ffxi.run(dx / length, dy / length)"),
         )
+        self.assertIn("reason, revoke, hold_position", self.addon)
+        self.assertIn("if not hold_position then", self.addon)
+        self.assertIn("settings.stationary == true)", movement)
 
     def test_stationary_puller_flash_can_establish_the_target(self):
         self.assertIn("local PULL_FLASH_SPELL_ID = 112", self.addon)

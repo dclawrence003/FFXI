@@ -51,11 +51,13 @@ PartyCombat follows combat actions, not cursor movement:
   FastFollow, or claim movement. This is used by the Ambuscade profiles to
   keep the backline out of frontal mechanics without disabling Silence or
   Elegy.
-- Ending pursuit hands movement back to FastFollow for followers whose follow
-  state PartyCombat previously claimed. The active policy's puller is the
-  formation anchor; the separate command leader is never substituted as the
-  follow target. After a zone transition, PartyCombat reinforces that handoff
-  three times at 3.5-second intervals. This covers a
+- In a mobile policy, ending pursuit hands movement back to FastFollow for
+  followers whose state PartyCombat previously claimed. A stationary policy
+  keeps that claim between ordinary target ends so the party remains planted;
+  explicit stop, policy change, or zoning releases it. The active policy's
+  puller is the formation anchor; the separate command leader is never
+  substituted as the follow target. After a zone transition, PartyCombat
+  reinforces that handoff three times at 3.5-second intervals. This covers a
   client that finishes rebuilding later than the others after a battlefield
   exit. A claim made during the preceding 60 seconds remains eligible, so
   killing the final target immediately before zoning cannot erase the recovery
@@ -70,9 +72,10 @@ follow/assist/engage state when it authorizes an attacker, then stops
 FastFollow only after that attacker accepts a valid combat target and
 PartyCombat takes exclusive ownership of combat positioning. In a stationary
 policy, that claim suppresses other follow controllers while PartyCombat itself
-never requests translational movement. When pursuit ends, PartyCombat is
-stopped, or a zone transition occurs, only a follower whose FastFollow state
-PartyCombat claimed is returned to following the configured puller. The puller
+never requests translational movement. Mobile target ends release the claim;
+stationary target ends retain it until explicit stop, policy change, or zoning.
+When released, only a follower whose FastFollow state PartyCombat claimed is
+returned to following the configured puller. The puller
 is never ordered to follow itself. GearSwap remains responsible for equipment,
 and AutoWS2 or another separately configured system remains responsible for
 weaponskills.
