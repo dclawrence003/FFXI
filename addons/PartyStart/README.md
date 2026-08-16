@@ -130,6 +130,9 @@ never reload GearSwap.
 For the `apexcrabs` update, `//exec reload_apexcrabs_safe.txt` reloads only the
 four changed follower GearSwap clients, one every eight seconds, then refreshes
 PartyStart across all six. It deliberately does not reload Dolo's GearSwap.
+For the healing hotfix, `//exec reload_apexcrabs_healing_safe.txt` is narrower:
+it reloads only Tackleberry and Smalls, ten seconds apart, before refreshing
+PartyStart across the team. Dolo's GearSwap remains untouched.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -327,6 +330,14 @@ synchronized Apex Crab. Each observation expires after 30 seconds, produces
 at most one attempt, is skipped below 55% MP or below 15% target HP, and never
 creates a blind periodic Dispel loop.
 
+Crabs use a more responsive Majesty policy than Efts: Tackleberry begins a
+routine cure below 88% HP, responds when two nearby members fall below 92%,
+and treats anyone below 65% as an emergency. The healthy/medium/low-MP cure
+cadence is 2.5/4/6 seconds, with cheap cluster curing permitted down to 35%
+MP. At 60% MP he pre-reserves 1000 TP for Chivalry, continues all needed cures
+while building it, and uses Chivalry at 55% MP. Smalls provides a last-resort
+backup cure below 45% HP while preserving 25% MP.
+
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.
 
@@ -444,6 +455,9 @@ RDM enfeebles by profile:
 On Smalls, `//gs c pstartrdm status` reports current MP,
 Haste/Refresh/Phalanx/defense target counts, the routine MP reserve, party
 Shell ownership, the active backup-cure threshold, and bounded Dispel count.
+On Tackleberry, `//gs c pstartpld status` reports the active cure policy and a
+second sustain line showing Majesty, Refresh, Ballad, Entrust, Chivalry,
+AutoWS2 reservation, and total completed cures.
 
 ## Safety and limitations
 

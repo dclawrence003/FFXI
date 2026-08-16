@@ -41,7 +41,8 @@ local PSTART_PLD_CURE_INTERVAL_MID = 5
 local PSTART_PLD_CURE_INTERVAL_LOW = 8
 local PSTART_PLD_MAJESTY_ACTION_ID = 394
 local PSTART_PLD_CHIVALRY_ACTION_ID = 158
-local PSTART_PLD_CHIVALRY_HPP = 45
+local PSTART_PLD_CHIVALRY_RESERVE_HPP = 45
+local PSTART_PLD_CHIVALRY_USE_HPP = 45
 local PSTART_PLD_CHIVALRY_RELEASE_HPP = 55
 local PSTART_PLD_CHIVALRY_TP = 1000
 local PSTART_PLD_SENTINEL_ACTION_ID = 48
@@ -64,6 +65,55 @@ local PSTART_PLD_SUSTAINED_PROFILES = {
     apexbats=true,
     apexcrabs=true,
 }
+
+local PSTART_PLD_DEFAULT_HEAL_POLICY = {
+    routine_hpp = PSTART_PLD_ROUTINE_HPP,
+    cluster_hpp = PSTART_PLD_CLUSTER_HPP,
+    cluster_count = PSTART_PLD_CLUSTER_COUNT,
+    cluster_mp_floor = PSTART_PLD_CONSERVE_MP_HPP,
+    emergency_hpp = PSTART_PLD_EMERGENCY_HPP,
+    routine_mp_floor = PSTART_PLD_ROUTINE_MP_FLOOR,
+    conserve_mp_hpp = PSTART_PLD_CONSERVE_MP_HPP,
+    low_mp_hpp = PSTART_PLD_LOW_MP_HPP,
+    conserve_routine_hpp = PSTART_PLD_CONSERVE_ROUTINE_HPP,
+    low_mp_routine_hpp = PSTART_PLD_LOW_MP_ROUTINE_HPP,
+    cure_interval_high = PSTART_PLD_CURE_INTERVAL_HIGH,
+    cure_interval_mid = PSTART_PLD_CURE_INTERVAL_MID,
+    cure_interval_low = PSTART_PLD_CURE_INTERVAL_LOW,
+    cure_iv_hpp = 65,
+    chivalry_reserve_hpp = PSTART_PLD_CHIVALRY_RESERVE_HPP,
+    chivalry_use_hpp = PSTART_PLD_CHIVALRY_USE_HPP,
+    chivalry_release_hpp = PSTART_PLD_CHIVALRY_RELEASE_HPP,
+}
+
+-- Crab AoE arrives in bursts across several melee characters. Begin Majesty
+-- recovery earlier and keep cheap Cure III flowing at lower MP instead of
+-- waiting for individual members to reach the Eft profile's danger line.
+local PSTART_PLD_CRAB_HEAL_POLICY = {
+    routine_hpp = 88,
+    cluster_hpp = 92,
+    cluster_count = 2,
+    cluster_mp_floor = 35,
+    emergency_hpp = 65,
+    routine_mp_floor = 25,
+    conserve_mp_hpp = 50,
+    low_mp_hpp = 35,
+    conserve_routine_hpp = 78,
+    low_mp_routine_hpp = 68,
+    cure_interval_high = 2.5,
+    cure_interval_mid = 4,
+    cure_interval_low = 6,
+    cure_iv_hpp = 70,
+    chivalry_reserve_hpp = 60,
+    chivalry_use_hpp = 55,
+    chivalry_release_hpp = 70,
+}
+
+local function pstart_pld_heal_policy()
+    return pstart_pld.profile == 'apexcrabs'
+        and PSTART_PLD_CRAB_HEAL_POLICY
+        or PSTART_PLD_DEFAULT_HEAL_POLICY
+end
 
 local function pstart_pld_valid_name(name)
     return type(name) == 'string'
@@ -237,6 +287,7 @@ end
 local function pstart_pld_scan_party()
     local lowest = nil
     local cluster_injured = 0
+    local policy = pstart_pld_heal_policy()
     for key, member in pairs(windower.ffxi.get_party() or {}) do
         if type(key) == 'string' and key:match('^p[0-5]$')
             and type(member) == 'table'
@@ -244,7 +295,7 @@ local function pstart_pld_scan_party()
             and member.hpp > 0
             and pstart_pld_member_in_range(member)
         then
-            if member.hpp < PSTART_PLD_CLUSTER_HPP then
+            if member.hpp < policy.cluster_hpp then
                 cluster_injured = cluster_injured + 1
             end
             if not lowest or member.hpp < lowest.hpp then
@@ -261,25 +312,27 @@ local function pstart_pld_scan_party()
 end
 
 local function pstart_pld_mp_policy()
-    if player.mpp < PSTART_PLD_LOW_MP_HPP then
-        return PSTART_PLD_LOW_MP_ROUTINE_HPP,
-            PSTART_PLD_CURE_INTERVAL_LOW, 'low'
-    elseif player.mpp < PSTART_PLD_CONSERVE_MP_HPP then
-        return PSTART_PLD_CONSERVE_ROUTINE_HPP,
-            PSTART_PLD_CURE_INTERVAL_MID, 'conserve'
+    local policy = pstart_pld_heal_policy()
+    if player.mpp < policy.low_mp_hpp then
+        return policy.low_mp_routine_hpp,
+            policy.cure_interval_low, 'low'
+    elseif player.mpp < policy.conserve_mp_hpp then
+        return policy.conserve_routine_hpp,
+            policy.cure_interval_mid, 'conserve'
     end
-    return PSTART_PLD_ROUTINE_HPP, PSTART_PLD_CURE_INTERVAL_HIGH, 'normal'
+    return policy.routine_hpp, policy.cure_interval_high, 'normal'
 end
 
 local function pstart_pld_needs_cure(lowest, cluster_injured)
     if not lowest then return false, 'no in-range party member' end
     local routine_hpp = pstart_pld_mp_policy()
     if lowest.hpp < routine_hpp then
-        return true, lowest.hpp < PSTART_PLD_EMERGENCY_HPP
+        return true, lowest.hpp < pstart_pld_heal_policy().emergency_hpp
             and 'emergency' or 'routine'
     end
-    if cluster_injured >= PSTART_PLD_CLUSTER_COUNT
-        and player.mpp >= PSTART_PLD_CONSERVE_MP_HPP
+    local policy = pstart_pld_heal_policy()
+    if cluster_injured >= policy.cluster_count
+        and player.mpp >= policy.cluster_mp_floor
     then
         return true, 'cluster'
     end
@@ -306,9 +359,10 @@ local function pstart_pld_activate_majesty()
 end
 
 local function pstart_pld_cure_choices(hpp, reason)
+    local policy = pstart_pld_heal_policy()
     if hpp < 35 then
         return {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
-    elseif hpp < 65 then
+    elseif hpp < policy.cure_iv_hpp then
         return {'Cure IV', 'Cure III', 'Cure II', 'Cure'}
     elseif reason == 'cluster' then
         return {'Cure III', 'Cure IV', 'Cure II', 'Cure'}
@@ -342,35 +396,42 @@ local function pstart_pld_cure_interval()
     return interval
 end
 
-local function pstart_pld_chivalry_ready()
+local function pstart_pld_chivalry_available()
     local ability = res.job_abilities[PSTART_PLD_CHIVALRY_ACTION_ID]
     local recasts = windower.ffxi.get_ability_recasts() or {}
     return ability
         and pstart_pld_known_ability(PSTART_PLD_CHIVALRY_ACTION_ID)
+        and (recasts[ability.recast_id] or 999) < latency
+end
+
+local function pstart_pld_chivalry_ready()
+    return pstart_pld_chivalry_available()
         and not midaction()
         and not moving
         and not silent_check_disable()
         and not silent_check_amnesia()
         and (not tickdelay or os.clock() >= tickdelay)
-        and (recasts[ability.recast_id] or 999) < latency
 end
 
 local function pstart_pld_sustain_mp()
+    local policy = pstart_pld_heal_policy()
     if pstart_pld.autows_paused then
         local chivalry_still_ready = pstart_pld_chivalry_ready()
-        if player.mpp >= PSTART_PLD_CHIVALRY_RELEASE_HPP
+        if player.mpp >= policy.chivalry_release_hpp
             or not chivalry_still_ready
         then
             windower.send_command('aws2 on')
             pstart_pld.autows_paused = false
             pstart_pld.last_action = player.mpp
-                >= PSTART_PLD_CHIVALRY_RELEASE_HPP
+                >= policy.chivalry_release_hpp
                 and 'MP recovered; AutoWS2 resumed'
                 or 'Chivalry unavailable; AutoWS2 resumed'
             return false
         end
 
-        if player.tp < PSTART_PLD_CHIVALRY_TP then
+        if player.mpp > policy.chivalry_use_hpp
+            or player.tp < PSTART_PLD_CHIVALRY_TP
+        then
             -- Reserving TP must not starve native Flash/Provoke/Warcry upkeep.
             return false
         end
@@ -387,15 +448,14 @@ local function pstart_pld_sustain_mp()
         return true
     end
 
-    if player.mpp >= PSTART_PLD_CHIVALRY_HPP
+    if player.mpp >= policy.chivalry_reserve_hpp
         or not pstart_pld_chivalry_ready()
     then
         return false
     end
 
-    -- AutoWS2 normally spends TP at 1000. When Chivalry is ready and MP is
-    -- low, reserve that TP instead; 1000 TP is already a substantial refill
-    -- and avoids needlessly delaying the recovery to the old 1300-TP rule.
+    -- Reserve one TP cycle before MP is critical. Continue curing while TP
+    -- accumulates, and spend it only after the use threshold is crossed.
     if not pstart_pld.autows_paused then
         windower.send_command('aws2 off')
         pstart_pld.autows_paused = true
@@ -403,7 +463,9 @@ local function pstart_pld_sustain_mp()
         add_to_chat(207,
             '[PartyStart PLD] Low MP: pausing AutoWS2 for Chivalry.')
     end
-    if player.tp < PSTART_PLD_CHIVALRY_TP then
+    if player.mpp > policy.chivalry_use_hpp
+        or player.tp < PSTART_PLD_CHIVALRY_TP
+    then
         -- Reserving TP must not starve native Flash/Provoke/Warcry upkeep.
         return false
     end
@@ -431,6 +493,7 @@ local function pstart_pld_action()
     end
 
     pstart_pld_observe_pressure()
+    local policy = pstart_pld_heal_policy()
     local lowest, cluster_injured = pstart_pld_scan_party()
     -- Breadwinner's 50% Hundred Fists transition is deterministic. Claim the
     -- reserved mitigation before a stream of Majesty cures can monopolize the
@@ -458,17 +521,20 @@ local function pstart_pld_action()
         return pstart_pld_tank_cooldown(lowest, cluster_injured)
     end
 
-    local emergency = lowest.hpp < PSTART_PLD_EMERGENCY_HPP
+    local emergency = lowest.hpp < policy.emergency_hpp
 
     -- Chivalry has a ten-minute recast. When it is ready, use it before the
     -- next non-emergency cure so an uninterrupted stream of routine damage
     -- cannot permanently starve the MP recovery branch.
-    if not emergency and player.mpp < PSTART_PLD_CHIVALRY_HPP then
+    if not emergency
+        and player.mpp < policy.chivalry_reserve_hpp
+    then
         if pstart_pld_sustain_mp() then return true end
-        if pstart_pld.autows_paused then return false end
+        -- TP reservation must not suppress a needed cure. The original
+        -- implementation returned here and exposed the party while charging.
     end
 
-    if player.mpp < PSTART_PLD_ROUTINE_MP_FLOOR and not emergency then
+    if player.mpp < policy.routine_mp_floor and not emergency then
         pstart_pld.last_action = 'routine cure held for MP reserve'
         return pstart_pld_sustain_mp()
     end
@@ -501,6 +567,18 @@ local function pstart_pld_status()
             target,
             cluster_injured,
             pstart_pld.last_action))
+    local function active(buff)
+        return buffactive[buff] and 'On' or 'Off'
+    end
+    add_to_chat(122,
+        ('PartyStart PLD sustain: cures %d / Majesty %s / Refresh %s / '
+            ..'Ballad %s / Entrust %s / Chivalry %s / AutoWS2 %s')
+        :format(
+            pstart_pld.cure_count,
+            active('Majesty'), active('Refresh'), active('Ballad'),
+            active('Colure Active'),
+            pstart_pld_chivalry_available() and 'Ready' or 'Cooldown',
+            pstart_pld.autows_paused and 'Reserved' or 'Active'))
 end
 
 local pstart_pld_original_self_command = user_job_self_command

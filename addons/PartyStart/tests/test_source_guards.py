@@ -161,7 +161,8 @@ class PartyStartSourceGuards(unittest.TestCase):
         native = hook.index("pstart_pld_original_user_job_tick()")
         self.assertLess(heal, native)
         self.assertIn("PSTART_PLD_CHIVALRY_TP = 1000", PLD)
-        self.assertIn("PSTART_PLD_CHIVALRY_HPP = 45", PLD)
+        self.assertIn("PSTART_PLD_CHIVALRY_RESERVE_HPP = 45", PLD)
+        self.assertIn("PSTART_PLD_CHIVALRY_USE_HPP = 45", PLD)
         self.assertIn("reserving 1000 TP for Chivalry", PLD)
         self.assertIn("gs c unset AutoTankFull", ADDON)
 
@@ -184,17 +185,17 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("PSTART_PLD_CURE_INTERVAL_LOW = 8", PLD)
         action = PLD.split("local function pstart_pld_action()", 1)[1]
         action = action.split("local function pstart_pld_status()", 1)[0]
-        emergency = action.index(
-            "local emergency = lowest.hpp < PSTART_PLD_EMERGENCY_HPP"
-        )
+        emergency = action.index("local emergency = lowest.hpp < policy.emergency_hpp")
         reserve = action.index(
-            "player.mpp < PSTART_PLD_ROUTINE_MP_FLOOR and not emergency"
+            "player.mpp < policy.routine_mp_floor and not emergency"
         )
         self.assertLess(emergency, reserve)
         self.assertIn(
-            "not emergency and player.mpp < PSTART_PLD_CHIVALRY_HPP",
+            "player.mpp < policy.chivalry_reserve_hpp",
             action,
         )
+        self.assertIn("TP reservation must not suppress a needed cure", action)
+        self.assertNotIn("if pstart_pld.autows_paused then return false end", action)
         ready_spell = PLD.split("local function pstart_pld_ready_spell", 1)[1]
         ready_spell = ready_spell.split("\nend", 1)[0]
         self.assertIn("pstart_pld_ready(spell)", ready_spell)
@@ -321,7 +322,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.2.0'", ADDON)
+        self.assertIn("_addon.version = '1.2.1'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -338,7 +339,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("'master','apexbats','apexcrabs','physical'", DNC)
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.2.0'", ADDON)
+        self.assertIn("_addon.version = '1.2.1'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -373,6 +374,15 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("action.category == 11", RDM)
         self.assertIn("res.monster_abilities[action.param]", RDM)
         self.assertIn("actor and type(actor.name) == 'string'", RDM)
+        self.assertIn("heal_hpp = 45", rdm)
+        self.assertIn("PSTART_PLD_CRAB_HEAL_POLICY", PLD)
+        self.assertIn("routine_hpp = 88", PLD)
+        self.assertIn("cluster_count = 2", PLD)
+        self.assertIn("emergency_hpp = 65", PLD)
+        self.assertIn("chivalry_reserve_hpp = 60", PLD)
+        self.assertIn("chivalry_use_hpp = 55", PLD)
+        self.assertIn("chivalry_release_hpp = 70", PLD)
+        self.assertIn("pstart_pld_chivalry_available()", PLD)
         self.assertIn("queue = {entries={}}", RDM)
         self.assertIn("entry = entry", RDM)
         self.assertIn("table.remove(queue.entries, 1)", RDM)

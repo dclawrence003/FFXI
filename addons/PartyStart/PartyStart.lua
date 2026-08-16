@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.2.0'
+_addon.version = '1.2.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -86,6 +86,7 @@ local profiles = {
         advisories = {
             'Apex Crabs: Barwatera and Shell cover Water-aligned Bubble Shower; HealBot removes STR Down only from physical jobs by default.',
             'Apex Crabs: Smalls makes one MP-reserved Dispel attempt after each observed Bubble Curtain, Metallic Body, or Scissor Guard; it does not poll blindly.',
+            'Apex Crabs: Tackleberry uses the aggressive AoE-heal policy and pre-reserves 1000 TP for Chivalry without suspending needed cures.',
             'Apex Crabs: Blade Madrigal is retained for the Dho Gates 1113 accuracy target. The G-11 Crab Bowl supports an independent infinite chain.',
         },
     },
