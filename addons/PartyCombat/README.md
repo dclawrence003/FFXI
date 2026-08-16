@@ -223,11 +223,12 @@ compatibility.
   battle lists. Let it select and approach only; PartyCombat, PartyStart,
   GearSwap, and AutoWS2 own the shared combat policy.
 - For any stationary unattended-XP camp, use exactly one enabled EasyFarm Pull
-  action: `Flash`. Set Detection Distance to `10`, Wander Distance to `0`, and
-  Approach off. Set the Flash row's EasyFarm Distance to `50`, the UI maximum.
+  action: `Flash`. Set Detection Distance to `12` (Flash's maximum range),
+  Wander Distance to `0`, and Approach off. Set the Flash row's EasyFarm
+  Distance to `50`, the UI maximum.
   That value is intentionally not Flash's real range: it disables EasyFarm's
-  unconditional pull-action navigation helper. Detection remains inside
-  Flash range, while FFXI still enforces the spell's actual 12-yalm limit.
+  unconditional pull-action navigation helper. Detection uses Flash's full
+  range, while FFXI still enforces the spell's actual 12-yalm limit.
   Leave EasyFarm's Battle, Job Ability, and Weaponskill lists disabled;
   PartyCombat handles shared engagement and AutoWS2 handles weaponskills.
 - Force mode is deliberately capped at 30 yalms; it is not unlimited.
