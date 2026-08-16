@@ -161,8 +161,9 @@ reloads Dolo's GearSwap. Run it out of combat, then preview and apply
 `progression/limbus`.
 For the Locus Dire Bat profile, `//exec reload_locusbats_safe.txt` uses the
 same four-client stagger, then refreshes PartyStart across all six. It never
-reloads Dolo's GearSwap. Run it out of combat before applying
-`progression/locusbats`.
+reloads Dolo's GearSwap. Run it out of combat; after every client is refreshed,
+the script automatically asks Dolomedes to reapply `progression/locusbats`.
+Wait for the six validation confirmations before arming PartyCombat.
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
@@ -386,6 +387,11 @@ to accelerate the party's 1,000-TP weapon-skill cycle. Victory March + Mage's
 Ballad III + Blade Madrigal and MP-reserved Distract before Dia supply its
 accuracy support against the listed 1,264 requirement for a 95% hit rate.
 Fury/Frailty remains in place as the attack and defense-down support layer.
+
+Activating Level Sync removes all existing buffs. If this profile is already
+active, PartyStart detects the Level Sync status and reapplies the local
+support/offense policy after three seconds. For a new camp, activate Level
+Sync first and then apply `progression/locusbats` normally.
 
 The bat's only listed moves are Ultrasonics and Blood Drain. Barney maintains
 Barblizzara for Ice-aligned Ultrasonics, which applies AoE Evasion Down; normal

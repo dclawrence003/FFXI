@@ -18,4 +18,6 @@ wait 3
 send Smalls lua r PartyStart
 wait 3
 send Achoo lua r PartyStart
-echo Locus Dire Bat reload complete. Preview and apply progression/locusbats, load Tackleberry's stationary EasyFarm profile, then arm PartyCombat.
+wait 5
+send Dolomedes pstart use progression locusbats
+echo Locus Dire Bat reload complete. progression/locusbats reapplication was sent to Dolomedes; wait for validation, load Tackleberry's stationary EasyFarm profile, then arm PartyCombat.

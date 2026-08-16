@@ -13,6 +13,9 @@ GEO = (ROOT / "gearswap" / "PartyStart_GEO.lua").read_text(encoding="utf-8")
 COMPOSITIONS = (ROOT / "data" / "compositions.lua").read_text(
     encoding="utf-8"
 )
+LOCUS_RELOAD = (ROOT / "scripts" / "reload_locusbats_safe.txt").read_text(
+    encoding="utf-8"
+)
 
 
 class PartyStartSourceGuards(unittest.TestCase):
@@ -442,7 +445,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.1'", ADDON)
+        self.assertIn("_addon.version = '1.4.2'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -462,7 +465,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.1'", ADDON)
+        self.assertIn("_addon.version = '1.4.2'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -488,6 +491,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("sustained = true", addon)
         self.assertIn("stationary = true", addon)
         self.assertIn("cor = {'corsair', 'samurai'}", addon)
+        self.assertIn("indi='Fury', geo='Frailty', entrust='Refresh'", addon)
         self.assertIn("1264 accuracy target", addon)
         self.assertIn("locus = 'locusbats'", ADDON)
         self.assertIn("direbats = 'locusbats'", ADDON)
@@ -496,9 +500,18 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("debuff_mp_floor = 55", rdm)
         self.assertLess(rdm.index("'Distract III'"), rdm.index("'Dia III'"))
         self.assertIn("{spell='Barblizzara', buff='Barblizzard'}", brd)
+        self.assertIn("{spell='Victory March', buff='march'}", brd)
+        self.assertIn("{spell=\"Mage's Ballad III\", buff='ballad'}", brd)
+        self.assertIn("{spell='Blade Madrigal', buff='madrigal'}", brd)
         self.assertNotIn("Barwatera", brd)
         self.assertIn("locusbats=true", PLD)
         self.assertIn("'apexbats','locusbats','apexcrabs'", DNC)
+        self.assertIn("windower.register_event('gain buff'", ADDON)
+        self.assertIn("buff_id == 269", ADDON)
+        self.assertIn("schedule_zone_rearm(3)", ADDON)
+        self.assertIn(
+            "send Dolomedes pstart use progression locusbats", LOCUS_RELOAD
+        )
 
     def test_apex_crabs_profile_is_sustained_and_event_driven(self):
         addon = ADDON.split("    apexcrabs = {", 1)[1].split(

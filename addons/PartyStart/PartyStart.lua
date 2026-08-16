@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.1'
+_addon.version = '1.4.2'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -1738,6 +1738,16 @@ windower.register_event('zone change', function()
         -- wakeup. Some clients spend most of a battlefield exit without
         -- yielding useful prerender ticks; either path may safely win.
         schedule_zone_rearm(8)
+    end
+end)
+
+windower.register_event('gain buff', function(buff_id)
+    -- Activating Level Sync removes every existing song, roll, colure, and
+    -- spell buff without zoning. Reapply the already-active profile after the
+    -- restriction settles so support does not remain silently empty.
+    if buff_id == 269 and current_profile and active_session then
+        chat(158, 'Level Sync detected; reapplying active party support.')
+        schedule_zone_rearm(3)
     end
 end)
 
