@@ -30,12 +30,15 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertIn("authorized = true", self.addon)
         self.assertGreaterEqual(self.addon.count("accept_target(target.id"), 2)
 
-    def test_puller_is_the_follow_anchor_and_never_follows_itself(self):
-        anchor = self.addon.split("local function follow_anchor()", 1)[1]
-        anchor = anchor.split("local function is_follow_anchor()", 1)[0]
-        self.assertIn("settings.puller", anchor)
-        self.assertIn("not is_follow_anchor()", self.addon)
-        self.assertNotIn("ffo follow '..settings.leader", self.addon)
+    def test_fastfollow_is_independently_controlled(self):
+        lowered = self.addon.lower()
+        self.assertNotIn("ffo ", lowered)
+        self.assertNotIn("fastfollow_claimed", lowered)
+        self.assertNotIn("follow_anchor", lowered)
+        self.assertNotIn("zone_follow_restore", lowered)
+        self.assertNotIn("restore_fastfollow", lowered)
+        self.assertIn("_addon.version = '0.6.0'", self.addon)
+        self.assertIn("FastFollow is untouched", self.addon)
 
     def test_target_only_observers_never_claim_combat_movement(self):
         self.assertIn("local function is_targeter()", self.addon)
@@ -81,9 +84,8 @@ class PartyCombatPolicy(unittest.TestCase):
             movement.index("if settings.stationary then"),
             movement.index("windower.ffxi.run(dx / length, dy / length)"),
         )
-        self.assertIn("reason, revoke, hold_position", self.addon)
-        self.assertIn("if not hold_position then", self.addon)
-        self.assertIn("settings.stationary == true)", movement)
+        self.assertIn("local function stop_local(reason, revoke)", self.addon)
+        self.assertNotIn("hold_position", self.addon)
 
     def test_stationary_puller_flash_can_establish_the_target(self):
         self.assertIn("local PULL_FLASH_SPELL_ID = 112", self.addon)

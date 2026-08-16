@@ -277,9 +277,9 @@ All supplied unattended XP profiles (`master`, `apexbats`, and `apexcrabs`)
 install PartyCombat's **stationary** movement policy. Attackers still receive
 the synchronized target, turn to face it, and engage; PartyCombat never changes
 their map position. The external puller must bring each enemy to the planted
-party. FastFollow remains suppressed between target deaths; `//pc stop`, a
-mobile profile change, or zoning releases PartyCombat's stationary position
-claim. Any future profile intended for unattended, fixed-camp XP must explicitly
+party. FastFollow is wholly independent and must be stopped manually on every
+planted character before combat; PartyCombat never suppresses or restores it.
+Any future profile intended for unattended, fixed-camp XP must explicitly
 set `stationary = true`; other supplied combat profiles remain mobile.
 
 The active stack is Chaos/Samurai Roll, Victory March/Mage's Ballad III/Blade
@@ -627,7 +627,9 @@ AutoWS2 reservation, and total completed cures.
   guarded; an unlearned ability is never attempted. PartyStart never enables
   Saber Dance and therefore cannot accidentally block Waltzes.
 - PartyStart configures support and follower AutoWS2 automation; it does not
-  select targets, move, or engage. PartyCombat exclusively owns those actions.
+  select targets, move, or engage. PartyCombat owns those combat actions but
+  never changes FastFollow; an independently enabled FastFollow can therefore
+  compete with mobile approach or defeat a stationary policy.
 - Every profile clears inherited HealBot follow, assist, and engage state on
   every client before applying job-specific support settings. FastFollow is
   user-owned: neither profile activation nor `off` changes its state.
@@ -650,8 +652,8 @@ AutoWS2 reservation, and total completed cures.
 - PartyStart performs a one-time clearing of inherited HealBot follow and
   assist state when a profile is selected. It does not subsequently poll,
   move, engage, or disengage any character, and never sends FastFollow
-  commands. PartyCombat is the sole owner of physical engagement and combat
-  movement, avoiding competing combat controllers.
+  commands. PartyCombat owns physical engagement and combat approach while
+  FastFollow remains an explicitly separate user-controlled movement system.
 - RDM prioritizes Refresh (self first, then PLD/RUN), then Haste and Phalanx,
   then offensive enfeebles. Sustained profiles omit party Shell, limit Refresh
   to the RDM and PLD/RUN, and guard routine buff spending with a 35% MP reserve.

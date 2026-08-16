@@ -74,71 +74,27 @@ def test_runtime_policy_is_validated_and_loaded_inert():
     assert "elseif command == 'policy' then" in SOURCE
 
 
-def test_fastfollow_is_claimed_only_after_a_target_is_accepted():
-    authority = SOURCE.split("if kind == 'authority'", 1)[1]
-    authority = authority.split("elseif kind == 'target'", 1)[0]
-    assert "ffo stop" not in authority
-    assert "clear_healbot_combat_automation()" in authority
-
-    accept = SOURCE.split("local function accept_target", 1)[1]
-    accept = accept.split("local function current_leader_target", 1)[0]
-    assert "claim_combat_movement()" in accept
-    assert accept.index("if distance > limit") < accept.index(
-        "claim_combat_movement()"
-    )
-
-    movement_claim = SOURCE.split(
-        "local function claim_combat_movement()", 1
-    )[1].split("\nend", 1)[0]
-    assert "ffo stop" in movement_claim
-
-
-def test_fastfollow_is_restored_only_after_partycombat_claimed_it():
-    assert "local fastfollow_claimed = false" in SOURCE
-
-    restore = SOURCE.split(
-        "local function restore_fastfollow()", 1
-    )[1].split("\nend", 1)[0]
-    assert "if fastfollow_claimed" in restore
-    assert "local anchor = follow_anchor()" in restore
-    assert "not is_follow_anchor()" in restore
-    assert "ffo follow '..anchor" in restore
-    assert "settings.leader" not in restore
-    assert "fastfollow_claimed = false" in restore
+def test_fastfollow_is_never_controlled_by_partycombat():
+    lowered = SOURCE.lower()
+    assert "ffo " not in lowered
+    assert "fastfollow_claimed" not in lowered
+    assert "follow_anchor" not in lowered
+    assert "zone_follow_restore" not in lowered
+    assert "restore_fastfollow" not in lowered
+    assert "claim_combat_movement" not in lowered
+    assert "_addon.version = '0.6.0'" in SOURCE
+    assert "FastFollow is untouched" in SOURCE
 
     stop_local = SOURCE.split("local function stop_local", 1)[1]
     stop_local = stop_local.split("local function inject_combat_target", 1)[0]
-    assert "restore_fastfollow()" in stop_local
+    assert "stop_running()" in stop_local
+    assert "FastFollow" not in stop_local
 
-
-def test_zone_follow_recovery_is_delayed_and_cancelled_by_new_combat():
-    assert "local zone_follow_restore_at = nil" in SOURCE
     zone = SOURCE.split(
         "windower.register_event('zone change'", 1
     )[1].split("windower.register_event('logout'", 1)[0]
-    assert "local restore_after_zone = fastfollow_claimed" in zone
-    assert "zone_follow_restore_at = now + POST_ZONE_FOLLOW_DELAY" in zone
-
-    accept = SOURCE.split("local function accept_target", 1)[1]
-    accept = accept.split("local function current_leader_target", 1)[0]
-    assert "zone_follow_restore_at = nil" in accept
-
-    prerender = SOURCE.split(
-        "windower.register_event('prerender'", 1
-    )[1].split("windower.register_event('addon command'", 1)[0]
-    assert "if zone_follow_restore_at and now >= zone_follow_restore_at" in prerender
-    assert "not active_target_id" in prerender
-    assert "local anchor = follow_anchor()" in prerender
-    assert "ffo follow '..anchor" in prerender
-
-
-def test_fastfollow_recovery_uses_puller_not_command_leader():
-    anchor = SOURCE.split("local function follow_anchor()", 1)[1]
-    anchor = anchor.split("local function is_follow_anchor()", 1)[0]
-    assert "settings.puller" in anchor
-    assert anchor.index("settings.puller") < anchor.index("settings.leader")
-    assert "ffo follow '..settings.leader" not in SOURCE
-    assert "_addon.version = '0.5.0'" in SOURCE
+    assert "stop_local(nil, true)" in zone
+    assert "follow" not in zone.lower()
 
 
 def test_priority_attackers_split_without_retargeting_the_tank():
@@ -204,11 +160,12 @@ def test_stationary_policy_is_explicit_and_blocks_translation():
     )
     stop = SOURCE.split("local function stop_local", 1)[1]
     stop = stop.split("local function inject_combat_target", 1)[0]
-    assert "reason, revoke, hold_position" in stop
-    assert "if not hold_position then" in stop
+    assert "reason, revoke" in stop
+    assert "hold_position" not in stop
     target_end = movement.split("if not valid_enemy(target) then", 1)[1]
     target_end = target_end.split("if not is_attacker() then", 1)[0]
-    assert "settings.stationary == true)" in target_end
+    assert "stop_local(is_attacker()" in target_end
+    assert "hold_position" not in target_end
 
 
 def test_no_all_character_attack_command():

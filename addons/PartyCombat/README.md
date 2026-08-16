@@ -52,38 +52,26 @@ PartyCombat follows combat actions, not cursor movement:
 - A dead, despawned, or invalid target ends the pursuit.
 - A runtime policy may authorize a character as a **target-only observer**.
   These clients receive the same local `<t>` as the damage group so RDM/BRD
-  GearSwap can enfeeble it, but they never engage, face, approach, stop
-  FastFollow, or claim movement. This is used by the Ambuscade profiles to
+  GearSwap can enfeeble it, but they never engage, face, approach, or interact
+  with FastFollow. This is used by encounter profiles to
   keep the backline out of frontal mechanics without disabling Silence or
   Elegy.
-- In a mobile policy, ending pursuit hands movement back to FastFollow for
-  followers whose state PartyCombat previously claimed. A stationary policy
-  keeps that claim between ordinary target ends so the party remains planted;
-  explicit stop, policy change, or zoning releases it. The active policy's
-  puller is the formation anchor; the separate command leader is never
-  substituted as the follow target. After a zone transition, PartyCombat
-  reinforces that handoff three times at 3.5-second intervals. This covers a
-  client that finishes rebuilding later than the others after a battlefield
-  exit. A claim made during the preceding 60 seconds remains eligible, so
-  killing the final target immediately before zoning cannot erase the recovery
-  signal. Accepting a new combat target or explicitly stopping PartyCombat
-  cancels every pending recovery attempt.
+- FastFollow is an independent user-owned controller. PartyCombat never sends
+  it a start, stop, follow, redirect, or restore command—when arming, forcing,
+  ending a target, stopping, changing policies, zoning, logging out, or
+  unloading. If both addons are enabled, their movement requests may compete;
+  the user must explicitly choose the desired FastFollow state per character.
 - Zoning disarms the addon. Runtime role policies also load inert.
 - Only configured attackers move and engage. Configured target-only observers
   synchronize the target without entering combat; all other clients are inert.
 
-Arming PartyCombat does not change FastFollow. It clears inherited HealBot
-follow/assist/engage state when it authorizes an attacker, then stops
-FastFollow only after that attacker accepts a valid combat target and
-PartyCombat takes exclusive ownership of combat positioning. In a stationary
-policy, that claim suppresses other follow controllers while PartyCombat itself
-never requests translational movement. Mobile target ends release the claim;
-stationary target ends retain it until explicit stop, policy change, or zoning.
-When released, only a follower whose FastFollow state PartyCombat claimed is
-returned to following the configured puller. The puller
-is never ordered to follow itself. GearSwap remains responsible for equipment,
-and AutoWS2 or another separately configured system remains responsible for
-weaponskills.
+PartyCombat clears inherited HealBot follow/assist/engage state when it
+authorizes an attacker, but FastFollow state is never read or written. For a
+stationary policy, manually stop FastFollow on every planted character before
+arming PartyCombat; otherwise FastFollow can still move them even though
+PartyCombat itself issues no translation. GearSwap remains responsible for
+equipment, and AutoWS2 or another separately configured system remains
+responsible for weaponskills.
 
 ## Installation
 
@@ -130,7 +118,8 @@ puller. Other clients can stop only their own local attacker.
 - `force`: Arms synchronization and explicitly orders the configured attacker
   to target and engage the leader's current enemy. It approaches only when the
   active policy is mobile.
-- `stop`: Disarms synchronization, stops movement, and disengages attackers.
+- `stop`: Disarms synchronization, stops PartyCombat-owned movement, and
+  disengages attackers. It leaves every FastFollow state unchanged.
 - `status`: Displays role, movement policy, authorization, target, and mode.
 - `policy <name> <leader> <puller> <attackers> [targeters]
   [mobile|stationary] [priority_target] [priority_attackers]`: Validates and
@@ -192,9 +181,8 @@ table retain the old behavior in which targeters equal attackers. The old
 ## PartyStart and AutoWS2 integration
 
 PartyStart does not police engagement. Its composition selects the command
-leader and puller. The leader controls policy while the puller is also the
-FastFollow recovery anchor; a tactical profile can narrow attackers and add target-only
-observers. Physical profiles configure AutoWS2 only for the resulting attacker
+leader and puller; either may control PartyCombat. A tactical profile can
+narrow attackers and add target-only observers. Physical profiles configure AutoWS2 only for the resulting attacker
 set after whole-party validation. PartyStart sends the matching `policy`
 command but never sends `on` or `force`; PartyCombat remains the only owner of
 target selection, approach movement, engagement, disengagement, and combat
@@ -205,11 +193,13 @@ PartyStart's unattended `master` (Apex Efts), `apexbats`, and `apexcrabs`
 profiles send `stationary`; the other supplied profiles send `mobile`. Future
 fixed-camp unattended profiles should explicitly set `stationary = true`. A
 direct `policy` command that omits the final field remains mobile for backward
-compatibility.
+compatibility. FastFollow must be stopped independently on stationary party
+members before these profiles are armed.
 
 The supplied Ambuscade V1 profile assigns `Bozzetto Urchin` to Dolomedes and
-Kickpuncher. Tackleberry and the target-only supports remain synchronized to
-Bozzetto Breadwinner while those two kill the add.
+Kickpuncher. Tackleberry, Smalls, and Achoo remain synchronized to Bozzetto
+Breadwinner while those two kill the add. Barney is deliberately excluded from
+target synchronization so his camera remains free for watching Housemaker.
 
 ## Safety and limitations
 
@@ -217,6 +207,10 @@ Bozzetto Breadwinner while those two kill the add.
 - In mobile mode, movement is a straight line and does not path around walls,
   hazards, or additional enemy groups. Stationary mode issues no translational
   movement.
+- PartyCombat never changes FastFollow. Disable or redirect FastFollow
+  yourself whenever its existing state conflicts with mobile approach or a
+  stationary camp. PartyCombat stop and target death will not restore a
+  preferred follow target because the addon no longer owns that preference.
 - Facing is maintained only while PartyCombat owns a valid combat target; it
   does not rotate characters merely because the addon is armed.
 - The automatic leash is measured from the attacker to the enemy, not from the

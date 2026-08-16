@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.5.0'
+_addon.version = '0.6.0'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -43,9 +43,6 @@ local ENGAGE_RETRY_INTERVAL = 1.5
 local MOVEMENT_INTERVAL = 0.08
 local TARGET_SYNC_INTERVAL = 1
 local PRIORITY_SCAN_INTERVAL = 0.10
-local POST_ZONE_FOLLOW_DELAY = 3.5
-local POST_ZONE_FOLLOW_ATTEMPTS = 3
-local RECENT_FOLLOW_CLAIM_WINDOW = 60
 local PULL_FLASH_SPELL_ID = 112
 
 local defaults = {
@@ -124,10 +121,6 @@ local last_engage_at = 0
 local running = false
 local last_ignore_target = nil
 local last_ignore_at = 0
-local fastfollow_claimed = false
-local zone_follow_restore_at = nil
-local zone_follow_restore_remaining = 0
-local last_fastfollow_claim_at = nil
 
 local function chat(color, message)
     windower.add_to_chat(color or 207, '[PartyCombat] '..message)
@@ -160,19 +153,6 @@ end
 
 local function is_puller()
     return same_name(local_name(), settings.puller)
-end
-
--- Command authority and formation movement are separate concerns. The puller
--- is the party's formation anchor; the leader may still arm, force, and
--- override combat without dragging FastFollow back to the leader afterward.
-local function follow_anchor()
-    if valid_name(settings.puller) then return settings.puller end
-    if valid_name(settings.leader) then return settings.leader end
-    return nil
-end
-
-local function is_follow_anchor()
-    return same_name(local_name(), follow_anchor())
 end
 
 local function is_controller()
@@ -413,29 +393,9 @@ end
 local function clear_healbot_combat_automation()
     windower.send_command(
         'hb follow off; hb as off; hb as attack off')
-    windower.ffxi.run(false)
-    running = false
-end
-
-local function claim_combat_movement()
-    if not fastfollow_claimed then
-        windower.send_command('ffo stop')
-        fastfollow_claimed = true
-    end
-    last_fastfollow_claim_at = os.clock()
-    windower.ffxi.run(false)
-    running = false
-end
-
-local function restore_fastfollow()
-    -- The local player record can be temporarily unavailable during a zone
-    -- transition. The claim flag itself proves this client was an attacker.
-    local anchor = follow_anchor()
-    if fastfollow_claimed and anchor and not is_follow_anchor()
-    then
-        windower.send_command('ffo follow '..anchor)
-    end
-    fastfollow_claimed = false
+    -- Stop only movement this addon previously started. FastFollow is a
+    -- separate user-owned controller and is never toggled or redirected.
+    stop_running()
 end
 
 local function face_target(self, target)
@@ -453,7 +413,7 @@ local function disengage_if_needed()
     end
 end
 
-local function stop_local(reason, revoke, hold_position)
+local function stop_local(reason, revoke)
     stop_running()
     disengage_if_needed()
     active_target_id = nil
@@ -465,9 +425,6 @@ local function stop_local(reason, revoke, hold_position)
     next_priority_scan = 0
     if revoke then
         authorized = false
-    end
-    if not hold_position then
-        restore_fastfollow()
     end
     if reason then
         chat(207, reason)
@@ -546,7 +503,7 @@ local function accept_target(id, mode)
 
     -- Target-only observers need the same local <t> as the damage group so
     -- their GearSwap controllers can Silence, Elegy, or otherwise debuff.
-    -- They never claim movement, stop FastFollow, face, engage, or approach.
+    -- They never run, face, engage, or approach.
     if not is_attacker() then
         active_target_id = target.id
         active_mode = 'observe'
@@ -575,13 +532,8 @@ local function accept_target(id, mode)
         return
     end
 
-    -- FastFollow remains user-owned while PartyCombat is merely armed. Stop
-    -- it only when this attacker has accepted a real combat target and
-    -- PartyCombat is taking exclusive ownership of combat positioning. In a
-    -- stationary policy, that ownership means suppressing all translation.
-    zone_follow_restore_at = nil
-    zone_follow_restore_remaining = 0
-    claim_combat_movement()
+    -- FastFollow is an entirely independent user-owned controller. Do not
+    -- start, stop, redirect, or restore it when combat movement begins.
     if priority_mode then priority_target_id = target.id end
     active_target_id = target.id
     active_mode = mode or (force and 'force' or 'auto')
@@ -627,7 +579,7 @@ local function update_priority_target(now)
     else
         stop_local(
             ('Priority target %s ended; no living shared target remains.')
-                :format(finished), false, settings.stationary == true)
+                :format(finished), false)
     end
 end
 
@@ -940,9 +892,6 @@ windower.register_event('ipc message', function(message)
     elseif kind == 'stop' then
         armed = false
         if is_targeter() then
-            zone_follow_restore_at = nil
-            zone_follow_restore_remaining = 0
-            last_fastfollow_claim_at = nil
             stop_local(nil, true)
         end
     end
@@ -950,25 +899,6 @@ end)
 
 windower.register_event('prerender', function()
     local now = os.clock()
-
-    -- Battlefield exits rebuild each local client at different speeds. Retry
-    -- the ownership handoff a few times so one slow client cannot miss the
-    -- only FastFollow restore. A new combat target or explicit stop cancels
-    -- the bounded recovery sequence.
-    if zone_follow_restore_at and now >= zone_follow_restore_at then
-        local anchor = follow_anchor()
-        if not active_target_id and anchor and not is_follow_anchor()
-        then
-            windower.send_command('ffo follow '..anchor)
-        end
-        zone_follow_restore_remaining = zone_follow_restore_remaining - 1
-        if zone_follow_restore_remaining > 0 and not active_target_id then
-            zone_follow_restore_at = now + POST_ZONE_FOLLOW_DELAY
-        else
-            zone_follow_restore_at = nil
-            zone_follow_restore_remaining = 0
-        end
-    end
 
     if armed and is_controller() and now >= next_authority then
         next_authority = now + AUTHORITY_INTERVAL
@@ -994,8 +924,7 @@ windower.register_event('prerender', function()
     if not valid_enemy(target) then
         stop_local(is_attacker()
             and 'Target ended; attacker stopped.'
-            or 'Target ended; observer target cleared.', false,
-            settings.stationary == true)
+            or 'Target ended; observer target cleared.', false)
         return
     end
 
@@ -1162,9 +1091,6 @@ windower.register_event('addon command', function(command, ...)
         end
         force_current_target()
     elseif command == 'off' or command == 'stop' then
-        zone_follow_restore_at = nil
-        zone_follow_restore_remaining = 0
-        last_fastfollow_claim_at = nil
         if not is_controller() then
             stop_local('Local attacker stopped.', true)
             return
@@ -1182,23 +1108,12 @@ windower.register_event('addon command', function(command, ...)
 end)
 
 windower.register_event('zone change', function()
-    local now = os.clock()
-    local recently_claimed = last_fastfollow_claim_at
-        and now - last_fastfollow_claim_at <= RECENT_FOLLOW_CLAIM_WINDOW
-    local restore_after_zone = fastfollow_claimed or recently_claimed
     if armed and is_controller() then
         broadcast_authority(false)
     end
     armed = false
     authorized = false
     stop_local(nil, true)
-    if restore_after_zone then
-        zone_follow_restore_remaining = POST_ZONE_FOLLOW_ATTEMPTS
-        zone_follow_restore_at = now + POST_ZONE_FOLLOW_DELAY
-    else
-        zone_follow_restore_at = nil
-        zone_follow_restore_remaining = 0
-    end
 end)
 
 windower.register_event('logout', 'unload', function()
@@ -1209,7 +1124,7 @@ windower.register_event('logout', 'unload', function()
 end)
 
 chat(158,
-    'Loaded inert. Use //pc on or //pc force on the configured leader or puller.')
+    'Loaded inert; FastFollow is untouched. Use //pc on or //pc force on the configured leader or puller.')
 if settings_warning then
     chat(123,
         'settings.lua was unavailable during startup; using safe defaults. '
