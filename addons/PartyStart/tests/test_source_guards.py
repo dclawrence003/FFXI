@@ -166,6 +166,32 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("reserving 1000 TP for Chivalry", PLD)
         self.assertIn("gs c unset AutoTankFull", ADDON)
 
+    def test_pld_war_defender_is_emergency_only(self):
+        self.assertIn("PSTART_PLD_DEFENDER_TRIGGER_HPP = 50", PLD)
+        self.assertIn("PSTART_PLD_DEFENDER_RELEASE_HPP = 70", PLD)
+        command_hook = PLD.split(
+            "function user_job_self_command(commandArgs, eventArgs)", 1
+        )[1]
+        self.assertIn("command == 'subjobenmity'", command_hook)
+        self.assertIn("eventArgs.handled = true", command_hook)
+        policy = PLD.split(
+            "local function pstart_pld_war_subjob_enmity()", 1
+        )[1].split("local function pstart_pld_tank_cooldown", 1)[0]
+        emergency = policy.index(
+            "hpp < PSTART_PLD_DEFENDER_TRIGGER_HPP"
+        )
+        defender = policy.index("PSTART_PLD_DEFENDER_ACTION_ID")
+        warcry = policy.index("PSTART_PLD_WARCRY_ACTION_ID")
+        self.assertLess(emergency, defender)
+        self.assertLess(defender, warcry)
+        self.assertIn("pstart_pld_cancel_offense_for_defender()", policy)
+        self.assertGreaterEqual(
+            policy.count("pstart_pld_cancel_offense_for_defender()"), 2
+        )
+        self.assertIn("buffactive['Defender']", policy)
+        self.assertIn("hpp >= PSTART_PLD_DEFENDER_RELEASE_HPP", policy)
+        self.assertIn("cancel defender", policy)
+
     def test_pld_cooldowns_are_owned_and_conditioned(self):
         self.assertIn("PSTART_PLD_SENTINEL_ACTION_ID = 48", PLD)
         self.assertIn("PSTART_PLD_RAMPART_ACTION_ID = 92", PLD)

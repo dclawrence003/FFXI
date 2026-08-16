@@ -3,8 +3,10 @@
 --
 -- This controller owns HP decisions and a conservative tank-cooldown policy.
 -- Selindrile's native PLD controller continues to own Majesty upkeep, self
--- buffs, Flash, and subjob enmity after this higher-priority pass returns
--- false. PartyStart disables native AutoTankFull so Sentinel/Rampart/Palisade
+-- buffs, and Flash after this higher-priority pass returns false. While this
+-- controller is active on PLD/WAR, it intercepts the native SubJobEnmity
+-- command so Defender is an emergency tool instead of an offensive-rotation
+-- step. PartyStart disables native AutoTankFull so Sentinel/Rampart/Palisade
 -- have exactly one automation owner.
 -- Load at the end of a participating character's PLD gear file:
 --     include('Common/PartyStart_PLD.lua')
@@ -48,6 +50,13 @@ local PSTART_PLD_CHIVALRY_TP = 1000
 local PSTART_PLD_SENTINEL_ACTION_ID = 48
 local PSTART_PLD_RAMPART_ACTION_ID = 92
 local PSTART_PLD_PALISADE_ACTION_ID = 278
+local PSTART_PLD_BERSERK_ACTION_ID = 31
+local PSTART_PLD_WARCRY_ACTION_ID = 32
+local PSTART_PLD_DEFENDER_ACTION_ID = 33
+local PSTART_PLD_AGGRESSOR_ACTION_ID = 34
+local PSTART_PLD_PROVOKE_ACTION_ID = 35
+local PSTART_PLD_DEFENDER_TRIGGER_HPP = 50
+local PSTART_PLD_DEFENDER_RELEASE_HPP = 70
 local PSTART_PLD_ESTABLISH_DELAY = 5
 local PSTART_PLD_RAMPART_CLUSTER_HPP = 85
 local PSTART_PLD_RAMPART_CLUSTER_COUNT = 2
@@ -212,6 +221,117 @@ local function pstart_pld_use_tank_ability(action_id, detail)
     pstart_pld.last_action = detail or ability.en
     add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
     return true
+end
+
+-- Selindrile's native PLD/WAR sequence treats Defender as the next generic
+-- enmity action after Warcry. That overlaps an attack penalty with offensive
+-- buffs and can leave the tank in Defender for routine, healthy combat. This
+-- replacement deliberately ignores tickdelay because the native job tick sets
+-- tickdelay immediately after queueing `gs c SubJobEnmity`; all other safety
+-- gates remain intact.
+local function pstart_pld_use_war_ability(action_id, target, detail)
+    local ability = res.job_abilities[action_id]
+    local recasts = windower.ffxi.get_ability_recasts() or {}
+    if not ability
+        or not pstart_pld_known_ability(action_id)
+        or midaction()
+        or silent_check_disable()
+        or silent_check_amnesia()
+        or os.clock() < (pstart_pld.retry_at or 0)
+        or (recasts[ability.recast_id] or 999) >= latency
+    then
+        return false
+    end
+    pstart_pld.pending = {
+        kind = 'tank_ability',
+        action_id = action_id,
+        spell_name = ability.en,
+    }
+    windower.chat.input('/ja "'..ability.en..'" '..target)
+    tickdelay = os.clock() + 1.5
+    pstart_pld.last_action = detail or ability.en
+    add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+    return true
+end
+
+local function pstart_pld_cancel_offense_for_defender()
+    local cancelled = {}
+    if buffactive['Warcry'] then
+        windower.send_command('cancel warcry')
+        cancelled[#cancelled + 1] = 'Warcry'
+    end
+    if buffactive['Berserk'] then
+        windower.send_command('cancel berserk')
+        cancelled[#cancelled + 1] = 'Berserk'
+    end
+    if #cancelled == 0 then return false end
+    tickdelay = os.clock() + 0.5
+    pstart_pld.last_action = 'cancelled '..table.concat(cancelled, '/')
+        ..' for emergency Defender'
+    add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+    return true
+end
+
+local function pstart_pld_war_subjob_enmity()
+    if player.sub_job ~= 'WAR' or state.Buff['SJ Restriction']
+        or not pstart_pld_enemy_target()
+    then
+        return false
+    end
+
+    local hpp = tonumber(player.hpp) or 100
+    if hpp < PSTART_PLD_DEFENDER_TRIGGER_HPP then
+        if pstart_pld_cancel_offense_for_defender() then return true end
+        if not buffactive['Defender']
+            and pstart_pld_use_war_ability(
+                PSTART_PLD_DEFENDER_ACTION_ID,
+                '<me>',
+                ('Defender emergency at %d%% HP'):format(hpp))
+        then
+            return true
+        end
+        -- Hate remains useful while the emergency window is active, but do
+        -- not reintroduce Warcry, Berserk, or Aggressor behind Defender.
+        return pstart_pld_use_war_ability(
+            PSTART_PLD_PROVOKE_ACTION_ID, '<t>', 'Provoke')
+    end
+
+    if buffactive['Defender'] then
+        if hpp >= PSTART_PLD_DEFENDER_RELEASE_HPP then
+            windower.send_command('cancel defender')
+            tickdelay = os.clock() + 0.5
+            pstart_pld.last_action = ('Defender released at %d%% HP')
+                :format(hpp)
+            add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+            return true
+        end
+        -- Warcry can also arrive from another WAR after Defender was applied.
+        -- Enforce mutual exclusion throughout the recovery band, not only on
+        -- the initial emergency tick.
+        if pstart_pld_cancel_offense_for_defender() then return true end
+        -- Keep the emergency defense through the recovery band and permit
+        -- only Provoke. The 50/70 hysteresis prevents cure-driven toggling.
+        return pstart_pld_use_war_ability(
+            PSTART_PLD_PROVOKE_ACTION_ID, '<t>', 'Provoke')
+    end
+
+    if pstart_pld_use_war_ability(
+        PSTART_PLD_PROVOKE_ACTION_ID, '<t>', 'Provoke')
+    then
+        return true
+    end
+    if pstart_pld_use_war_ability(
+        PSTART_PLD_WARCRY_ACTION_ID, '<me>', 'Warcry')
+    then
+        return true
+    end
+    if pstart_pld_use_war_ability(
+        PSTART_PLD_AGGRESSOR_ACTION_ID, '<me>', 'Aggressor')
+    then
+        return true
+    end
+    return pstart_pld_use_war_ability(
+        PSTART_PLD_BERSERK_ACTION_ID, '<me>', 'Berserk')
 end
 
 local function pstart_pld_tank_cooldown(lowest, cluster_injured)
@@ -584,6 +704,13 @@ end
 local pstart_pld_original_self_command = user_job_self_command
 function user_job_self_command(commandArgs, eventArgs)
     local command = commandArgs[1] and commandArgs[1]:lower() or nil
+    if command == 'subjobenmity' and pstart_pld.active
+        and player.main_job == 'PLD' and player.sub_job == 'WAR'
+    then
+        eventArgs.handled = true
+        pstart_pld_war_subjob_enmity()
+        return
+    end
     if command ~= 'pstartpld' then
         if pstart_pld_original_self_command then
             return pstart_pld_original_self_command(commandArgs, eventArgs)

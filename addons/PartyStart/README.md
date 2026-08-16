@@ -32,11 +32,16 @@ PartyStart establishes clear ownership:
 - PLD GearSwap is the primary healer in sustained profiles. It evaluates HP
   before the
   native PLD tick, maintains Majesty through the native controller, casts
-  routine Cure III/Cure IV, and then yields to Flash, Provoke, Warcry, and
-  self-buff upkeep. PartyStart disables native `AutoTankFull` and conservatively
-  owns Sentinel after target establishment, Rampart for clustered damage, and
-  Palisade after the tank begins taking damage. Native AutoWS stays off so
-  AutoWS2 remains the only weapon-skill owner.
+  routine Cure III/Cure IV, and then yields to Flash and self-buff upkeep.
+  While PartyStart is active on PLD/WAR, it owns the native `SubJobEnmity`
+  command: Provoke remains the first healthy-combat hate action; Warcry,
+  Aggressor, and Berserk remain offensive actions; and Defender triggers only
+  below 50% HP. Entering that emergency window cancels Warcry and Berserk,
+  and Defender stays isolated until recovery reaches 70%, preventing
+  cure-driven on/off oscillation. PartyStart disables native `AutoTankFull`
+  and conservatively owns Sentinel after target establishment, Rampart for
+  clustered damage, and Palisade after the tank begins taking damage. Native
+  AutoWS stays off so AutoWS2 remains the only weapon-skill owner.
   V1 reserves Sentinel and Rampart for Breadwinner's 50% Hundred Fists
   transition. V2 deliberately leaves Sentinel manual for hate recovery after
   Sweet Breath.
