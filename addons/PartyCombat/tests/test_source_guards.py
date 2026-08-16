@@ -40,13 +40,13 @@ def test_combat_authority_is_explicit():
         assert f"{name} = {{" in SETTINGS
     assert "broadcast_authority(true)" in SOURCE
     assert "broadcast_authority(false)" in SOURCE
-    assert "if not authorized or not is_attacker() then return end" in SOURCE
+    assert "if not authorized or not is_targeter() then return end" in SOURCE
 
 
 def test_authorized_puller_can_establish_but_not_replace_live_target():
     action = SOURCE.split("windower.register_event('action'", 1)[1]
     action = action.split("windower.register_event('ipc message'", 1)[0]
-    assert "local puller_authority = authorized and is_puller()" in action
+    assert "local puller_authority = (authorized or armed) and is_puller()" in action
     assert "local leader_authority = armed and is_leader()" in action
     assert "active_target_id ~= target.id" in action
     assert "if valid_enemy(active) then return end" in action
@@ -66,7 +66,7 @@ def test_runtime_policy_is_validated_and_loaded_inert():
     assert "armed = false" in policy
     assert "settings = {" in policy
     assert "puller = puller" in policy
-    assert "configured command leader issues //pc on" in policy
+    assert "configured command leader or puller issues //pc on or //pc force" in policy
     assert "elseif command == 'policy' then" in SOURCE
 
 
@@ -96,7 +96,10 @@ def test_fastfollow_is_restored_only_after_partycombat_claimed_it():
         "local function restore_fastfollow()", 1
     )[1].split("\nend", 1)[0]
     assert "if fastfollow_claimed" in restore
-    assert "ffo follow '..settings.leader" in restore
+    assert "local anchor = follow_anchor()" in restore
+    assert "not is_follow_anchor()" in restore
+    assert "ffo follow '..anchor" in restore
+    assert "settings.leader" not in restore
     assert "fastfollow_claimed = false" in restore
 
     stop_local = SOURCE.split("local function stop_local", 1)[1]
@@ -121,6 +124,17 @@ def test_zone_follow_recovery_is_delayed_and_cancelled_by_new_combat():
     )[1].split("windower.register_event('addon command'", 1)[0]
     assert "if zone_follow_restore_at and now >= zone_follow_restore_at" in prerender
     assert "not active_target_id" in prerender
+    assert "local anchor = follow_anchor()" in prerender
+    assert "ffo follow '..anchor" in prerender
+
+
+def test_fastfollow_recovery_uses_puller_not_command_leader():
+    anchor = SOURCE.split("local function follow_anchor()", 1)[1]
+    anchor = anchor.split("local function is_follow_anchor()", 1)[0]
+    assert "settings.puller" in anchor
+    assert anchor.index("settings.puller") < anchor.index("settings.leader")
+    assert "ffo follow '..settings.leader" not in SOURCE
+    assert "_addon.version = '0.4.1'" in SOURCE
 
 
 def test_active_attackers_face_their_combat_target():

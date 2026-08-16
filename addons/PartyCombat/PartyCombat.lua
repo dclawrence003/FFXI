@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.4.0'
+_addon.version = '0.4.1'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -154,6 +154,19 @@ end
 
 local function is_puller()
     return same_name(local_name(), settings.puller)
+end
+
+-- Command authority and formation movement are separate concerns. The puller
+-- is the party's formation anchor; the leader may still arm, force, and
+-- override combat without dragging FastFollow back to the leader afterward.
+local function follow_anchor()
+    if valid_name(settings.puller) then return settings.puller end
+    if valid_name(settings.leader) then return settings.leader end
+    return nil
+end
+
+local function is_follow_anchor()
+    return same_name(local_name(), follow_anchor())
 end
 
 local function is_controller()
@@ -319,10 +332,10 @@ end
 local function restore_fastfollow()
     -- The local player record can be temporarily unavailable during a zone
     -- transition. The claim flag itself proves this client was an attacker.
-    if fastfollow_claimed and valid_name(settings.leader)
-        and not is_leader()
+    local anchor = follow_anchor()
+    if fastfollow_claimed and anchor and not is_follow_anchor()
     then
-        windower.send_command('ffo follow '..settings.leader)
+        windower.send_command('ffo follow '..anchor)
     end
     fastfollow_claimed = false
 end
@@ -697,10 +710,10 @@ windower.register_event('prerender', function()
     -- only FastFollow restore. A new combat target or explicit stop cancels
     -- the bounded recovery sequence.
     if zone_follow_restore_at and now >= zone_follow_restore_at then
-        if not active_target_id and valid_name(settings.leader)
-            and not is_leader()
+        local anchor = follow_anchor()
+        if not active_target_id and anchor and not is_follow_anchor()
         then
-            windower.send_command('ffo follow '..settings.leader)
+            windower.send_command('ffo follow '..anchor)
         end
         zone_follow_restore_remaining = zone_follow_restore_remaining - 1
         if zone_follow_restore_remaining > 0 and not active_target_id then

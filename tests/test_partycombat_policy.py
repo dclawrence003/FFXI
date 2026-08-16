@@ -30,8 +30,12 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertIn("authorized = true", self.addon)
         self.assertGreaterEqual(self.addon.count("accept_target(target.id"), 2)
 
-    def test_leader_never_follows_itself(self):
-        self.assertIn("and not is_leader()", self.addon)
+    def test_puller_is_the_follow_anchor_and_never_follows_itself(self):
+        anchor = self.addon.split("local function follow_anchor()", 1)[1]
+        anchor = anchor.split("local function is_follow_anchor()", 1)[0]
+        self.assertIn("settings.puller", anchor)
+        self.assertIn("not is_follow_anchor()", self.addon)
+        self.assertNotIn("ffo follow '..settings.leader", self.addon)
 
     def test_target_only_observers_never_claim_combat_movement(self):
         self.assertIn("local function is_targeter()", self.addon)

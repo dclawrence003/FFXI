@@ -44,8 +44,10 @@ PartyCombat follows combat actions, not cursor movement:
   keep the backline out of frontal mechanics without disabling Silence or
   Elegy.
 - Ending pursuit hands movement back to FastFollow for followers whose follow
-  state PartyCombat previously claimed. After a zone transition, PartyCombat
-  reinforces that handoff three times at 3.5-second intervals. This covers a
+  state PartyCombat previously claimed. The active policy's puller is the
+  formation anchor; the separate command leader is never substituted as the
+  follow target. After a zone transition, PartyCombat reinforces that handoff
+  three times at 3.5-second intervals. This covers a
   client that finishes rebuilding later than the others after a battlefield
   exit. A claim made during the preceding 60 seconds remains eligible, so
   killing the final target immediately before zoning cannot erase the recovery
@@ -60,9 +62,10 @@ follow/assist/engage state when it authorizes an attacker, then stops
 FastFollow only after that attacker accepts a valid combat target and
 PartyCombat is about to take movement control. When pursuit ends, PartyCombat
 is stopped, or a zone transition occurs, only a follower whose FastFollow state
-PartyCombat claimed is returned to following the configured leader. GearSwap
-remains responsible for equipment, and AutoWS2 or another separately configured
-system remains responsible for weaponskills.
+PartyCombat claimed is returned to following the configured puller. The puller
+is never ordered to follow itself. GearSwap remains responsible for equipment,
+and AutoWS2 or another separately configured system remains responsible for
+weaponskills.
 
 ## Installation
 
@@ -76,6 +79,12 @@ lua load PartyCombat
 All clients read the same `data\settings.lua` file. PartyCombat never writes
 to it. This deliberately avoids Windower's shared XML config loader, which can
 fail when several local clients reload an addon simultaneously.
+
+Copy `scripts\reload_partycombat_safe.txt` to `Windower\scripts`. From a safe,
+out-of-combat location, `//exec reload_partycombat_safe.txt` reloads only
+PartyCombat, one client at a time. It never reloads GearSwap or PartyStart.
+Reapply the PartyStart policy with `//pstart on`, then arm combat with
+`//pc on`.
 
 Recommended `scripts\init.txt` bindings:
 
@@ -159,7 +168,8 @@ table retain the old behavior in which targeters equal attackers. The old
 ## PartyStart and AutoWS2 integration
 
 PartyStart does not police engagement. Its composition selects the command
-leader and puller; a tactical profile can narrow attackers and add target-only
+leader and puller. The leader controls policy while the puller is also the
+FastFollow recovery anchor; a tactical profile can narrow attackers and add target-only
 observers. Physical profiles configure AutoWS2 only for the resulting attacker
 set after whole-party validation. PartyStart sends the matching `policy`
 command but never sends `on` or `force`; PartyCombat remains the only owner of

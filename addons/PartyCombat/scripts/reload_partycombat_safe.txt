@@ -1,0 +1,14 @@
+echo Staggered PartyCombat-only reload beginning. Combat will be disarmed.
+send Dolomedes lua r PartyCombat
+wait 4
+send Tackleberry lua r PartyCombat
+wait 4
+send Kickpuncher lua r PartyCombat
+wait 4
+send Barneystinson lua r PartyCombat
+wait 4
+send Smalls lua r PartyCombat
+wait 4
+send Achoo lua r PartyCombat
+wait 4
+echo PartyCombat reload complete. Run pstart on, then pc on.
