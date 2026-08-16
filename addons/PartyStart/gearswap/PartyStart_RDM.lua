@@ -7,6 +7,7 @@
 
 local pstart_rdm_profiles = {
     master = {
+        sustained = true,
         -- Black Halo is 70% MND / 30% STR, so MND is the stronger equal-cost
         -- Gain spell for Smalls's Maxentius offense.
         gain = {
@@ -18,6 +19,27 @@ local pstart_rdm_profiles = {
         lean = true,
         -- Apex Efts do not cast spells. Their magical TP effects apply status
         -- ailments without listed magic damage, which Shell does not prevent.
+        party_shell = false,
+        routine_buff_mp_floor = 35,
+        tank_buff_mp_floor = 20,
+        debuff_mp_floor = 55,
+        debuff_min_target_hpp = 65,
+        debuffs = {
+            {spells={'Dia III', 'Dia II', 'Dia'}, duration=150},
+        },
+    },
+    apexbats = {
+        sustained = true,
+        -- The Dho Gates flock bats use Water-aligned Sonic Boom for Attack
+        -- Down without listed damage. Barwatera and job-aware Erase are useful;
+        -- a six-target Shell pass is not.
+        gain = {
+            spells={'Gain-MND', 'Gain-STR'},
+            buff='MND Boost',
+            buffs={['Gain-MND']='MND Boost', ['Gain-STR']='STR Boost'},
+        },
+        temper = true,
+        lean = true,
         party_shell = false,
         routine_buff_mp_floor = 35,
         tank_buff_mp_floor = 20,
@@ -274,11 +296,11 @@ local function pstart_rdm_owns_buff(name, buff)
     if buff == 'Shell' then
         return profile.party_shell or not profile.lean
     elseif buff == 'Protect' then
-        -- Majesty supplies initial Protect in master. RDM repairs only an
-        -- individual copy that a loss packet confirms was dispelled, subject
-        -- to the sustained profile's routine MP reserve.
+        -- Majesty supplies initial Protect in sustained profiles. RDM repairs
+        -- only an individual copy that a loss packet confirms was dispelled,
+        -- subject to the sustained profile's routine MP reserve.
         return profile.party_protect
-            or pstart_rdm.profile == 'master' or not profile.lean
+            or profile.sustained or not profile.lean
     end
     return false
 end
@@ -442,7 +464,7 @@ end
 local function pstart_rdm_convert_recovery()
     local profile = pstart_rdm_profiles[pstart_rdm.profile]
     if not profile
-        or (pstart_rdm.profile ~= 'master' and not profile.healing)
+        or (not profile.sustained and not profile.healing)
         or os.clock() > (pstart_rdm.convert_recovery_until or 0)
     then
         return false
@@ -474,7 +496,7 @@ end
 local function pstart_rdm_emergency_heal()
     local profile = pstart_rdm_profiles[pstart_rdm.profile]
     if not profile
-        or (pstart_rdm.profile ~= 'master' and not profile.healing)
+        or (not profile.sustained and not profile.healing)
         or os.clock() - (pstart_rdm.last_heal_at or 0) < 2.5
     then
         return false
@@ -606,8 +628,8 @@ local function pstart_rdm_cast_party_buffs()
         end
     end
     if not profile.lean then
-        -- Richer profiles retain individual party defenses. The sustained
-        -- master profile omits this twelve-cast rotation to preserve MP.
+        -- Richer profiles retain individual party defenses. Sustained profiles
+        -- omit this twelve-cast rotation to preserve MP.
         for _, name in ipairs(defense) do
             if pstart_rdm_cast_buff(name,
                 {'Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect'},
@@ -872,7 +894,7 @@ function user_job_self_command(commandArgs, eventArgs)
                 #pstart_rdm.defense,
                 profile.routine_buff_mp_floor or 0,
                 profile.party_shell and 'On' or 'Off',
-                profile.heal_hpp or (pstart_rdm.profile == 'master' and 25 or 0)))
+                profile.heal_hpp or (profile.sustained and 25 or 0)))
         return
     elseif requested == 'off' then
         pstart_rdm.active = false

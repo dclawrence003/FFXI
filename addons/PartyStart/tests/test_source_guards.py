@@ -251,14 +251,15 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertIn("table.insert(refresh_targets, 1, name)", apply_rdm)
 
-    def test_master_rdm_refresh_scope_is_sustainable(self):
+    def test_sustained_rdm_refresh_scope_is_conservative(self):
         apply_rdm = ADDON.split("local function apply_rdm", 1)[1]
         apply_rdm = apply_rdm.split("local function apply_brd", 1)[0]
-        self.assertIn("local master_refresh = profile_name == 'master'", apply_rdm)
+        self.assertIn("local sustained = profile.sustained == true", apply_rdm)
+        self.assertIn("local sustained_refresh = sustained", apply_rdm)
         self.assertIn("name:lower() == player.name:lower()", apply_rdm)
         self.assertIn("or job == 'PLD' or job == 'RUN'", apply_rdm)
         self.assertIn("local refresh_wanted", apply_rdm)
-        self.assertIn("or profile_name ~= 'master' or master_refresh", apply_rdm)
+        self.assertIn("or not sustained or sustained_refresh", apply_rdm)
         self.assertIn("local function haste_rank", apply_rdm)
         self.assertIn("{'Gain-MND', 'Gain-STR'}", RDM)
         self.assertIn("local function pstart_rdm_can_spend", RDM)
@@ -309,6 +310,32 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("{spell='Barsleepra', buff='Barsleep'}", BRD)
         self.assertIn("debuff_target_names = {'Bozzetto Breadwinner'}", BRD)
         self.assertIn("debuff_target_names = {'Popular Penelope'}", BRD)
+
+    def test_apex_bats_profile_is_sustained_and_status_aware(self):
+        addon = ADDON.split("    apexbats = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        rdm = RDM.split("    apexbats = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        brd = BRD.split("    apexbats = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        self.assertIn("_addon.version = '1.1.0'", ADDON)
+        self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
+        self.assertIn("sustained = true", addon)
+        self.assertIn("Mage's Ballad III", addon)
+        self.assertIn("Blade Madrigal", addon)
+        self.assertIn("geo = {indi='Fury', geo='Frailty'", addon)
+        self.assertIn("bats = 'apexbats'", ADDON)
+        self.assertIn("apexefts = 'master'", ADDON)
+        self.assertIn("sustained = true", rdm)
+        self.assertIn("party_shell = false", rdm)
+        self.assertIn("debuff_mp_floor = 55", rdm)
+        self.assertIn("{spell='Barwatera', buff='Barwater'}", brd)
+        self.assertIn("apexbats=true", PLD)
+        self.assertIn("PSTART_PLD_SUSTAINED_PROFILES", PLD)
+        self.assertIn("'master','apexbats','physical'", DNC)
 
 
 if __name__ == "__main__":

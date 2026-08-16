@@ -82,7 +82,8 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("Carnage Elegy", master)
         self.assertIn("Dia III", master)
         self.assertIn("entrust='Refresh'", master)
-        self.assertIn("profile_name == 'master'", self.addon)
+        self.assertIn("sustained = true", master)
+        self.assertIn("local sustained = profile.sustained == true", self.addon)
         self.assertIn("and job == 'PLD'", self.addon)
         self.assertIn("profile.physical_offense", self.addon)
         self.assertIn("master = {", self.rdm)
@@ -134,6 +135,26 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("Barsleepra", self.brd)
         self.assertIn("PSTART_PLD_V1_HUNDRED_FISTS_HPP = 52", self.pld)
         self.assertIn("Sweet Breath resets enmity", self.addon)
+
+    def test_apex_bats_profile_keeps_mp_and_status_policy_separate(self):
+        addon = self.addon.split("    apexbats = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        rdm = self.rdm.split("    apexbats = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        brd = self.brd.split("    apexbats = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+        self.assertIn("Sustained Apex Bats: Dho Gates", addon)
+        self.assertIn("sustained = true", addon)
+        self.assertIn("Mage's Ballad III", addon)
+        self.assertIn("entrust='Refresh'", addon)
+        self.assertIn("party_shell = false", rdm)
+        self.assertIn("routine_buff_mp_floor = 35", rdm)
+        self.assertIn("Barwatera", brd)
+        self.assertIn("apexbats=true", self.pld)
+        self.assertIn("bats = 'apexbats'", self.addon)
 
 
 if __name__ == "__main__":

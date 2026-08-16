@@ -7,7 +7,7 @@
 --     include('Common/PartyStart_BRD.lua')
 --
 -- PartyStart drives it with:
---     gs c pstartbrd <master|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
+--     gs c pstartbrd <master|apexbats|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
 --     gs c pstartbrd off
 
 local pstart_brd_profiles = {
@@ -17,6 +17,20 @@ local pstart_brd_profiles = {
             {spell='Victory March', buff='march'},
             {spell="Mage's Ballad III", buff='ballad'},
             {spell='Blade Madrigal', buff='madrigal'},
+        },
+        debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+    },
+    apexbats = {
+        song_mode = 'Sustain',
+        songs = {
+            {spell='Victory March', buff='march'},
+            {spell="Mage's Ballad III", buff='ballad'},
+            {spell='Blade Madrigal', buff='madrigal'},
+        },
+        party_buffs = {
+            {spell='Barwatera', buff='Barwater'},
         },
         debuffs = {
             {'Carnage Elegy', 'Battlefield Elegy'},
@@ -386,7 +400,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
-            ..'<master|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'<master|apexbats|physical|accuracy|magic|safe|ambuscade-v1|'
             ..'ambuscade-v2|off> <leader>')
     end
 

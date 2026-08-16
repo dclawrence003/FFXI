@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.0.0'
+_addon.version = '1.1.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -36,6 +36,7 @@ local nonce_counter = 0
 
 local profiles = {
     master = {
+        sustained = true,
         physical_offense = true,
         cor = {'chaos', 'samurai'},
         brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
@@ -46,6 +47,26 @@ local profiles = {
             entrust_jobs={'PLD','RUN','RDM','COR'}},
         rdm_debuffs = {
             {'Dia III', 'Dia II', 'Dia'},
+        },
+    },
+    apexbats = {
+        label = 'Sustained Apex Bats: Dho Gates',
+        sustained = true,
+        physical_offense = true,
+        cor = {'chaos', 'samurai'},
+        brd = {'Victory March', "Mage's Ballad III", 'Blade Madrigal'},
+        brd_debuffs = {
+            {'Carnage Elegy', 'Battlefield Elegy'},
+        },
+        geo = {indi='Fury', geo='Frailty', entrust='Refresh',
+            entrust_jobs={'PLD','RUN','RDM','COR'}},
+        rdm_debuffs = {
+            {'Dia III', 'Dia II', 'Dia'},
+        },
+        advisories = {
+            'Apex Bats: Barwatera is maintained for Water-aligned Sonic Boom; HealBot removes Attack Down only from physical jobs by default.',
+            'Apex Bats: Blade Madrigal is retained for the Dho Gates 1113 accuracy target; switch profiles only after live hit-rate evidence supports it.',
+            'Apex Bats detect by sound. PartyStart configures support/offense only; pulling and camp safety remain external responsibilities.',
         },
     },
     physical = {
@@ -163,6 +184,12 @@ local profiles = {
 }
 
 local profile_aliases = {
+    bats = 'apexbats',
+    apexbat = 'apexbats',
+    ['apex-bats'] = 'apexbats',
+    efts = 'master',
+    apexefts = 'master',
+    ['apex-efts'] = 'master',
     v1 = 'ambuscade-v1',
     ambu1 = 'ambuscade-v1',
     ambuv1 = 'ambuscade-v1',
@@ -671,6 +698,7 @@ local function apply_rdm(
     local phalanx_targets = {}
     local defense_targets = {}
     local encounter_policy = profile.rdm or {}
+    local sustained = profile.sustained == true
     local attackers = composition_attackers(composition, active_names, profile)
 
     for _,name in ipairs(sorted_roster(roster)) do
@@ -688,11 +716,11 @@ local function apply_rdm(
             -- PartyStart profile, even when GearSwap will not maintain this
             -- target in the sustained profile.
             issue(('hb cancelbuff %s %s'):format(name, refresh))
-            local master_refresh = profile_name == 'master'
+            local sustained_refresh = sustained
                 and (name:lower() == player.name:lower()
                     or job == 'PLD' or job == 'RUN')
             local refresh_wanted = encounter_policy.refresh_scope == 'mp'
-                or profile_name ~= 'master' or master_refresh
+                or not sustained or sustained_refresh
             if refresh_wanted then
                 local destination = (job == 'PLD' or job == 'RUN')
                     and refresh_tanks or refresh_others
@@ -704,8 +732,8 @@ local function apply_rdm(
             and valid_name(configured_tank)
             and name:lower() == configured_tank:lower()
             or encounter_policy.phalanx_scope ~= 'tank'
-                and (profile_name == 'master' and job == 'PLD'
-                    or profile_name ~= 'master'
+                and (sustained and job == 'PLD'
+                    or not sustained
                         and name ~= player.name
                         and frontline_jobs:contains(job))
         if phalanx_ii and phalanx_wanted then
@@ -717,7 +745,7 @@ local function apply_rdm(
         end
     end
 
-    if profile_name == 'master' then
+    if sustained then
         -- The MP reserve can intentionally pause the tail of this list. Keep
         -- the tank/healer and primary physical contributors at the front so
         -- low-priority support melee never delays the core party.
@@ -737,9 +765,9 @@ local function apply_rdm(
         end)
     end
 
-    -- RDM's controller moves itself to the front. In master this leaves only
-    -- the RDM and PLD/RUN on the Refresh rotation; Ballad supplies the other
-    -- MP jobs. Richer profiles still append every MP job after the tanks.
+    -- RDM's controller moves itself to the front. In sustained profiles this
+    -- leaves only the RDM and PLD/RUN on the Refresh rotation; Ballad supplies
+    -- the other MP jobs. Richer profiles append every MP job after the tanks.
     for _, name in ipairs(refresh_tanks) do
         refresh_targets[#refresh_targets + 1] = name
     end
@@ -795,7 +823,7 @@ local function apply_rdm(
     issue(('gs c pstartrdm %s %s %s %s %s %s'):format(
         profile_name, target_source, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets), csv(defense_targets)))
-    if profile_name == 'master' or encounter_policy.gearswap_healing then
+    if sustained or encounter_policy.gearswap_healing then
         -- GearSwap owns all HP decisions in the sustained profile. HealBot is
         -- retained on RDM only for packet-backed status removal; letting it
         -- also cure creates a race with PLD and drains the RDM first.
@@ -839,7 +867,7 @@ local function apply_geo(player, profile_name, profile, roster)
     local geo = profile.geo
     local entrustee = first_jobs(roster, geo.entrust_jobs)
         or player.name
-    if profile_name == 'master' or geo.lean then
+    if profile.sustained or geo.lean then
         issue('gs c pstartgeo lean')
     else
         issue('gs c pstartgeo restore')
@@ -858,7 +886,7 @@ local function apply_pld(profile_name, profile, leader)
         ..'gs c unset AutoTankFull; '
         ..'gs c set HybridMode Tank; '
         ..'gs c unset AutoWSMode')
-    if profile_name == 'master' or profile.pld_controller then
+    if profile.sustained or profile.pld_controller then
         -- HealBot's optional PartyOps gate can reject a newer PartyOps phase
         -- before action selection. The PLD controller therefore lives in
         -- GearSwap and runs before native Flash/Provoke upkeep.
@@ -1336,17 +1364,18 @@ windower.register_event('addon command', function(command, ...)
         for name, _ in pairs(compositions) do names[#names + 1] = name end
         table.sort(names)
         chat(207, 'Compositions: '..table.concat(names, ', '))
-        chat(207, 'Profiles: master, physical, accuracy, magic, safe, '
+        chat(207, 'Profiles: master (Apex Efts), apexbats (bats), '
+            ..'physical, accuracy, magic, safe, '
             ..'ambuscade-v1 (v1), ambuscade-v2 (v2)')
     else
         chat(207, 'Commands: use <composition> <profile> | preview '
-            ..'<composition> <profile> | on | off | master | physical | '
-            ..'accuracy | magic | safe | v1 | v2 | status | list')
+            ..'<composition> <profile> | on | off | master | apexbats | '
+            ..'physical | accuracy | magic | safe | v1 | v2 | status | list')
     end
 end)
 
-chat(158, 'Loaded. Use //pstart preview progression master, then '
-    ..'//pstart use progression master. Ambuscade aliases: //pstart v1 or v2.')
+chat(158, 'Loaded. Sustained aliases: //pstart efts or bats. '
+    ..'Ambuscade aliases: //pstart v1 or v2.')
 if composition_warning then
     chat(167, 'Composition policy unavailable; activation is blocked. '
         ..composition_warning)
