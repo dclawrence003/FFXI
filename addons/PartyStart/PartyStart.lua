@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.2'
+_addon.version = '1.4.3'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -1498,6 +1498,12 @@ local function stop_local(options)
     options = options or {}
     local player = windower.ffxi.get_player()
     if not player then return end
+    if options.invalidate_combat then
+        -- Explicitly stopping support must not leave a stale PartyCombat
+        -- policy armable. Internal job-change revalidation deliberately omits
+        -- this flag so a same-profile unattended rearm remains idempotent.
+        issue('pc invalidate partystart')
+    end
     stop_owned_autows2()
     issue('hb follow off; hb db off; hb as off; hb as attack off; hb off')
     if player.main_job == 'COR' then issue('r2 off') end
@@ -1532,7 +1538,12 @@ local function stop_local(options)
         job_revalidate_at = nil
     end
     if not options.silent then
-        chat(207, 'Support automation stopped; no combat or FastFollow commands were issued.')
+        if options.invalidate_combat then
+            chat(207, 'Support automation stopped; PartyCombat readiness was '
+                ..'revoked and FastFollow was untouched.')
+        else
+            chat(207, 'Support automation stopped; FastFollow was untouched.')
+        end
     end
 end
 
@@ -1625,7 +1636,7 @@ windower.register_event('ipc message', function(message)
                 ..'no automation changed on this client.')
         end
     elseif kind == 'stop' then
-        stop_local()
+        stop_local{invalidate_combat=true}
     elseif kind == 'jobchange' then
         local composition_name = normalize_composition(fields[4])
         local profile_name = fields[5]
@@ -1794,7 +1805,7 @@ windower.register_event('addon command', function(command, ...)
             normalize_profile(args[2] or last_profile), true)
     elseif command == 'stop' or command == 'off' then
         send_ipc{PREFIX, 'stop', new_nonce(windower.ffxi.get_player())}
-        stop_local()
+        stop_local{invalidate_combat=true}
     elseif command == 'sleep' then
         local player = windower.ffxi.get_player()
         if current_profile ~= 'limbus' or not active_session then
@@ -1833,6 +1844,13 @@ windower.register_event('addon command', function(command, ...)
             ..'physical | accuracy | magic | safe | v1 | v2 | status | '
             ..'version | list')
     end
+end)
+
+windower.register_event('unload', function()
+    -- Reloading PartyStart destroys its in-memory active session. Revoke the
+    -- corresponding combat readiness locally so stale static policy cannot be
+    -- armed while every healing and buff controller is off.
+    issue('pc invalidate partystart')
 end)
 
 chat(158, 'Loaded v'.._addon.version..'. Sustained aliases: '

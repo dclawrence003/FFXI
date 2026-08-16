@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.0'
+_addon.version = '0.6.1'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -106,6 +106,10 @@ else
     settings_warning = tostring(settings_load_error)
 end
 local active_policy_name = 'settings'
+-- Static settings are a safe fallback for policy construction, but they do
+-- not prove that PartyStart's healing/buff controllers are active in this
+-- client session.  Only a validated runtime policy may unlock combat.
+local runtime_policy_ready = false
 local armed = false
 local authorized = false
 local active_target_id = nil
@@ -590,6 +594,11 @@ local function current_leader_target()
 end
 
 local function arm()
+    if not runtime_policy_ready then
+        chat(167, 'Combat interlock: no fresh runtime policy. Run the desired '
+            ..'PartyStart profile and wait for its ready message before //pc on.')
+        return false
+    end
     armed = true
     next_authority = 0
     -- IPC delivery back to the sending client is not guaranteed. A controller
@@ -601,6 +610,7 @@ local function arm()
     broadcast_authority(true)
     chat(158,
         'Armed by the configured leader/puller. Damage-target synchronization is active.')
+    return true
 end
 
 local function force_current_target()
@@ -609,7 +619,11 @@ local function force_current_target()
         chat(123, 'Force engage requires a living enemy target.')
         return
     end
-    if not armed then arm() else broadcast_authority(true) end
+    if not armed then
+        if not arm() then return end
+    else
+        broadcast_authority(true)
+    end
     if is_priority_attacker() and priority_target_matches(target) then
         accept_target(target.id, 'priority')
         chat(158, ('Priority engagement: %s; shared target unchanged.')
@@ -631,6 +645,20 @@ local function stop_all()
     send_ipc('stop')
     stop_local(nil, true)
     chat(207, 'Disarmed and stopped all configured attackers.')
+end
+
+local function invalidate_runtime_policy(reason)
+    if armed and is_controller() then
+        broadcast_authority(false)
+    end
+    armed = false
+    authorized = false
+    stop_local(nil, true)
+    runtime_policy_ready = false
+    active_policy_name = 'settings'
+    chat(123, ('Runtime policy invalidated%s; combat is locked until '
+        ..'PartyStart supplies a fresh policy.')
+        :format(reason and (' ('..reason..')') or ''))
 end
 
 local function apply_runtime_policy(
@@ -742,6 +770,7 @@ local function apply_runtime_policy(
         and (settings.stationary == true) == stationary
     if unchanged then
         active_policy_name = policy_name
+        runtime_policy_ready = true
         return true
     end
 
@@ -777,6 +806,7 @@ local function apply_runtime_policy(
         priority_attackers = priority_attackers,
     }
     active_policy_name = policy_name
+    runtime_policy_ready = true
     next_authority = 0
     chat(158, ('Policy %s loaded inert: leader %s, puller %s, '
         ..'%d attackers, %d synchronized targeters, %s movement, priority %s/%d.')
@@ -876,7 +906,10 @@ windower.register_event('ipc message', function(message)
 
     if kind == 'authority' then
         local attacker_name = fields[4]
-        local enabled = fields[5] == '1'
+        -- A healthy controller continues broadcasting authority every two
+        -- seconds. Never let that heartbeat reauthorize a client whose local
+        -- PartyStart instance has since stopped or reloaded.
+        local enabled = fields[5] == '1' and runtime_policy_ready
         if same_name(local_name(), attacker_name) and is_targeter() then
             local was_authorized = authorized
             authorized = enabled
@@ -1007,9 +1040,10 @@ windower.register_event('addon command', function(command, ...)
         local target = active_target_id
             and windower.ffxi.get_mob_by_id(active_target_id)
             or nil
-        chat(207, ('Policy %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s | priority %s')
+        chat(207, ('Policy %s | support-ready %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s | priority %s')
             :format(
                 active_policy_name,
+                runtime_policy_ready and 'Yes' or 'No',
                 role,
                 settings.leader,
                 settings.puller,
@@ -1076,6 +1110,12 @@ windower.register_event('addon command', function(command, ...)
         apply_runtime_policy(
             policy_name, leader, puller, attacker_names, targeter_names,
             movement_mode, priority_target, priority_attacker_names)
+    elseif command == 'invalidate' then
+        if args[1] ~= 'partystart' then
+            chat(123, 'Runtime invalidation is reserved for PartyStart.')
+            return
+        end
+        invalidate_runtime_policy('PartyStart stopped or reloaded')
     elseif command == 'on' or command == 'arm' or command == 'auto' then
         if not is_controller() then
             chat(123, 'Only the configured leader or puller can arm PartyCombat.')
@@ -1124,7 +1164,7 @@ windower.register_event('logout', 'unload', function()
 end)
 
 chat(158,
-    'Loaded inert; FastFollow is untouched. Use //pc on or //pc force on the configured leader or puller.')
+    'Loaded inert; FastFollow is untouched. Apply PartyStart (or an explicit runtime policy), then use //pc on or //pc force.')
 if settings_warning then
     chat(123,
         'settings.lua was unavailable during startup; using safe defaults. '

@@ -16,6 +16,9 @@ COMPOSITIONS = (ROOT / "data" / "compositions.lua").read_text(
 LOCUS_RELOAD = (ROOT / "scripts" / "reload_locusbats_safe.txt").read_text(
     encoding="utf-8"
 )
+LOCUS_ACTIVATE = (
+    ROOT / "scripts" / "activate_locusbats_safe.txt"
+).read_text(encoding="utf-8")
 
 
 class PartyStartSourceGuards(unittest.TestCase):
@@ -445,7 +448,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.2'", ADDON)
+        self.assertIn("_addon.version = '1.4.3'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -465,7 +468,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.2'", ADDON)
+        self.assertIn("_addon.version = '1.4.3'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -506,12 +509,36 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertNotIn("Barwatera", brd)
         self.assertIn("locusbats=true", PLD)
         self.assertIn("'apexbats','locusbats','apexcrabs'", DNC)
+        heal_policy = PLD.split(
+            "local function pstart_pld_heal_policy()", 1
+        )[1].split("local function pstart_pld_valid_name", 1)[0]
+        self.assertNotIn("apexbats", heal_policy)
+        self.assertNotIn("locusbats", heal_policy)
+        self.assertIn("PSTART_PLD_DEFAULT_HEAL_POLICY", heal_policy)
         self.assertIn("windower.register_event('gain buff'", ADDON)
         self.assertIn("buff_id == 269", ADDON)
         self.assertIn("schedule_zone_rearm(3)", ADDON)
+        for script in (LOCUS_RELOAD, LOCUS_ACTIVATE):
+            self.assertIn("pstart use progression locusbats", script)
+            self.assertIn("pstart status", script)
+            self.assertIn("pc status", script)
+            self.assertIn("send Tackleberry gs c pstartpld status", script)
+            self.assertNotRegex(
+                script.lower(), r"(?m)^\s*(?:send\s+\S+\s+)?pc on\s*$"
+            )
+
+    def test_support_stop_and_reload_revoke_stale_combat_readiness(self):
+        self.assertIn("issue('pc invalidate partystart')", ADDON)
+        self.assertIn("stop_local{invalidate_combat=true}", ADDON)
+        self.assertIn("windower.register_event('unload'", ADDON)
+        revalidation = ADDON.split(
+            "local function queue_job_revalidation", 1
+        )[1].split("windower.register_event('ipc message'", 1)[0]
         self.assertIn(
-            "send Dolomedes pstart use progression locusbats", LOCUS_RELOAD
+            "stop_local{silent=true, preserve_revalidation=true}",
+            revalidation,
         )
+        self.assertNotIn("invalidate_combat=true", revalidation)
 
     def test_apex_crabs_profile_is_sustained_and_event_driven(self):
         addon = ADDON.split("    apexcrabs = {", 1)[1].split(

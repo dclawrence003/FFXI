@@ -1,0 +1,12 @@
+echo Activating progression/locusbats without reloading any client or GearSwap.
+pstart use progression locusbats
+wait 8
+pstart status
+pc status
+send Dolomedes r2 status
+send Tackleberry gs c pstartpld status
+send Kickpuncher gs c pstartdnc status
+send Barneystinson gs c pstartbrd status
+send Smalls gs c pstartrdm status
+send Achoo gs c pstartgeo status
+echo Verify Active progression/locusbats, PLD healing On, and BRD On. PartyCombat 0.6.1 must also say support-ready Yes. Then use //pc on from Dolomedes or Tackleberry.

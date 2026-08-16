@@ -182,6 +182,16 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertNotIn("Barwatera", brd)
         self.assertIn("locusbats=true", self.pld)
         self.assertIn("locus = 'locusbats'", self.addon)
+        heal_policy = self.pld.split(
+            "local function pstart_pld_heal_policy()", 1
+        )[1].split("local function pstart_pld_valid_name", 1)[0]
+        self.assertNotIn("locusbats", heal_policy)
+        self.assertIn("PSTART_PLD_DEFAULT_HEAL_POLICY", heal_policy)
+
+    def test_explicit_support_stop_revokes_partycombat_readiness(self):
+        self.assertIn("issue('pc invalidate partystart')", self.addon)
+        self.assertIn("stop_local{invalidate_combat=true}", self.addon)
+        self.assertIn("windower.register_event('unload'", self.addon)
 
     def test_apex_crabs_profile_reacts_to_self_buffs_without_blind_spam(self):
         addon = self.addon.split("    apexcrabs = {", 1)[1].split(

@@ -19,5 +19,14 @@ send Smalls lua r PartyStart
 wait 3
 send Achoo lua r PartyStart
 wait 5
-send Dolomedes pstart use progression locusbats
-echo Locus Dire Bat reload complete. progression/locusbats reapplication was sent to Dolomedes; wait for validation, load Tackleberry's stationary EasyFarm profile, then arm PartyCombat.
+pstart use progression locusbats
+wait 8
+pstart status
+pc status
+send Dolomedes r2 status
+send Tackleberry gs c pstartpld status
+send Kickpuncher gs c pstartdnc status
+send Barneystinson gs c pstartbrd status
+send Smalls gs c pstartrdm status
+send Achoo gs c pstartgeo status
+echo Reload complete. Confirm progression/locusbats is Active and PartyCombat 0.6.1 says support-ready Yes before //pc on.

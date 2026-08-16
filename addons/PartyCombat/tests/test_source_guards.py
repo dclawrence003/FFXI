@@ -74,6 +74,28 @@ def test_runtime_policy_is_validated_and_loaded_inert():
     assert "elseif command == 'policy' then" in SOURCE
 
 
+def test_support_readiness_interlock_blocks_stale_combat():
+    assert "local runtime_policy_ready = false" in SOURCE
+    arm = SOURCE.split("local function arm()", 1)[1].split(
+        "local function force_current_target", 1
+    )[0]
+    assert "if not runtime_policy_ready then" in arm
+    assert "return false" in arm
+    policy = SOURCE.split("local function apply_runtime_policy", 1)[1].split(
+        "local function damage_target", 1
+    )[0]
+    assert policy.count("runtime_policy_ready = true") == 2
+    assert "local function invalidate_runtime_policy" in SOURCE
+    assert "runtime_policy_ready = false" in SOURCE
+    assert "elseif command == 'invalidate' then" in SOURCE
+    assert "args[1] ~= 'partystart'" in SOURCE
+    assert "support-ready %s" in SOURCE
+    authority = SOURCE.split("if kind == 'authority' then", 1)[1].split(
+        "elseif kind == 'target'", 1
+    )[0]
+    assert "fields[5] == '1' and runtime_policy_ready" in authority
+
+
 def test_fastfollow_is_never_controlled_by_partycombat():
     lowered = SOURCE.lower()
     assert "ffo " not in lowered
@@ -82,7 +104,7 @@ def test_fastfollow_is_never_controlled_by_partycombat():
     assert "zone_follow_restore" not in lowered
     assert "restore_fastfollow" not in lowered
     assert "claim_combat_movement" not in lowered
-    assert "_addon.version = '0.6.0'" in SOURCE
+    assert "_addon.version = '0.6.1'" in SOURCE
     assert "FastFollow is untouched" in SOURCE
 
     stop_local = SOURCE.split("local function stop_local", 1)[1]

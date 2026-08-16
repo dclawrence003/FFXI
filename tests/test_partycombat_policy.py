@@ -37,8 +37,20 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertNotIn("follow_anchor", lowered)
         self.assertNotIn("zone_follow_restore", lowered)
         self.assertNotIn("restore_fastfollow", lowered)
-        self.assertIn("_addon.version = '0.6.0'", self.addon)
+        self.assertIn("_addon.version = '0.6.1'", self.addon)
         self.assertIn("FastFollow is untouched", self.addon)
+
+    def test_combat_requires_a_fresh_support_policy(self):
+        self.assertIn("local runtime_policy_ready = false", self.addon)
+        self.assertIn("if not runtime_policy_ready then", self.addon)
+        self.assertGreaterEqual(
+            self.addon.count("runtime_policy_ready = true"), 2
+        )
+        self.assertIn("invalidate_runtime_policy", self.addon)
+        self.assertIn("support-ready %s", self.addon)
+        self.assertIn(
+            "fields[5] == '1' and runtime_policy_ready", self.addon
+        )
 
     def test_target_only_observers_never_claim_combat_movement(self):
         self.assertIn("local function is_targeter()", self.addon)
