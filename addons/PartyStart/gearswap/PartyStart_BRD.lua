@@ -822,6 +822,42 @@ local function pstart_brd_maintenance(profile)
     return pstart_brd_cast_debuff(profile)
 end
 
+local function pstart_brd_report_song_state(profile)
+    local song_state = {}
+    for _, song in ipairs((profile and profile.songs) or {}) do
+        song_state[#song_state + 1] = ('%s=%s'):format(
+            song.spell,
+            buffactive[song.buff] and 'UP' or 'MISSING')
+    end
+
+    local blockers = {}
+    if not state.AutoSongMode.value then
+        blockers[#blockers + 1] = 'AutoSong Off'
+    end
+    if midaction() then blockers[#blockers + 1] = 'midaction' end
+    if moving then blockers[#blockers + 1] = 'moving' end
+    if silent_check_disable() then
+        blockers[#blockers + 1] = 'incapacitated'
+    end
+    local delay = math.max(0, (tonumber(tickdelay) or 0) - os.clock())
+    if delay > 0.2 then
+        blockers[#blockers + 1] = ('tick delay %.1fs'):format(delay)
+    end
+
+    add_to_chat(122, ('PartyStart BRD songs: mode %s / AutoSong %s / %s')
+        :format(
+            tostring(state.SongMode.value),
+            state.AutoSongMode.value and 'On' or 'Off',
+            #song_state > 0 and table.concat(song_state, '; ') or 'none'))
+    add_to_chat(#blockers > 0 and 123 or 122,
+        'PartyStart BRD song blockers: '
+        ..(#blockers > 0 and table.concat(blockers, ', ') or 'none'))
+    if state.Weapons then
+        add_to_chat(122, 'PartyStart BRD weapon mode: '
+            ..tostring(state.Weapons.value))
+    end
+end
+
 local pstart_brd_original_self_command = user_job_self_command
 function user_job_self_command(commandArgs, eventArgs)
     local command = commandArgs[1] and commandArgs[1]:lower() or nil
@@ -837,8 +873,13 @@ function user_job_self_command(commandArgs, eventArgs)
     if requested == 'tick' then
         local profile = pstart_brd_profiles[pstart_brd.profile]
         if pstart_brd.active and profile then
-            -- Barney's character GearSwap remains the sole party-song owner.
-            -- This heartbeat owns only encounter barspells and hostile songs.
+            -- The character GearSwap's normal job tick is the sole party-song
+            -- scheduler. Calling check_song() here creates a second scheduler
+            -- which can queue the same missing song twice before midaction()
+            -- changes, preventing the three-song rotation from advancing.
+            -- This independent heartbeat owns only encounter maintenance so
+            -- reactions and Barspells still work when Sel-Include suppresses
+            -- its normal tick during Sneak or Invisible.
             pstart_brd_maintenance(profile)
         end
         return
@@ -854,7 +895,7 @@ function user_job_self_command(commandArgs, eventArgs)
             pstart_brd_cast_sleep()
         end
         return
-    elseif not requested then
+    elseif not requested or requested == 'status' then
         local target = pstart_brd_target()
         local target_text = target
             and (target.name..' @ '
@@ -885,6 +926,7 @@ function user_job_self_command(commandArgs, eventArgs)
             :format((pstart_brd.urchin_sleep_requested_until or 0) > os.clock()
                 and 'Scanning/Queued' or (profile.auto_urchin_sleep
                     and 'Armed' or 'Off')))
+        pstart_brd_report_song_state(profile)
         pstart_brd_report_instrument()
         return
     end

@@ -30,7 +30,7 @@ class PartyStartRolePolicy(unittest.TestCase):
             ("Dolomedes", "COR", "DualSavage", "Savage Blade"),
             ("Tackleberry", "PLD", "Naegling", "Savage Blade"),
             ("Kickpuncher", "DNC", "Tauret", "Evisceration"),
-            ("Barneystinson", "BRD", "DualSavage", "Savage Blade"),
+            ("Barneystinson", "BRD", "Naegling", "Savage Blade"),
             ("Smalls", "RDM", "Maxentius", "Black Halo"),
             ("Achoo", "GEO", "Maxentius", "Black Halo"),
         ):

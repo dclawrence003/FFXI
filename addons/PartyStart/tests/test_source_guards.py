@@ -75,7 +75,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         expected = {
             "Tackleberry": ("Naegling", "Savage Blade", "1000"),
             "Kickpuncher": ("Tauret", "Evisceration", "1000"),
-            "Barneystinson": ("DualSavage", "Savage Blade", "1000"),
+            "Barneystinson": ("Naegling", "Savage Blade", "1000"),
             "Smalls": ("Maxentius", "Black Halo", "1000"),
             "Achoo": ("Maxentius", "Black Halo", "1000"),
         }
@@ -142,6 +142,17 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertNotIn("pstart_brd_cast_party_song", BRD)
         self.assertNotIn("pstart_brd_force_instrument", BRD)
         self.assertNotIn("pstart_brd_ensure_physical_weapon", BRD)
+
+    def test_brd_heartbeat_does_not_duplicate_native_song_scheduler(self):
+        tick_branch = BRD.split("if requested == 'tick' then", 1)[1].split(
+            "elseif requested == 'sleep' then", 1
+        )[0]
+        self.assertIn("pstart_brd_maintenance(profile)", tick_branch)
+        self.assertNotRegex(tick_branch, r"(?m)^\s*check_song\(\)\s*$")
+        self.assertIn(
+            "elseif not requested or requested == 'status' then", BRD
+        )
+        self.assertIn("PartyStart BRD songs: mode", BRD)
 
     def test_master_has_explicit_single_healing_owners(self):
         master_rdm = ADDON.split(
@@ -410,6 +421,23 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("pstart_brd_restore_sleep_target(pending)", BRD)
         self.assertIn("kind = 'urchin_sleep'", BRD)
 
+    def test_v1_has_one_aoe_barspell_owner(self):
+        aoe_barspell = re.compile(
+            r"['\"]Bar(?:fira|blizzara|aera|stonra|thundra|watera|silencera)['\"]"
+        )
+        self.assertRegex(BRD, aoe_barspell)
+        for controller in (RDM, PLD, DNC, GEO):
+            self.assertNotRegex(controller, aoe_barspell)
+
+        apply_rdm = ADDON.split("local function apply_rdm", 1)[1].split(
+            "local function apply_brd", 1
+        )[0]
+        apply_brd = ADDON.split("local function apply_brd", 1)[1].split(
+            "local function apply_geo", 1
+        )[0]
+        self.assertIn("hb disable buff", apply_rdm)
+        self.assertIn("hb off", apply_brd)
+
     def test_v1_requires_support_subjobs_and_maintains_reraise(self):
         v1 = ADDON.split("['ambuscade-v1'] = {", 1)[1].split(
             "['ambuscade-v2'] = {", 1
@@ -448,7 +476,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.3'", ADDON)
+        self.assertIn("_addon.version = '1.4.5'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -468,7 +496,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.3'", ADDON)
+        self.assertIn("_addon.version = '1.4.5'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -526,6 +554,18 @@ class PartyStartSourceGuards(unittest.TestCase):
             self.assertNotRegex(
                 script.lower(), r"(?m)^\s*(?:send\s+\S+\s+)?pc on\s*$"
             )
+        self.assertIn("send Barneystinson gs reload", LOCUS_RELOAD)
+        for name in ("Tackleberry", "Kickpuncher", "Smalls", "Dolomedes"):
+            self.assertNotIn(f"send {name} gs reload", LOCUS_RELOAD)
+        self.assertLess(
+            LOCUS_RELOAD.index("send Achoo lua r PartyStart"),
+            LOCUS_RELOAD.index("send Barneystinson gs reload"),
+        )
+        self.assertLess(
+            LOCUS_RELOAD.index("send Barneystinson gs reload"),
+            LOCUS_RELOAD.index("pstart use progression locusbats"),
+        )
+        self.assertIn("wait 12", LOCUS_RELOAD)
 
     def test_support_stop_and_reload_revoke_stale_combat_readiness(self):
         self.assertIn("issue('pc invalidate partystart')", ADDON)

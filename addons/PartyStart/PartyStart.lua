@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.3'
+_addon.version = '1.4.5'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')

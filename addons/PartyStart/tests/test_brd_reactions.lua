@@ -121,7 +121,7 @@ state = {
 }
 info = {ExtraSongs=0}
 player = {mp=999, hpp=100}
-buffactive = {Reraise=true, Barsilence=true}
+buffactive = {Reraise=true, Barsilence=true, Barstone=true}
 moving = false
 spell_latency = 0.5
 tickdelay = 0
@@ -130,7 +130,11 @@ silent_check_disable = function() return false end
 silent_can_use = function() return true end
 add_to_chat = function() end
 update_job_states = function() end
-check_song = function() return false end
+local native_check_song_calls = 0
+check_song = function()
+    native_check_song_calls = native_check_song_calls + 1
+    return false
+end
 
 assert(loadfile('addons/PartyStart/gearswap/PartyStart_BRD.lua'))()
 assert(callbacks.action, 'BRD action handler was not registered')
@@ -139,6 +143,24 @@ local event_args = {handled=false}
 user_job_self_command(
     {'pstartbrd', 'ambuscade-v1', 'Dolomedes'}, event_args)
 assert(event_args.handled, 'activation command was not handled')
+
+-- PartyStart's independent heartbeat must never invoke Barney's native song
+-- owner. The normal GearSwap job tick owns songs; a second call path can queue
+-- the same missing song twice before midaction() changes.
+user_job_self_command({'pstartbrd', 'tick'}, {handled=false})
+assert(native_check_song_calls == 0,
+    'PartyStart BRD tick created a second native song scheduler')
+
+-- The wrapped native path still delegates song selection exactly once.
+check_song()
+assert(native_check_song_calls == 1,
+    'normal GearSwap song path did not reach the native song routine')
+
+-- The safe activation script asks for an explicit status token. It must be a
+-- supported alias rather than falling through to the usage error.
+local status_args = {handled=false}
+user_job_self_command({'pstartbrd', 'status'}, status_args)
+assert(status_args.handled, 'explicit BRD status command was not handled')
 
 -- A ready packet received during another action must queue, then take the next
 -- GearSwap heartbeat before routine songs or maintenance.

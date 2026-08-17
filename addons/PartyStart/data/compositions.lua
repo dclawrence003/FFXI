@@ -51,7 +51,7 @@ return {
                     DNC = {weapon_mode='Tauret', ws='Evisceration', tp=1000},
                 },
                 Barneystinson = {
-                    BRD = {weapon_mode='DualSavage', ws='Savage Blade', tp=1000},
+                    BRD = {weapon_mode='Naegling', ws='Savage Blade', tp=1000},
                 },
                 Smalls = {
                     RDM = {weapon_mode='Maxentius', ws='Black Halo', tp=1000},
@@ -98,7 +98,7 @@ return {
                     RDM = {weapon_mode='Tauret', ws='Evisceration', tp=1000},
                 },
                 Barneystinson = {
-                    BRD = {weapon_mode='DualSavage', ws='Savage Blade', tp=1000},
+                    BRD = {weapon_mode='Naegling', ws='Savage Blade', tp=1000},
                 },
                 Smalls = {
                     WHM = {weapon_mode='Maxentius', ws='Black Halo', tp=1000},
@@ -146,7 +146,7 @@ return {
                     DNC = {weapon_mode='Tauret', ws='Evisceration', tp=1000},
                 },
                 Barneystinson = {
-                    BRD = {weapon_mode='DualSavage', ws='Savage Blade', tp=1000},
+                    BRD = {weapon_mode='Naegling', ws='Savage Blade', tp=1000},
                 },
                 Smalls = {
                     RDM = {weapon_mode='Maxentius', ws='Black Halo', tp=1000},

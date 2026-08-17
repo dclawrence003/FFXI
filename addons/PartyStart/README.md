@@ -162,11 +162,15 @@ Tackleberry, Kickpuncher, Barney, and Smalls's changed GearSwap controllers,
 with ten-second gaps, then refreshes PartyStart one client at a time. It never
 reloads Dolo's GearSwap. Run it out of combat, then preview and apply
 `progression/limbus`.
-For the Locus Dire Bat profile, `//exec reload_locusbats_safe.txt` uses the
-same four-client stagger, then refreshes PartyStart across all six. It never
-reloads Dolo's GearSwap. Run it out of combat; after every client is refreshed,
-the script directly reapplies `progression/locusbats`, waits eight seconds, and
-prints PartyStart, PartyCombat, Roller2, PLD, DNC, BRD, RDM, and GEO status.
+For the Locus Dire Bat profile, `//exec reload_locusbats_safe.txt` first
+refreshes PartyStart across all six clients, then reloads only Barney's
+GearSwap so its BRD controller matches the refreshed addon. It never reloads
+Dolo's GearSwap.
+After every reload has completed, the script applies `progression/locusbats`
+exactly once, waits twelve seconds for the three-song rotation, and prints
+PartyStart, PartyCombat, Roller2, PLD, DNC, BRD, RDM, and GEO status. This
+ordering prevents a late addon unload from disarming a controller after the
+profile was selected.
 For recovery when no code reload is needed, use
 `//exec activate_locusbats_safe.txt`; it performs only that activation and
 verification pass. Do not arm combat until PartyStart reports
@@ -773,10 +777,16 @@ AutoWS2 reservation, and total completed cures.
   because GearSwap does not expose enemy debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
-- PartyStart does not force BRD weapons or instruments. Barney's character
-  GearSwap keeps Naegling and Izhiikoh in the physical weapon mode. Weapon
-  modes intentionally do not own or lock the range slot; the normal BRD song
-  casting sets equip Blurred Harp +1.
+- Barney's normal GearSwap job tick is the sole party-song scheduler.
+  PartyStart's independent 0.75-second heartbeat runs encounter maintenance
+  only; it must not invoke the song routine a second time. Use
+  `//gs c pstartbrd status` to see every required song as `UP` or `MISSING`,
+  along with any active cast blocker.
+- PartyStart does not force BRD instruments. Barney's current `/WHM` support
+  setup uses the single-wield `Naegling` weapon mode; `DualSavage` remains
+  available only for a future dual-wield-capable subjob. Weapon modes
+  intentionally do not own or lock the range slot, so the normal BRD song
+  casting sets can equip Blurred Harp +1.
 - Blurred Harp +1 is Superior 2 equipment. The BRD must have spent at least
   100 Bard Job Points before it can be equipped. Set
   `info.ExtraSongMinimumJobPoints = 100` in that character's BRD gear file.
