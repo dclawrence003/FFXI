@@ -11,4 +11,4 @@ send Smalls lua r PartyCombat
 wait 4
 send Achoo lua r PartyCombat
 wait 4
-echo PartyCombat reload complete. Apply PartyStart, confirm pc status says support-ready Yes, then use pc on.
+echo PartyCombat 0.6.2 reload complete. Apply PartyStart for pc on, or target a living enemy and use Alt-P for explicit manual smash.

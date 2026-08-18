@@ -30,7 +30,7 @@ INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES.
 
 _addon.name = 'PartyCombat'
 _addon.author = 'OpenAI Codex'
-_addon.version = '0.6.1'
+_addon.version = '0.6.2'
 _addon.commands = {'partycombat', 'pcombat', 'pc'}
 
 local packets = require('packets')
@@ -105,11 +105,18 @@ if settings_loader then
 else
     settings_warning = tostring(settings_load_error)
 end
+-- Preserve the disk configuration independently of any narrower PartyStart
+-- policy installed later. An explicit manual smash must always rebuild the
+-- user's complete configured roster rather than inheriting stale encounter
+-- roles from a previously stopped profile.
+local static_settings = settings
 local active_policy_name = 'settings'
 -- Static settings are a safe fallback for policy construction, but they do
 -- not prove that PartyStart's healing/buff controllers are active in this
--- client session.  Only a validated runtime policy may unlock combat.
+-- client session. Only a validated runtime policy may unlock normal //pc on;
+-- the separate explicit force path is visibly labeled manual smash.
 local runtime_policy_ready = false
+local manual_smash_ready = false
 local armed = false
 local authorized = false
 local active_target_id = nil
@@ -161,6 +168,11 @@ end
 
 local function is_controller()
     return is_leader() or is_puller()
+end
+
+local function is_static_controller(name)
+    return same_name(name, static_settings.leader)
+        or same_name(name, static_settings.puller)
 end
 
 local function attacker_settings(name)
@@ -435,6 +447,51 @@ local function stop_local(reason, revoke)
     end
 end
 
+local function install_manual_smash_policy()
+    if manual_smash_ready and active_policy_name == 'manual-smash' then
+        return
+    end
+
+    stop_local(nil, true)
+    local attackers = {}
+    local targeters = {}
+    for name, policy in pairs(static_settings.attackers or {}) do
+        if valid_name(name) and type(policy) == 'table' then
+            attackers[name] = {
+                auto_distance = tonumber(policy.auto_distance) or 10,
+                force_distance = tonumber(policy.force_distance) or 30,
+                engage_distance = tonumber(policy.engage_distance) or 2.8,
+            }
+            targeters[name] = true
+        end
+    end
+
+    settings = {
+        leader = static_settings.leader,
+        puller = static_settings.puller,
+        stationary = false,
+        attackers = attackers,
+        targeters = targeters,
+        priority_target = nil,
+        priority_attackers = {},
+    }
+    active_policy_name = 'manual-smash'
+    runtime_policy_ready = false
+    manual_smash_ready = true
+    next_authority = 0
+end
+
+local function clear_manual_smash_policy()
+    if not manual_smash_ready then return end
+    manual_smash_ready = false
+    settings = static_settings
+    active_policy_name = 'settings'
+end
+
+local function combat_authority_ready()
+    return runtime_policy_ready or manual_smash_ready
+end
+
 local function inject_combat_target(target)
     local player = local_player()
     if not player or not valid_enemy(target) then return false end
@@ -546,6 +603,25 @@ local function accept_target(id, mode)
     inject_combat_target(target)
 end
 
+local function force_manual_target(target)
+    install_manual_smash_policy()
+    armed = true
+    next_authority = 0
+    if is_targeter() then
+        authorized = true
+        clear_healbot_combat_automation()
+        accept_target(target.id, 'force')
+    end
+    -- The manual message installs the same static all-attacker policy before
+    -- granting authority on every client. This remains reliable even when a
+    -- stopped PartyStart profile left different in-memory roles behind.
+    send_ipc('smash', local_name(), target.id)
+    broadcast_authority(true)
+    chat(158, ('Manual smash armed for all configured attackers: %s. Support '
+        ..'automation was not started.')
+        :format(target.name or target.id))
+end
+
 local function update_priority_target(now)
     if not authorized or not is_priority_attacker()
         or type(settings.priority_target) ~= 'string'
@@ -596,7 +672,8 @@ end
 local function arm()
     if not runtime_policy_ready then
         chat(167, 'Combat interlock: no fresh runtime policy. Run the desired '
-            ..'PartyStart profile and wait for its ready message before //pc on.')
+            ..'PartyStart profile before //pc on, or use //pc force for an '
+            ..'explicit unsupported manual smash.')
         return false
     end
     armed = true
@@ -617,6 +694,10 @@ local function force_current_target()
     local target = current_leader_target()
     if not target then
         chat(123, 'Force engage requires a living enemy target.')
+        return
+    end
+    if not runtime_policy_ready then
+        force_manual_target(target)
         return
     end
     if not armed then
@@ -640,10 +721,12 @@ local function force_current_target()
 end
 
 local function stop_all()
+    local was_manual_smash = manual_smash_ready
     armed = false
     broadcast_authority(false)
     send_ipc('stop')
     stop_local(nil, true)
+    if was_manual_smash then clear_manual_smash_policy() end
     chat(207, 'Disarmed and stopped all configured attackers.')
 end
 
@@ -655,9 +738,14 @@ local function invalidate_runtime_policy(reason)
     authorized = false
     stop_local(nil, true)
     runtime_policy_ready = false
-    active_policy_name = 'settings'
-    chat(123, ('Runtime policy invalidated%s; combat is locked until '
-        ..'PartyStart supplies a fresh policy.')
+    if manual_smash_ready then
+        clear_manual_smash_policy()
+    else
+        active_policy_name = 'settings'
+    end
+    chat(123, ('Runtime policy invalidated%s; normal //pc on is locked until '
+        ..'PartyStart supplies a fresh policy. Explicit //pc force remains '
+        ..'available as manual smash.')
         :format(reason and (' ('..reason..')') or ''))
 end
 
@@ -770,6 +858,7 @@ local function apply_runtime_policy(
         and (settings.stationary == true) == stationary
     if unchanged then
         active_policy_name = policy_name
+        manual_smash_ready = false
         runtime_policy_ready = true
         return true
     end
@@ -806,6 +895,7 @@ local function apply_runtime_policy(
         priority_attackers = priority_attackers,
     }
     active_policy_name = policy_name
+    manual_smash_ready = false
     runtime_policy_ready = true
     next_authority = 0
     chat(158, ('Policy %s loaded inert: leader %s, puller %s, '
@@ -902,6 +992,32 @@ windower.register_event('ipc message', function(message)
     end
     local kind = fields[2]
     local leader = fields[3]
+
+    if kind == 'smash' then
+        local controller = fields[4]
+        local target = fields[5]
+            and windower.ffxi.get_mob_by_id(tonumber(fields[5]))
+            or nil
+        if not same_name(leader, static_settings.leader)
+            or not is_static_controller(controller)
+            or not valid_enemy(target)
+        then
+            return
+        end
+        install_manual_smash_policy()
+        armed = same_name(local_name(), controller)
+        authorized = is_targeter()
+        if authorized then
+            clear_healbot_combat_automation()
+            accept_target(target.id, 'force')
+        end
+        if not same_name(local_name(), controller) then
+            chat(158, ('Manual smash authorized by %s: %s.')
+                :format(controller, target.name or target.id))
+        end
+        return
+    end
+
     if not same_name(leader, settings.leader) then return end
 
     if kind == 'authority' then
@@ -909,7 +1025,7 @@ windower.register_event('ipc message', function(message)
         -- A healthy controller continues broadcasting authority every two
         -- seconds. Never let that heartbeat reauthorize a client whose local
         -- PartyStart instance has since stopped or reloaded.
-        local enabled = fields[5] == '1' and runtime_policy_ready
+        local enabled = fields[5] == '1' and combat_authority_ready()
         if same_name(local_name(), attacker_name) and is_targeter() then
             local was_authorized = authorized
             authorized = enabled
@@ -927,6 +1043,7 @@ windower.register_event('ipc message', function(message)
         if is_targeter() then
             stop_local(nil, true)
         end
+        clear_manual_smash_policy()
     end
 end)
 
@@ -1040,10 +1157,11 @@ windower.register_event('addon command', function(command, ...)
         local target = active_target_id
             and windower.ffxi.get_mob_by_id(active_target_id)
             or nil
-        chat(207, ('Policy %s | support-ready %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s | priority %s')
+        chat(207, ('Policy %s | support-ready %s | manual-smash %s | role %s | leader %s | puller %s | movement %s | armed %s | authorized %s | target %s | mode %s | priority %s')
             :format(
                 active_policy_name,
                 runtime_policy_ready and 'Yes' or 'No',
+                manual_smash_ready and 'Yes' or 'No',
                 role,
                 settings.leader,
                 settings.puller,
@@ -1123,9 +1241,12 @@ windower.register_event('addon command', function(command, ...)
         end
         arm()
     elseif command == 'force' or command == 'engage'
-        or command == 'attack'
+        or command == 'attack' or command == 'smash'
     then
-        if not is_controller() then
+        local force_controller = runtime_policy_ready and is_controller()
+            or (not runtime_policy_ready
+                and is_static_controller(local_name()))
+        if not force_controller then
             chat(123, 'Only the configured leader or puller can force engagement.')
             return
         end
@@ -1138,10 +1259,11 @@ windower.register_event('addon command', function(command, ...)
         stop_all()
     elseif command == 'help' then
         chat(207,
-            'Commands: on | force | stop | status | policy <name> <leader> '
+            'Commands: on | force/smash | stop | status | policy <name> <leader> '
             ..'<puller> <attackers> [targeters] [mobile|stationary] '
             ..'[priority_target] [priority_attackers]. '
-            ..'Leader or puller may arm/force.')
+            ..'Leader or puller may arm/force. Force without a fresh support '
+            ..'policy explicitly uses the static all-attacker smash policy.')
     else
         chat(123, 'Unknown command. Use //pc help.')
     end
@@ -1154,6 +1276,7 @@ windower.register_event('zone change', function()
     armed = false
     authorized = false
     stop_local(nil, true)
+    clear_manual_smash_policy()
 end)
 
 windower.register_event('logout', 'unload', function()
@@ -1164,7 +1287,8 @@ windower.register_event('logout', 'unload', function()
 end)
 
 chat(158,
-    'Loaded inert; FastFollow is untouched. Apply PartyStart (or an explicit runtime policy), then use //pc on or //pc force.')
+    'Loaded inert; FastFollow is untouched. //pc on requires PartyStart; '
+    ..'//pc force explicitly falls back to the static all-attacker smash policy.')
 if settings_warning then
     chat(123,
         'settings.lua was unavailable during startup; using safe defaults. '

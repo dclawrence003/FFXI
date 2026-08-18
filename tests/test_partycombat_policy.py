@@ -37,7 +37,7 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertNotIn("follow_anchor", lowered)
         self.assertNotIn("zone_follow_restore", lowered)
         self.assertNotIn("restore_fastfollow", lowered)
-        self.assertIn("_addon.version = '0.6.1'", self.addon)
+        self.assertIn("_addon.version = '0.6.2'", self.addon)
         self.assertIn("FastFollow is untouched", self.addon)
 
     def test_combat_requires_a_fresh_support_policy(self):
@@ -49,8 +49,36 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertIn("invalidate_runtime_policy", self.addon)
         self.assertIn("support-ready %s", self.addon)
         self.assertIn(
-            "fields[5] == '1' and runtime_policy_ready", self.addon
+            "fields[5] == '1' and combat_authority_ready()", self.addon
         )
+
+    def test_explicit_force_has_a_scoped_manual_smash_fallback(self):
+        self.assertIn("local static_settings = settings", self.addon)
+        self.assertIn("local manual_smash_ready = false", self.addon)
+        self.assertIn("local function install_manual_smash_policy()", self.addon)
+        self.assertIn("active_policy_name = 'manual-smash'", self.addon)
+        self.assertIn("stationary = false", self.addon)
+        self.assertIn("targeters[name] = true", self.addon)
+        self.assertIn("send_ipc('smash', local_name(), target.id)", self.addon)
+        self.assertIn("if kind == 'smash' then", self.addon)
+        self.assertIn("or command == 'attack' or command == 'smash'", self.addon)
+
+        arm = self.addon.split("local function arm()", 1)[1].split(
+            "local function force_current_target", 1
+        )[0]
+        self.assertIn("if not runtime_policy_ready then", arm)
+        self.assertNotIn("manual_smash_ready", arm)
+
+        force = self.addon.split(
+            "local function force_current_target()", 1
+        )[1].split("local function stop_all", 1)[0]
+        self.assertIn("if not runtime_policy_ready then", force)
+        self.assertIn("force_manual_target(target)", force)
+
+        stop = self.addon.split("local function stop_all()", 1)[1].split(
+            "local function invalidate_runtime_policy", 1
+        )[0]
+        self.assertIn("clear_manual_smash_policy()", stop)
 
     def test_target_only_observers_never_claim_combat_movement(self):
         self.assertIn("local function is_targeter()", self.addon)
