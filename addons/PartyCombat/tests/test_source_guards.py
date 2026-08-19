@@ -93,31 +93,7 @@ def test_support_readiness_interlock_blocks_stale_combat():
     authority = SOURCE.split("if kind == 'authority' then", 1)[1].split(
         "elseif kind == 'target'", 1
     )[0]
-    assert "fields[5] == '1' and combat_authority_ready()" in authority
-
-
-def test_explicit_force_can_install_a_temporary_static_smash_policy():
-    assert "local static_settings = settings" in SOURCE
-    assert "local manual_smash_ready = false" in SOURCE
-    assert "local function install_manual_smash_policy()" in SOURCE
-    assert "for name, policy in pairs(static_settings.attackers or {})" in SOURCE
-    assert "active_policy_name = 'manual-smash'" in SOURCE
-    assert "send_ipc('smash', local_name(), target.id)" in SOURCE
-    assert "if kind == 'smash' then" in SOURCE
-    assert "or command == 'attack' or command == 'smash'" in SOURCE
-
-    arm = SOURCE.split("local function arm()", 1)[1].split(
-        "local function force_current_target", 1
-    )[0]
-    assert "if not runtime_policy_ready then" in arm
-    assert "manual_smash_ready" not in arm
-
-    force = SOURCE.split("local function force_current_target()", 1)[1].split(
-        "local function stop_all", 1
-    )[0]
-    assert "if not runtime_policy_ready then" in force
-    assert "force_manual_target(target)" in force
-    assert "clear_manual_smash_policy()" in SOURCE
+    assert "fields[5] == '1' and runtime_policy_ready" in authority
 
 
 def test_fastfollow_is_never_controlled_by_partycombat():
@@ -128,7 +104,7 @@ def test_fastfollow_is_never_controlled_by_partycombat():
     assert "zone_follow_restore" not in lowered
     assert "restore_fastfollow" not in lowered
     assert "claim_combat_movement" not in lowered
-    assert "_addon.version = '0.6.2'" in SOURCE
+    assert "_addon.version = '0.6.1'" in SOURCE
     assert "FastFollow is untouched" in SOURCE
 
     stop_local = SOURCE.split("local function stop_local", 1)[1]
