@@ -19,8 +19,15 @@ For each local character, the addon:
 History is not reset at the weekly tally. It remains available after zoning,
 logout, Windower reloads, and computer restarts.
 
-Version 0.4.1 also migrates older local history on load: unrecognized targets
-are removed and recognized final-chest targets are relabeled from the
+Version 0.4.2 recognizes each final coffer through three independent packet
+stages: the initial action, the server's NPC menu, and the outgoing dialog
+choice. This covers normal, injected, and mirrored interactions while retaining
+the authoritative eight-target allowlist. Multiple stages for one opening share
+one preserved currency baseline and therefore cannot create duplicate history.
+The pending observation window is two minutes, measured from the latest stage.
+
+Version 0.4.1 added migration of older local history on load: unrecognized
+targets are removed and recognized final-chest targets are relabeled from the
 authoritative mapping. This repairs stale temporary-item labels left by 0.3.x.
 
 ## Installation
@@ -131,6 +138,9 @@ Disable this optional integration without affecting tracking:
 - An award is intentionally ignored unless it follows interaction with one of
   the eight recognized final-floor rotation chests. This prevents roaming
   3,000-unit `???` rewards from polluting rotation history.
+- The tracker listens for the initial action, incoming NPC menu, and outgoing
+  dialog choice. Seeing several of these for the same coffer extends one pending
+  event without replacing its pre-award currency baseline.
 - Repeated packets or interactions for the same final chest within five
   minutes are treated as one opening.
 - Load it before opening the chest. Loading it for the first time after the

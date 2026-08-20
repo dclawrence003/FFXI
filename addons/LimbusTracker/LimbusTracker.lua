@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'LimbusTracker'
 _addon.author = 'OpenAI Codex at the direction of Dolomedes'
-_addon.version = '0.4.1'
+_addon.version = '0.4.2'
 _addon.commands = {'limbustracker', 'lt'}
 
 local config = require('config')
@@ -117,6 +117,7 @@ local final_chest_targets = {
 }
 
 local duplicate_window = 300
+local pending_timeout = 120
 local history_version = 2
 
 local function validated_chest(area, target_id, requested_chest)
@@ -538,7 +539,7 @@ local function record_chest(area, target_id, chest, units, signature)
     return true
 end
 
-local function begin_chest(target_id)
+local function begin_chest(target_id, source)
     local area = current_area()
     if not area then return end
     target_id = tonumber(target_id)
@@ -547,19 +548,41 @@ local function begin_chest(target_id)
     if not chest then return end
     initialize_character()
     local field = area .. ' Units'
-    pending_chest = {
-        area = area,
-        chest = chest,
-        target_id = target_id,
-        started = os.time(),
-        units_before = tonumber(previous_units[field]),
-    }
+    local now = os.time()
+    source = tostring(source or 'unknown')
+    if pending_chest and pending_chest.area == area
+        and pending_chest.target_id == target_id
+        and now - tonumber(pending_chest.last_seen
+            or pending_chest.started or 0) <= pending_timeout
+    then
+        -- The same opening produces action, menu, and dialog packets. Preserve
+        -- the earliest currency baseline while extending the observation
+        -- window; replacing it can turn a valid gain into a zero delta.
+        pending_chest.last_seen = now
+        pending_chest.sources = pending_chest.sources or {}
+        pending_chest.sources[source] = true
+        if pending_chest.units_before == nil then
+            pending_chest.units_before = tonumber(previous_units[field])
+        end
+    else
+        pending_chest = {
+            area = area,
+            chest = chest,
+            target_id = target_id,
+            started = now,
+            last_seen = now,
+            units_before = tonumber(previous_units[field]),
+            sources = {[source] = true},
+        }
+    end
     coroutine.schedule(request_currency_two, 0.5)
     coroutine.schedule(request_currency_two, 2)
 end
 
 local function finish_chest_if_ready(packet)
-    if not pending_chest or os.time() - pending_chest.started > 30 then
+    if not pending_chest or os.time() - tonumber(pending_chest.last_seen
+        or pending_chest.started or 0) > pending_timeout
+    then
         pending_chest = nil
         return false
     end
@@ -669,14 +692,31 @@ windower.register_event('zone change', function()
 end)
 
 windower.register_event('outgoing chunk', function(id, original, modified)
-    if id ~= 0x01A then return end
-    local ok, packet = pcall(packets.parse, 'outgoing', modified or original)
-    if ok and packet and packet.Target and packet.Category == 0 then
-        begin_chest(packet.Target)
+    if id == 0x01A then
+        local ok, packet = pcall(packets.parse, 'outgoing', modified or original)
+        if ok and packet and packet.Target and packet.Category == 0 then
+            begin_chest(packet.Target, 'action')
+        end
+    elseif id == 0x05B then
+        -- Some interaction paths expose the final coffer reliably only as the
+        -- dialog choice. This is still restricted to the eight known targets.
+        local ok, packet = pcall(packets.parse, 'outgoing', modified or original)
+        if ok and packet and packet.Target then
+            begin_chest(packet.Target, 'dialog')
+        end
     end
 end)
 
 windower.register_event('incoming chunk', function(id, original, modified)
+    if id == 0x032 or id == 0x034 then
+        -- The server menu identifies the coffer even when an injected or
+        -- mirrored interaction bypasses the normal outgoing action event.
+        local ok, packet = pcall(packets.parse, 'incoming', modified or original)
+        if ok and packet and packet.NPC then
+            begin_chest(packet.NPC, 'menu')
+        end
+        return
+    end
     if id ~= 0x118 then return end
     local ok, packet = pcall(packets.parse, 'incoming', modified or original)
     if not ok or not packet then return end
