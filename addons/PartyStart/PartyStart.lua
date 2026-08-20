@@ -11,14 +11,17 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.5'
+_addon.version = '1.4.6'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
 res = require('resources')
 
 local PREFIX = 'PARTYSTART2'
-local DISCOVERY_TIMEOUT = 5
+local DISCOVERY_TIMEOUT = 8
+local START_RETRY_INTERVAL = 0.75
+local DECISION_RETRY_INTERVAL = 0.75
+local DECISION_RETRY_WINDOW = 5
 local sessions = {}
 local current_profile = nil
 local current_composition = nil
@@ -1027,6 +1030,24 @@ local function encode_roster(session)
     return table.concat(records, ';')
 end
 
+local function announce_start(session)
+    send_ipc{
+        PREFIX, 'start', session.nonce, session.composition, session.profile,
+        session.preview and '1' or '0', table.concat(session.names, ','),
+        session.leader, session.requester,
+    }
+    session.next_start_at = os.clock() + START_RETRY_INTERVAL
+end
+
+local function announce_decision(session)
+    if not session.decision or not session.encoded_roster then return end
+    send_ipc{
+        PREFIX, 'decision', session.nonce, session.decision,
+        session.encoded_roster, session.requester,
+    }
+    session.next_decision_at = os.clock() + DECISION_RETRY_INTERVAL
+end
+
 local function decode_roster(session, encoded)
     local roster = {}
     if type(encoded) ~= 'string' then return roster end
@@ -1421,11 +1442,14 @@ local function finalize_session(session)
         or (session.preview and 'preview' or 'commit')
     session.applied = true
     session.completed_at = os.clock()
+    session.decision = decision
+    session.encoded_roster = encode_roster(session)
+    if decision == 'commit' then
+        session.decision_retry_until = session.completed_at
+            + DECISION_RETRY_WINDOW
+    end
     announce_validation(session, errors, warnings)
-    send_ipc{
-        PREFIX, 'decision', session.nonce, decision,
-        encode_roster(session), session.requester,
-    }
+    announce_decision(session)
     if #errors > 0 then
         chat(167, 'Validation failed; no automation was changed.')
         return
@@ -1476,17 +1500,14 @@ local function begin(composition_name, profile_name, preview, revalidation)
         requester = player.name,
         roster = {},
         discovery_deadline = os.clock() + DISCOVERY_TIMEOUT,
+        next_start_at = 0,
         next_report_at = 0,
         applied = false,
     }
     sessions[nonce] = session
     pending_revalidation = nil
     job_revalidate_at = nil
-    send_ipc{
-        PREFIX, 'start', nonce, normalized, profile_name,
-        preview and '1' or '0', table.concat(names, ','),
-        composition.command_leader, player.name,
-    }
+    announce_start(session)
     report(session)
     chat(207, ('%s %d party jobs for %s/%s%s...')
         :format(preview and 'Previewing' or 'Validating', #names,
@@ -1683,6 +1704,16 @@ windower.register_event('prerender', function()
         end
     end
     for nonce,session in pairs(sessions) do
+        if not session.applied and is_requester(session)
+            and now <= session.discovery_deadline
+            and now >= (session.next_start_at or 0)
+            and not roster_complete(session)
+        then
+            -- A Windower instance may miss the first IPC while addons are
+            -- settling after login/reload. Reannounce the same nonce; the
+            -- receiver is idempotent and will keep reporting into one session.
+            announce_start(session)
+        end
         if now <= session.discovery_deadline
             and now >= (session.next_report_at or 0)
         then
@@ -1693,6 +1724,15 @@ windower.register_event('prerender', function()
             and (roster_complete(session) or now >= session.discovery_deadline)
         then
             finalize_session(session)
+        elseif session.applied and is_requester(session)
+            and session.decision == 'commit'
+            and now <= (session.decision_retry_until or 0)
+            and now >= (session.next_decision_at or math.huge)
+        then
+            -- Rebroadcast only the consolidated commit. A client that already
+            -- applied it rejects duplicates via session.applied; a client that
+            -- missed the first packet gets the identical validated policy.
+            announce_decision(session)
         elseif session.applied and session.completed_at
             and now - session.completed_at > 30
         then

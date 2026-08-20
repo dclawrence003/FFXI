@@ -121,12 +121,26 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("if #errors > 0 then", finalize)
         self.assertIn("if session.preview then", finalize)
         self.assertIn("no automation was changed", finalize)
-        self.assertIn("DISCOVERY_TIMEOUT = 5", ADDON)
-        self.assertIn("PREFIX, 'decision', session.nonce, decision", finalize)
+        self.assertIn("DISCOVERY_TIMEOUT = 8", ADDON)
+        self.assertIn("session.decision = decision", finalize)
+        self.assertIn("announce_decision(session)", finalize)
         self.assertIn("elseif kind == 'decision' then", ADDON)
         self.assertIn("session.roster = decode_roster(session, encoded)", ADDON)
         self.assertIn("if decision == 'commit' and #errors == 0", ADDON)
         self.assertIn("session.next_report_at = now + 0.5", ADDON)
+
+    def test_activation_handshake_retries_without_reapplying_profiles(self):
+        prerender = ADDON.split("windower.register_event('prerender'", 1)[1]
+        self.assertIn("START_RETRY_INTERVAL = 0.75", ADDON)
+        self.assertIn("DECISION_RETRY_INTERVAL = 0.75", ADDON)
+        self.assertIn("DECISION_RETRY_WINDOW = 5", ADDON)
+        self.assertIn("local function announce_start(session)", ADDON)
+        self.assertIn("local function announce_decision(session)", ADDON)
+        self.assertIn("and not roster_complete(session)", prerender)
+        self.assertIn("announce_start(session)", prerender)
+        self.assertIn("and session.decision == 'commit'", prerender)
+        self.assertIn("announce_decision(session)", prerender)
+        self.assertIn("if not session or session.applied", ADDON)
 
     def test_job_change_suspends_then_revalidates(self):
         self.assertIn("windower.register_event('job change'", ADDON)
@@ -476,7 +490,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.5'", ADDON)
+        self.assertIn("_addon.version = '1.4.6'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -496,7 +510,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.5'", ADDON)
+        self.assertIn("_addon.version = '1.4.6'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,

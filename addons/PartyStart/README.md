@@ -142,6 +142,13 @@ each configured participant.
 
 Do not stack `send @all` reloads for PartyCombat, PartyStart, and GearSwap.
 Six simultaneous GearSwap rebuilds can hang or crash Windower's `Hook.dll`.
+PartyStart 1.4.6 also hardens normal activation against clients settling at
+slightly different times: it reannounces one validation session during an
+eight-second discovery window and rebroadcasts the identical validated commit
+for five seconds. Both messages retain the same session nonce, and each client
+applies the profile at most once. These retries do not rerun GearSwap setup,
+restart a BRD song rotation, or alter profile policy. A client on which
+PartyStart is completely unloaded still fails validation explicitly.
 Copy the scripts in `scripts` into `Windower\scripts`. Run
 `//exec reload_partystart_safe.txt` when only PartyStart changed. Run
 `//exec reload_party_stack_safe.txt` when either PartyCombat or PartyStart
