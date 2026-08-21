@@ -238,7 +238,9 @@ class PartyStartRolePolicy(unittest.TestCase):
             "free-look support; no forced target/AutoWS2", self.addon
         )
         self.assertIn("HOUSEMAKER RETURNED: BARNEY RETURN TO GROUP NOW", self.addon)
-        self.assertIn("self_heal_hpp = 85", self.brd)
+        self.assertIn("self_heal_hpp = 40", self.brd)
+        self.assertIn("startup_jas = {'Nightingale', 'Troubadour'}", self.brd)
+        self.assertIn("mechanic_duty = true", self.brd)
         self.assertIn("pstart_brd_cast_self_heal", self.brd)
         self.assertIn("warble_reactions = true", self.brd)
         self.assertIn("auto_urchin_sleep = true", self.brd)

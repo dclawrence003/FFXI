@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.6'
+_addon.version = '1.4.7'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -264,10 +264,10 @@ local profiles = {
         advisories = {
             'V1: Tackleberry tanks Breadwinner in the starting corner facing the wall; Dolomedes, Kickpuncher, Smalls, and Achoo attack from behind.',
             'V1: Smalls opens Stymie + Saboteur + Silence, confirms the result, retries a resist, then applies Paralyze II. Silence is critical because it shrinks Warble range and suppresses invisible Urchin activation.',
-            'V1: Barney must be BRD/WHM; he maintains Barsilencera and default Barstonra, reacts to each elemental Warble with its matching Barspell, and is the intended Housemaker bait. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
+            'V1: Barney must be BRD/WHM. He attempts Nightingale/Troubadour for the opening songs, then switches to dedicated Barsilence/default-Barstone/reactive-Barspell/Lullaby duty when Breadwinner engages. Keep him with the group, move only Barney 20+ yalms away when the movement alarm fires, then return immediately after Earthshaker for Cure/Paralyna and renewed Barspell coverage.',
             'V1: PartyCombat never forces Barney onto Breadwinner. His camera is user-owned for watching Housemaker; briefly target Breadwinner manually only when an Elegy attempt is wanted.',
             'V1: Barney, Smalls, and Achoo maintain self-Reraise. Dolomedes, Tackleberry, and Kickpuncher require Reraise items; each client warns while unprotected.',
-            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Warble ready packets make Barney prioritize the matching elemental Barspell over songs, cures, Elegy, and routine Barstone; Housemaker movement/Earthshaker and Hundred Fists remain alerted.',
+            'V1: Entrusted Indi-Wilt follows Tackleberry to reduce physical pressure. Warble ready packets reach Barney through PartyStart plus a deduplicated GearSwap fallback and make him prioritize the matching elemental Barspell; routine songs/Elegy are held in combat and self-Cure is emergency-only below 40%. Housemaker movement/Earthshaker and Hundred Fists remain alerted.',
             'V1: Each completed Warble makes Barney attempt one Horde Lullaby on visible Bozzetto Urchins; each later Warble wakes them and rearms that sleep. Dolo and Kickpuncher automatically split to an Urchin and return to Breadwinner after it dies; Tackleberry, Smalls, and Achoo keep attacking Breadwinner while Barney remains free-look.',
             'V1: Drill Claw is a frontal cone with damage and -75% Max HP; keep Breadwinner facing the wall. An unblocked elemental Warble is radial party-wide magic damage.',
             'V1: Hundred Fists/Gale Spikes begin near 50%. PLD automation reserves Sentinel for that threshold.',
@@ -534,26 +534,45 @@ local function monster_ability_from_action(action)
         for _, target in ipairs(action.targets or {}) do
             for _, result in ipairs(target.actions or {}) do
                 local ability = res.monster_abilities[result.param]
-                if ability then return ability end
+                if ability then return ability, 'ready' end
             end
         end
         return nil
     end
     if action.category == 6 or action.category == 11 then
-        return res.monster_abilities[action.param]
+        return res.monster_abilities[action.param], 'complete'
     end
     return nil
 end
 
+-- The addon action event is the authoritative encounter observer. Relay exact
+-- Warble phases into the local BRD GearSwap controller so a GearSwap-local raw
+-- callback cannot be the single point of failure. Only the BRD client relays;
+-- the controller deduplicates this against its own packet-path fallback.
+local function relay_v1_brd_mechanic(ability, phase)
+    if not ability or not V1_WARBLE_ALERTS[ability.en]
+        or ability.en == 'Meeble Warble'
+        or (phase ~= 'ready' and phase ~= 'complete')
+    then
+        return
+    end
+    local player = windower.ffxi.get_player()
+    if not player or player.main_job ~= 'BRD' then return end
+    local command = phase == 'ready' and 'warble' or 'warblecomplete'
+    windower.send_command(('gs c pstartbrd %s %d')
+        :format(command, ability.id))
+end
+
 local function v1_encounter_alert(action)
     if current_profile ~= 'ambuscade-v1' then return end
-    local ability = monster_ability_from_action(action)
+    local ability, phase = monster_ability_from_action(action)
     local actor = ability and windower.ffxi.get_mob_by_id(action.actor_id)
         or nil
     if not actor or type(actor.name) ~= 'string' then return end
 
     local message
     if actor.name == 'Bozzetto Breadwinner' then
+        relay_v1_brd_mechanic(ability, phase)
         message = V1_WARBLE_ALERTS[ability.en]
         if ability.en == 'Hundred Fists' then
             message = 'HUNDRED FISTS: reserved PLD mitigation is activating; Gale Spikes can reflect damage and overwrite Haste II.'

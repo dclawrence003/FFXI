@@ -130,7 +130,12 @@ local pstart_brd_profiles = {
     },
     ['ambuscade-v1'] = {
         song_mode = 'Melee',
-        self_heal_hpp = 85,
+        -- The local encounter guide assigns BRD to Barspell duty once combat
+        -- starts. Self-Cure is therefore a near-death backstop, not a routine
+        -- 85% maintenance loop that can occupy an entire Warble ready window.
+        self_heal_hpp = 40,
+        startup_jas = {'Nightingale', 'Troubadour'},
+        mechanic_duty = true,
         self_buffs = {
             {spell='Reraise', buff='Reraise'},
         },
@@ -181,9 +186,14 @@ local pstart_brd = {
     warble = nil,
     urchin_sleep_requested_until = 0,
     urchin_sleep_not_before = 0,
+    urchin_sleep_discovery_until = 0,
     urchin_sleep_issued_at = 0,
+    urchin_sleep_wait_reported = false,
     last_warble_complete_key = nil,
     last_warble_complete_at = 0,
+    startup_ja_index = 1,
+    v1_combat_started = false,
+    v1_combat_announced = false,
 }
 
 local PSTART_BRD_DEBUFF_RETRY = 90
@@ -191,6 +201,7 @@ local PSTART_BRD_SLEEP_WINDOW = 8
 local PSTART_BRD_WARBLE_WINDOW = 4.25
 local PSTART_BRD_URCHIN_SLEEP_WINDOW = 15
 local PSTART_BRD_URCHIN_APPEAR_DELAY = 0.15
+local PSTART_BRD_URCHIN_DISCOVERY_WINDOW = 2
 local PSTART_BRD_HORDE_MAX_RADIUS = 8
 local PSTART_BRD_REISSUE_DELAY = 1.25
 local PSTART_BRD_SLEEP_CHOICES = {
@@ -332,26 +343,93 @@ end
 -- Warble has only a four-second ready window on Difficult/Very Difficult.
 -- Ignore Selendrile's routine tick delay for encounter reactions while still
 -- respecting real casting blockers and spell recasts.
-local function pstart_brd_reaction_ready(spell)
+local function pstart_brd_reaction_blocker(spell)
     local recasts = windower.ffxi.get_spell_recasts() or {}
-    return spell
-        and not pstart_brd.pending
-        and not midaction()
-        and not moving
-        and not silent_check_disable()
-        and (recasts[spell.id] or 0) < spell_latency
-        and player
-        and (player.mp or 0) >= (spell.mp_cost or 0)
-        and silent_can_use(spell.id)
+    if not spell then return 'spell unavailable' end
+    if pstart_brd.pending then
+        return 'finishing '..tostring(pstart_brd.pending.kind or 'another action')
+    end
+    if midaction() then return 'another action is in progress' end
+    if moving then return 'moving' end
+    if silent_check_disable() then return 'incapacitated' end
+    if (recasts[spell.id] or 0) >= spell_latency then
+        return 'spell recast'
+    end
+    if not player or (player.mp or 0) < (spell.mp_cost or 0) then
+        return 'insufficient MP'
+    end
+    if not silent_can_use(spell.id) then return 'spell access/status' end
+    return nil
+end
+
+local function pstart_brd_reaction_ready(spell)
+    return pstart_brd_reaction_blocker(spell) == nil
 end
 
 local function pstart_brd_reset_reactions()
     pstart_brd.warble = nil
     pstart_brd.urchin_sleep_requested_until = 0
     pstart_brd.urchin_sleep_not_before = 0
+    pstart_brd.urchin_sleep_discovery_until = 0
     pstart_brd.urchin_sleep_issued_at = 0
+    pstart_brd.urchin_sleep_wait_reported = false
     pstart_brd.last_warble_complete_key = nil
     pstart_brd.last_warble_complete_at = 0
+    pstart_brd.startup_ja_index = 1
+    pstart_brd.v1_combat_started = false
+    pstart_brd.v1_combat_announced = false
+end
+
+local function pstart_brd_clear_urchin_sleep()
+    pstart_brd.urchin_sleep_requested_until = 0
+    pstart_brd.urchin_sleep_not_before = 0
+    pstart_brd.urchin_sleep_discovery_until = 0
+    pstart_brd.urchin_sleep_issued_at = 0
+    pstart_brd.urchin_sleep_wait_reported = false
+end
+
+local function pstart_brd_cast_startup_ja(profile)
+    local tasks = profile and profile.startup_jas or nil
+    if not tasks or #tasks == 0 then return false end
+
+    while (pstart_brd.startup_ja_index or 1) <= #tasks do
+        local index = pstart_brd.startup_ja_index or 1
+        local name = tasks[index]
+        local ability = res.job_abilities and res.job_abilities:with('en', name)
+            or nil
+        if buffactive[name] then
+            pstart_brd.startup_ja_index = index + 1
+        elseif not ability then
+            add_to_chat(123, ('PartyStart BRD: startup JA %s is unavailable; continuing.')
+                :format(name))
+            pstart_brd.startup_ja_index = index + 1
+        else
+            local recasts = windower.ffxi.get_ability_recasts() or {}
+            local recast = tonumber(recasts[ability.recast_id]) or math.huge
+            if recast >= 1 then
+                add_to_chat(123, ('PartyStart BRD: startup JA %s has %.0fs recast; continuing without it.')
+                    :format(name, recast))
+                pstart_brd.startup_ja_index = index + 1
+            elseif pstart_brd.pending or midaction() or moving
+                or silent_check_disable()
+            then
+                -- Reserve setup casting until Barney is stationary and free.
+                return true
+            else
+                pstart_brd.pending = {
+                    kind = 'startup_ja',
+                    spell_id = ability.id,
+                    startup_index = index,
+                    ability = name,
+                }
+                windower.chat.input('/ja "'..name..'" <me>')
+                tickdelay = os.clock() + 1
+                add_to_chat(158, 'PartyStart BRD opening songs: '..name..'.')
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function pstart_brd_cast_self_heal(profile)
@@ -417,6 +495,37 @@ local function pstart_brd_live_enemy(target)
         and target.valid_target
         and tonumber(target.hpp)
         and target.hpp > 0
+end
+
+local function pstart_brd_begin_v1_mechanic_duty()
+    if pstart_brd.v1_combat_started then return true end
+    pstart_brd.v1_combat_started = true
+    if not pstart_brd.v1_combat_announced then
+        pstart_brd.v1_combat_announced = true
+        add_to_chat(122,
+            'PartyStart BRD: Breadwinner engaged; dedicated Barspell/Lullaby duty is active. Routine songs, Elegy, and buffs are held.')
+    end
+    return true
+end
+
+local function pstart_brd_v1_mechanic_duty_active()
+    local profile = pstart_brd_profiles[pstart_brd.profile]
+    if not pstart_brd.active or pstart_brd.profile ~= 'ambuscade-v1'
+        or not profile or not profile.mechanic_duty
+    then
+        return false
+    end
+    if pstart_brd.v1_combat_started then return true end
+
+    for _, mob in pairs(windower.ffxi.get_mob_array() or {}) do
+        if pstart_brd_live_enemy(mob)
+            and mob.name == 'Bozzetto Breadwinner'
+            and (tonumber(mob.status) == 1 or tonumber(mob.hpp) < 100)
+        then
+            return pstart_brd_begin_v1_mechanic_duty()
+        end
+    end
+    return false
 end
 
 local function pstart_brd_lullaby_target_allowed(target)
@@ -505,11 +614,16 @@ local function pstart_brd_cast_warble_bar()
     local now = os.clock()
     if now > request.deadline then
         pstart_brd.warble = nil
-        add_to_chat(123, ('PartyStart BRD: %s reaction window expired before %s landed.')
-            :format(request.ability, request.spell))
+        add_to_chat(123, ('PartyStart BRD: MISSED %s -> %s (%s).')
+            :format(request.ability, request.spell,
+                request.last_blocker or 'reaction window expired'))
         return false
     end
     if request.satisfied or buffactive[request.buff] then
+        if not request.satisfied then
+            add_to_chat(122, ('PartyStart BRD: %s already covered by %s.')
+                :format(request.ability, request.spell))
+        end
         request.satisfied = true
         return false
     end
@@ -532,7 +646,16 @@ local function pstart_brd_cast_warble_bar()
     end
     -- A queued but temporarily blocked reaction owns the casting slot; routine
     -- songs and maintenance must not consume the remainder of the ready window.
-    if not pstart_brd_reaction_ready(spell) then return true end
+    local blocker = pstart_brd_reaction_blocker(spell)
+    if blocker then
+        request.last_blocker = blocker
+        if not request.blocker_reported then
+            request.blocker_reported = true
+            add_to_chat(123, ('PartyStart BRD: %s queued for %s; blocked by %s.')
+                :format(request.spell, request.ability, blocker))
+        end
+        return true
+    end
 
     request.issued_at = now
     pstart_brd.pending = {
@@ -558,9 +681,7 @@ local function pstart_brd_cast_urchin_sleep()
 
     local now = os.clock()
     if now > deadline then
-        pstart_brd.urchin_sleep_requested_until = 0
-        pstart_brd.urchin_sleep_not_before = 0
-        pstart_brd.urchin_sleep_issued_at = 0
+        pstart_brd_clear_urchin_sleep()
         return false
     end
     if now < (pstart_brd.urchin_sleep_not_before or 0) then
@@ -568,13 +689,29 @@ local function pstart_brd_cast_urchin_sleep()
     end
 
     local urchins = pstart_brd_visible_urchins()
-    if #urchins == 0 then return false end
+    if #urchins == 0 then
+        if now <= (pstart_brd.urchin_sleep_discovery_until or 0) then
+            -- The mobs become targetable shortly after the completion packet.
+            -- Do not let a routine song or Cure consume that discovery gap.
+            return true
+        end
+        -- Keep the full scan alive for delayed targetability, but release the
+        -- casting slot so default Barstone can be restored meanwhile.
+        return false
+    end
     local closest_distance = math.sqrt(math.max(0,
         tonumber(urchins[1].distance) or math.huge))
     -- Horde Lullaby's AoE is centered on Barney, not on the selected mob. Even
     -- the maximum String-skill radius is eight yalms, so wait for Barney to
     -- return from Housemaker rather than spending the one-shot cast out of range.
-    if closest_distance > PSTART_BRD_HORDE_MAX_RADIUS then return false end
+    if closest_distance > PSTART_BRD_HORDE_MAX_RADIUS then
+        if not pstart_brd.urchin_sleep_wait_reported then
+            pstart_brd.urchin_sleep_wait_reported = true
+            add_to_chat(123, ('PartyStart BRD: Urchin sleep waiting; nearest add is %.1fy away (Horde radius %.0fy).')
+                :format(closest_distance, PSTART_BRD_HORDE_MAX_RADIUS))
+        end
+        return true
+    end
 
     local spell = pstart_brd_first_spell(PSTART_BRD_URCHIN_SLEEP_CHOICES)
     if not spell then
@@ -599,6 +736,7 @@ local function pstart_brd_cast_urchin_sleep()
     if not target_token or not target then return true end
 
     pstart_brd.urchin_sleep_issued_at = now
+    pstart_brd.urchin_sleep_wait_reported = false
     pstart_brd.pending = {
         kind = 'urchin_sleep',
         spell_id = spell.id,
@@ -634,55 +772,101 @@ local function pstart_brd_warble_from_action(action)
     return nil
 end
 
-local function pstart_brd_handle_warble(action)
+local function pstart_brd_queue_warble(ability)
     local profile = pstart_brd_profiles[pstart_brd.profile]
     if not pstart_brd.active or pstart_brd.profile ~= 'ambuscade-v1'
-        or not profile or not profile.warble_reactions
+        or not profile or not profile.warble_reactions or not ability
     then
-        return
+        return false
     end
-
-    local ability, phase = pstart_brd_warble_from_action(action)
-    local actor = ability and windower.ffxi.get_mob_by_id(action.actor_id)
-        or nil
-    if not actor or actor.name ~= 'Bozzetto Breadwinner' then return end
-
     local now = os.clock()
     local reaction = PSTART_BRD_WARBLE_REACTIONS[ability.en]
-    if phase == 'ready' then
-        pstart_brd.warble = {
-            ability = ability.en,
-            spell = reaction.spell,
-            buff = reaction.buff,
-            deadline = now + PSTART_BRD_WARBLE_WINDOW,
-            issued_at = 0,
-            satisfied = false,
-        }
-        -- Wake Selendrile's heartbeat immediately if another action currently
-        -- prevents the direct packet-path attempt.
-        tickdelay = 0
+    if not reaction then return false end
+    pstart_brd_begin_v1_mechanic_duty()
+
+    local current = pstart_brd.warble
+    if current and current.ability == ability.en
+        and now - (current.observed_at or 0) < 1
+    then
         pstart_brd_cast_warble_bar()
-        return
+        return true
     end
 
-    local completion_key = tostring(action.actor_id)..':'..ability.en
+    pstart_brd.warble = {
+        ability = ability.en,
+        spell = reaction.spell,
+        buff = reaction.buff,
+        deadline = now + PSTART_BRD_WARBLE_WINDOW,
+        observed_at = now,
+        issued_at = 0,
+        satisfied = false,
+        blocker_reported = false,
+        last_blocker = nil,
+    }
+    add_to_chat(158, ('PartyStart BRD trigger: %s -> reserve %s.')
+        :format(ability.en, reaction.spell))
+    -- Wake Selendrile's heartbeat immediately if another action currently
+    -- prevents the direct packet-path attempt.
+    tickdelay = 0
+    pstart_brd_cast_warble_bar()
+    return true
+end
+
+local function pstart_brd_complete_warble(ability)
+    local profile = pstart_brd_profiles[pstart_brd.profile]
+    if not pstart_brd.active or pstart_brd.profile ~= 'ambuscade-v1'
+        or not profile or not profile.warble_reactions or not ability
+        or not PSTART_BRD_WARBLE_REACTIONS[ability.en]
+    then
+        return false
+    end
+    local now = os.clock()
+    pstart_brd_begin_v1_mechanic_duty()
+    local completion_key = ability.en
     if pstart_brd.last_warble_complete_key == completion_key
         and now - (pstart_brd.last_warble_complete_at or 0) < 1.5
     then
-        return
+        return true
     end
     pstart_brd.last_warble_complete_key = completion_key
     pstart_brd.last_warble_complete_at = now
+
+    local request = pstart_brd.warble
+    if request and request.ability == ability.en
+        and not request.satisfied and not buffactive[request.buff]
+    then
+        add_to_chat(123, ('PartyStart BRD: MISSED %s -> %s at resolution (%s).')
+            :format(request.ability, request.spell,
+                request.last_blocker or 'cast did not complete in time'))
+    end
     pstart_brd.warble = nil
     if profile.auto_urchin_sleep then
         pstart_brd.urchin_sleep_requested_until =
             now + PSTART_BRD_URCHIN_SLEEP_WINDOW
         pstart_brd.urchin_sleep_not_before =
             now + PSTART_BRD_URCHIN_APPEAR_DELAY
+        pstart_brd.urchin_sleep_discovery_until =
+            now + PSTART_BRD_URCHIN_DISCOVERY_WINDOW
         pstart_brd.urchin_sleep_issued_at = 0
+        pstart_brd.urchin_sleep_wait_reported = false
+        add_to_chat(158,
+            'PartyStart BRD: Warble complete; reserving the add-discovery window for Horde Lullaby.')
     end
     tickdelay = 0
     pstart_brd_cast_urchin_sleep()
+    return true
+end
+
+local function pstart_brd_handle_warble(action)
+    local ability, phase = pstart_brd_warble_from_action(action)
+    local actor = ability and windower.ffxi.get_mob_by_id(action.actor_id)
+        or nil
+    if not actor or actor.name ~= 'Bozzetto Breadwinner' then return end
+    if phase == 'ready' then
+        pstart_brd_queue_warble(ability)
+    elseif phase == 'complete' then
+        pstart_brd_complete_warble(ability)
+    end
 end
 
 windower.raw_register_event('action', pstart_brd_handle_warble)
@@ -814,6 +998,14 @@ end
 local function pstart_brd_maintenance(profile)
     if pstart_brd_cast_warble_bar() then return true end
     if pstart_brd_cast_urchin_sleep() then return true end
+    if pstart_brd_v1_mechanic_duty_active() then
+        -- Once Breadwinner is engaged, the encounter guide assigns Barney to
+        -- Barspell duty. Only a near-death Cure and default Barstone repair are
+        -- allowed between reactive casts; songs, Elegy, and routine buffs wait
+        -- until the profile is reapplied outside combat.
+        if pstart_brd_cast_self_heal(profile) then return true end
+        return pstart_brd_cast_default_bar(profile)
+    end
     if pstart_brd_cast_self_heal(profile) then return true end
     if pstart_brd_cast_sleep() then return true end
     if pstart_brd_cast_self_buff(profile) then return true end
@@ -883,6 +1075,18 @@ function user_job_self_command(commandArgs, eventArgs)
             pstart_brd_maintenance(profile)
         end
         return
+    elseif requested == 'warble' or requested == 'warblecomplete' then
+        local ability = res.monster_abilities[tonumber(commandArgs[3]) or -1]
+        if ability and PSTART_BRD_WARBLE_REACTIONS[ability.en] then
+            if requested == 'warble' then
+                pstart_brd_queue_warble(ability)
+            else
+                pstart_brd_complete_warble(ability)
+            end
+        elseif pstart_brd.active and pstart_brd.profile == 'ambuscade-v1' then
+            add_to_chat(123, 'PartyStart BRD: ignored invalid Warble relay.')
+        end
+        return
     elseif requested == 'sleep' then
         if not pstart_brd.active or pstart_brd.profile ~= 'limbus' then
             add_to_chat(123,
@@ -926,6 +1130,15 @@ function user_job_self_command(commandArgs, eventArgs)
             :format((pstart_brd.urchin_sleep_requested_until or 0) > os.clock()
                 and 'Scanning/Queued' or (profile.auto_urchin_sleep
                     and 'Armed' or 'Off')))
+        add_to_chat(122, ('PartyStart BRD V1 mechanic duty: %s')
+            :format(pstart_brd.v1_combat_started
+                and 'Combat hold (Bars/Lullaby only)'
+                or (profile.mechanic_duty and 'Setup phase' or 'Off')))
+        if profile.startup_jas then
+            add_to_chat(122, ('PartyStart BRD opening JA progress: %d/%d')
+                :format(math.min((pstart_brd.startup_ja_index or 1) - 1,
+                    #profile.startup_jas), #profile.startup_jas))
+        end
         pstart_brd_report_song_state(profile)
         pstart_brd_report_instrument()
         return
@@ -986,9 +1199,14 @@ function check_song()
     -- the character GearSwap's continuing ownership of party songs.
     if pstart_brd_cast_warble_bar() then return true end
     if pstart_brd_cast_urchin_sleep() then return true end
+    if pstart_brd_v1_mechanic_duty_active() then
+        if pstart_brd_cast_self_heal(profile) then return true end
+        return pstart_brd_cast_default_bar(profile)
+    end
     if pstart_brd_cast_self_heal(profile) then return true end
     if pstart_brd_cast_sleep() then return true end
     if pstart_brd_cast_self_buff(profile) then return true end
+    if pstart_brd_cast_startup_ja(profile) then return true end
     if pstart_brd_original_check_song
         and pstart_brd_original_check_song()
     then
@@ -1038,9 +1256,16 @@ function job_aftercast(spell, spellMap, eventArgs)
                 add_to_chat(123,
                     'PartyStart BRD: Urchin Lullaby interrupted; retry remains queued inside the original scan window.')
             else
-                pstart_brd.urchin_sleep_requested_until = 0
-                pstart_brd.urchin_sleep_not_before = 0
-                pstart_brd.urchin_sleep_issued_at = 0
+                pstart_brd_clear_urchin_sleep()
+            end
+        elseif pending.kind == 'startup_ja' then
+            if spell.interrupted then
+                tickdelay = 0
+                add_to_chat(123, ('PartyStart BRD: %s did not activate; retrying before opening songs.')
+                    :format(pending.ability))
+            else
+                pstart_brd.startup_ja_index =
+                    (pending.startup_index or pstart_brd.startup_ja_index or 1) + 1
             end
         end
         pstart_brd.pending = nil

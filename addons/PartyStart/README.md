@@ -149,6 +149,13 @@ for five seconds. Both messages retain the same session nonce, and each client
 applies the profile at most once. These retries do not rerun GearSwap setup,
 restart a BRD song rotation, or alter profile policy. A client on which
 PartyStart is completely unloaded still fails validation explicitly.
+PartyStart 1.4.7 hardens the V1 BRD mechanic without changing Barney's
+instrument sets or three-song implementation. The normal addon action event
+relays exact Warble ready/completion IDs into the BRD controller, while its
+existing GearSwap-local callback remains a deduplicated fallback. Apply this
+update out of combat: reload PartyStart one client at a time, reload Barney's
+GearSwap once, then reapply `progression/ambuscade-v1` and wait for the opening
+song/Barspell setup before `//pc on`.
 Copy the scripts in `scripts` into `Windower\scripts`. Run
 `//exec reload_partystart_safe.txt` when only PartyStart changed. Run
 `//exec reload_party_stack_safe.txt` when either PartyCombat or PartyStart
@@ -605,9 +612,13 @@ Tackleberry.
   either JA is on recast, the controller skips it rather than delaying
   Silence. A confirmed resist receives a short recast-aware retry instead of
   the normal 45-second Silence timer.
-- Barney maintains self-Reraise, Barsilencera, and Barstonra as the safe idle
-  default. A Breadwinner Warble ready packet immediately reserves his next cast
-  for the matching elemental `Bar-ara`; this reaction outranks songs, cures,
+- During V1 setup, Barney applies Reraise, then attempts Nightingale and
+  Troubadour when their recasts are ready before delegating the same three
+  opening songs to his existing character GearSwap. PartyStart does not select
+  instruments or replace that song routine. He then establishes Barsilencera
+  and Barstonra as the safe idle default. A Breadwinner Warble ready packet
+  immediately reserves his next cast for the matching elemental `Bar-ara`;
+  this reaction outranks songs, cures,
   Elegy, and default-Barstone restoration. If you manually target Breadwinner
   on Barney, his controller can make its normal Elegy attempt; otherwise it
   skips Elegy instead of taking camera control. His AoE barspells intentionally
@@ -631,8 +642,14 @@ Tackleberry.
   matching Barspell was blocked, interrupted, out of range, or late. Drill Claw instead is a frontal cone
   with 75% Max HP Down; several affected characters indicate Breadwinner faced
   the stack, and the profile now prints a specific Drill Claw warning.
-- Barney's V1 GearSwap controller attempts a learned self-Cure below 85% HP as
-  a last-resort backstop while he is isolated. Earthshaker's potent Paralyze
+- As soon as Breadwinner is engaged (or the first Warble is observed), Barney
+  switches to dedicated mechanic duty, matching the archived Difficult
+  strategy. Routine songs, Elegy, Reraise refresh, and nonessential buffs stop
+  for the rest of that activation; reactive elemental Bars, the short Urchin
+  discovery/sleep queue, and default Barstone repair remain active. Reapply the
+  profile outside combat for a fresh setup cycle.
+- Barney's V1 GearSwap controller attempts a learned self-Cure only below 40%
+  HP as a last-resort backstop while isolated. Earthshaker's potent Paralyze
   can interrupt it, so this does not replace returning to Smalls/Tackleberry.
 - Every V1 client polls Housemaker's position five times per second. The moment
   it leaves its staging point, all clients print a boxed warning telling Barney
@@ -642,8 +659,11 @@ Tackleberry.
   packet-backed fallback. Elemental Warble and Hundred Fists alerts remain
   packet-backed; each Warble alert now describes the Barspell Barney is actively
   attempting.
-- A completed Warble opens a 15-second scan for newly targetable `Bozzetto
-  Urchin` mobs. When one appears, Barney makes exactly one Horde Lullaby II/I
+- A completed Warble reserves Barney's cast slot for a two-second add-discovery
+  window. If no Urchin appears immediately, the casting slot is released so
+  default Barstone can return while the full 15-second scan continues; if a
+  visible Urchin is outside Horde radius, Barney reserves the slot until it is
+  in range or that window expires. When one appears, Barney makes exactly one Horde Lullaby II/I
   attempt; single-target Foe Lullaby is deliberately not used for this group
   response. The sleep action prefers `<bt>` or an already safe selected target.
   If neither exists, it briefly uses PartyCombat's non-engaging observer-target
@@ -769,7 +789,8 @@ AutoWS2 reservation, and total completed cures.
   routine buff maintenance. V2 keeps the normal support-first order.
 - Existing HealBot maintained buffs are not globally erased. Repeating a
   profile is idempotent, but manually registered unrelated buffs remain.
-- BRD hostile-song timers are tracked per enemy. The controller retries Elegy
+- BRD hostile-song timers are tracked per enemy. Outside V1 mechanic duty, the
+  controller retries Elegy
   and Nocturne after 90 seconds because enemy debuff icons are not exposed to
   GearSwap. Encounter barspells use Barney's own `buffactive` state and are
   recast only after the corresponding local effect disappears.
@@ -784,7 +805,10 @@ AutoWS2 reservation, and total completed cures.
   because GearSwap does not expose enemy debuff icons.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
-- Barney's normal GearSwap job tick is the sole party-song scheduler.
+- Barney's normal GearSwap job tick is the sole party-song scheduler. V1 uses
+  that unchanged scheduler for its opening songs, then suppresses routine song
+  refresh after Breadwinner engagement so an eight-second song cast cannot
+  occupy the four-second Warble warning.
   PartyStart's independent 0.75-second heartbeat runs encounter maintenance
   only; it must not invoke the song routine a second time. Use
   `//gs c pstartbrd status` to see every required song as `UP` or `MISSING`,

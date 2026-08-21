@@ -37,12 +37,17 @@ for id, name in ipairs(spell_names) do
 end
 
 local warbles = {
-    {id=101, ability='Fire Meeble Warble', spell='Barfira', buff='Barfire'},
-    {id=102, ability='Blizzard Meeble Warble', spell='Barblizzara', buff='Barblizzard'},
-    {id=103, ability='Aero Meeble Warble', spell='Baraera', buff='Baraero'},
-    {id=104, ability='Stone Meeble Warble', spell='Barstonra', buff='Barstone'},
-    {id=105, ability='Thunder Meeble Warble', spell='Barthundra', buff='Barthunder'},
-    {id=106, ability='Water Meeble Warble', spell='Barwatera', buff='Barwater'},
+    {id=3968, ability='Fire Meeble Warble', spell='Barfira', buff='Barfire'},
+    {id=3969, ability='Blizzard Meeble Warble', spell='Barblizzara', buff='Barblizzard'},
+    {id=3973, ability='Aero Meeble Warble', spell='Baraera', buff='Baraero'},
+    {id=3971, ability='Stone Meeble Warble', spell='Barstonra', buff='Barstone'},
+    {id=3970, ability='Thunder Meeble Warble', spell='Barthundra', buff='Barthunder'},
+    {id=3972, ability='Water Meeble Warble', spell='Barwatera', buff='Barwater'},
+}
+
+local startup_abilities = {
+    Nightingale={id=201, en='Nightingale', recast_id=109},
+    Troubadour={id=202, en='Troubadour', recast_id=110},
 }
 
 res = {
@@ -52,6 +57,11 @@ res = {
         end,
     },
     items = {with = function() return nil end},
+    job_abilities = {
+        with = function(_, key, value)
+            return key == 'en' and startup_abilities[value] or nil
+        end,
+    },
     monster_abilities = {},
 }
 for _, warble in ipairs(warbles) do
@@ -63,7 +73,7 @@ end
 
 local breadwinner = {
     id=500, index=50, name='Bozzetto Breadwinner', spawn_type=16,
-    valid_target=true, hpp=100, distance=4,
+    valid_target=true, hpp=100, distance=4, status=0,
 }
 local housemaker = {
     id=600, index=60, name='Bozzetto Housemaker', spawn_type=16,
@@ -88,6 +98,7 @@ windower = {
     ffxi = {
         get_spells = function() return learned end,
         get_spell_recasts = function() return {} end,
+        get_ability_recasts = function() return {[109]=0, [110]=0} end,
         get_player = function()
             return {id=900, index=90, job_points={brd={jp_spent=0}}}
         end,
@@ -151,7 +162,19 @@ user_job_self_command({'pstartbrd', 'tick'}, {handled=false})
 assert(native_check_song_calls == 0,
     'PartyStart BRD tick created a second native song scheduler')
 
--- The wrapped native path still delegates song selection exactly once.
+-- The wrapped native path applies Nightingale/Troubadour before delegating the
+-- unchanged three-song scheduler. This is the documented V1 opening sequence;
+-- no instrument or song-selection code lives in the bridge.
+check_song()
+assert(commands[#commands] == '/ja "Nightingale" <me>',
+    'V1 opening did not start with Nightingale')
+job_aftercast({id=startup_abilities.Nightingale.id, interrupted=false}, nil, {})
+fake_now = fake_now + 1
+check_song()
+assert(commands[#commands] == '/ja "Troubadour" <me>',
+    'V1 opening did not apply Troubadour')
+job_aftercast({id=startup_abilities.Troubadour.id, interrupted=false}, nil, {})
+fake_now = fake_now + 1
 check_song()
 assert(native_check_song_calls == 1,
     'normal GearSwap song path did not reach the native song routine')
@@ -165,20 +188,39 @@ assert(status_args.handled, 'explicit BRD status command was not handled')
 -- A ready packet received during another action must queue, then take the next
 -- GearSwap heartbeat before routine songs or maintenance.
 busy = true
+local command_count_before_ready = #commands
 callbacks.action({
     category=7,
     actor_id=breadwinner.id,
     targets={{actions={{param=warbles[1].id}}}},
 })
-assert(#commands == 0, 'busy ready packet cast instead of queueing')
+assert(#commands == command_count_before_ready,
+    'busy ready packet cast instead of queueing')
 busy = false
 check_song()
 assert(commands[#commands] == '/ma "Barfira" <me>',
     'queued Fire Warble did not cast Barfira')
 job_aftercast({id=spells_by_name.Barfira.id, interrupted=false}, nil, {})
 
+-- PartyStart's standard action-event relay is a second trigger path. It must
+-- work independently and deduplicate the GearSwap-local packet fallback.
+fake_now = fake_now + 2
+user_job_self_command({'pstartbrd', 'warble', tostring(warbles[2].id)},
+    {handled=false})
+assert(commands[#commands] == '/ma "Barblizzara" <me>',
+    'standard PartyStart relay did not cast the mapped Barspell')
+local relay_command_count = #commands
+callbacks.action({
+    category=7,
+    actor_id=breadwinner.id,
+    targets={{actions={{param=warbles[2].id}}}},
+})
+assert(#commands == relay_command_count,
+    'duplicate relay and raw callback issued the Barspell twice')
+job_aftercast({id=spells_by_name.Barblizzara.id, interrupted=false}, nil, {})
+
 -- Exercise every remaining ready-packet mapping through the immediate path.
-for index=2,#warbles do
+for index=3,#warbles do
     fake_now = fake_now + 1
     local warble = warbles[index]
     buffactive[warble.buff] = nil
@@ -200,16 +242,28 @@ end
 -- Lullaby, and restore Housemaker afterward.
 selected_target = housemaker
 battle_target = nil
-mob_array = {urchin_two, urchin_one}
+mob_array = {}
 urchin_one.distance = 100
 urchin_two.distance = 121
 fake_now = fake_now + 1
+user_job_self_command({
+    'pstartbrd', 'warblecomplete', tostring(warbles[#warbles].id),
+}, {handled=false})
+-- Category 6/11 and the standard addon relay can describe the same completion.
+-- The immediate duplicate must not create another sleep generation.
 callbacks.action({
-    category=11,
+    category=6,
     actor_id=breadwinner.id,
     param=warbles[#warbles].id,
 })
 fake_now = fake_now + 0.2
+check_song()
+assert(commands[#commands] ~= '/ma "Horde Lullaby II" <t>',
+    'Horde Lullaby cast before an Urchin became targetable')
+fake_now = fake_now + 2.1
+check_song()
+mob_array = {urchin_two, urchin_one}
+fake_now = fake_now + 0.1
 check_song()
 assert(commands[#commands] ~= '/ma "Horde Lullaby II" <t>',
     'Horde Lullaby was spent while Barney was outside its maximum radius')
@@ -234,6 +288,10 @@ job_aftercast({
     interrupted=false,
 }, nil, {})
 assert(selected_target == housemaker, 'prior observer target was not restored')
+local song_calls_in_combat = native_check_song_calls
+check_song()
+assert(native_check_song_calls == song_calls_in_combat,
+    'V1 mechanic duty allowed routine song casting after engagement')
 
 local function command_count(needle)
     local count = 0
@@ -243,15 +301,7 @@ local function command_count(needle)
     return count
 end
 
--- A duplicate completion category cannot double-sleep the same Warble.
-fake_now = fake_now + 0.5
-callbacks.action({
-    category=6,
-    actor_id=breadwinner.id,
-    param=warbles[#warbles].id,
-})
-fake_now = fake_now + 0.2
-check_song()
+-- The relay/raw completion pair above cannot double-sleep the same Warble.
 assert(command_count('/ma "Horde Lullaby II" <t>') == 1,
     'duplicate completion packet caused a second Lullaby')
 

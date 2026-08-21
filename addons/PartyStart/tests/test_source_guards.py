@@ -391,7 +391,9 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("auto_urchin_sleep = true", v1)
         self.assertIn("debuff_target_names = {'Bozzetto Breadwinner'}", BRD)
         self.assertIn("debuff_target_names = {'Popular Penelope'}", BRD)
-        self.assertIn("self_heal_hpp = 85", BRD)
+        self.assertIn("self_heal_hpp = 40", BRD)
+        self.assertIn("startup_jas = {'Nightingale', 'Troubadour'}", BRD)
+        self.assertIn("mechanic_duty = true", BRD)
         self.assertIn("local function pstart_brd_cast_self_heal", BRD)
         self.assertIn("emergency %s at %d%% HP", BRD)
 
@@ -413,6 +415,10 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn(
             "windower.raw_register_event('action', pstart_brd_handle_warble)", BRD
         )
+        self.assertIn("local function relay_v1_brd_mechanic", ADDON)
+        self.assertIn("gs c pstartbrd %s %d", ADDON)
+        self.assertIn("requested == 'warble' or requested == 'warblecomplete'", BRD)
+        self.assertIn("pstart_brd_v1_mechanic_duty_active()", BRD)
         maintenance = BRD.split("local function pstart_brd_maintenance", 1)[1]
         maintenance = maintenance.split("\nend", 1)[0]
         self.assertLess(
@@ -490,7 +496,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.6'", ADDON)
+        self.assertIn("_addon.version = '1.4.7'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -510,7 +516,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.6'", ADDON)
+        self.assertIn("_addon.version = '1.4.7'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
