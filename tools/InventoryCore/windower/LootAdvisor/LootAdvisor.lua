@@ -1,6 +1,6 @@
 _addon.name = 'LootAdvisor'
 _addon.author = 'Dolomedes + Codex'
-_addon.version = '0.2.1'
+_addon.version = '0.2.2'
 _addon.commands = {'la', 'lootadvisor'}
 
 require('tables')
@@ -12,12 +12,20 @@ local json = require('json')
 local cache = {items = {}, generated_at = 'not loaded'}
 local seen = {}
 local last_scan = 0
-http.TIMEOUT = 2
+-- LuaSocket requests execute on Windower's game thread. InventoryCore is a
+-- localhost service, so a healthy request should complete almost immediately;
+-- never let a dead or wedged backend stall a client for multiple seconds.
+http.TIMEOUT = 0.10
 local api_root = 'http://127.0.0.1:8787'
 local currencies = {}
 local last_telemetry = 0
 local last_currency_request = 0
-local telemetry_warning_at = 0
+local api_failure_count = 0
+local api_retry_at = 0
+local api_offline = false
+
+local API_INITIAL_BACKOFF = 60
+local API_MAX_BACKOFF = 300
 
 local colors = {KEEP=158, UPGRADE=159, AH=205, HOLD=200, REVIEW=207, VENDOR=057, DROP=167}
 
@@ -73,13 +81,49 @@ local function load_cache()
     end
 end
 
+local function api_can_attempt(force)
+    if force then
+        api_retry_at = 0
+        return true
+    end
+    return os.time() >= api_retry_at
+end
+
+local function api_mark_failure()
+    api_failure_count = api_failure_count + 1
+    local backoff = math.min(
+        API_MAX_BACKOFF,
+        API_INITIAL_BACKOFF * (2 ^ math.min(api_failure_count - 1, 3)))
+    api_retry_at = os.time() + backoff
+    if not api_offline then
+        api_offline = true
+        windower.add_to_chat(123,
+            ('[LA] InventoryCore is unavailable; localhost requests paused '
+                ..'for %d seconds. Cached loot advice remains active.')
+                :format(backoff))
+    end
+end
+
+local function api_mark_success()
+    if api_offline then
+        windower.add_to_chat(158, '[LA] InventoryCore connection restored.')
+    end
+    api_offline = false
+    api_failure_count = 0
+    api_retry_at = 0
+end
+
 local function live_recommendation(item_id)
+    if not api_can_attempt(false) then return nil end
     local ok, body, code = pcall(
         http.request,
         ('http://127.0.0.1:8787/api/loot?id=%d'):format(item_id))
-    if not ok or tonumber(code) ~= 200 or not body then
+    if not ok or not body or not tonumber(code) then
+        api_mark_failure()
         return nil
     end
+    api_mark_success()
+    if tonumber(code) ~= 200 then return nil end
 
     local parsed_ok, row = pcall(json.parse, body)
     if not parsed_ok or type(row) ~= 'table' or not row.action then
@@ -184,7 +228,8 @@ local function json_encode(value)
     return '{' .. table.concat(output, ',') .. '}'
 end
 
-local function post_json(path, payload)
+local function post_json(path, payload, force)
+    if not api_can_attempt(force) then return false end
     local body = json_encode(payload)
     local response = {}
     local ok, request_ok, code = pcall(http.request, {
@@ -197,15 +242,12 @@ local function post_json(path, payload)
         source = ltn12.source.string(body),
         sink = ltn12.sink.table(response),
     })
-    if not ok or not request_ok or tonumber(code) ~= 200 then
-        local now = os.time()
-        if now - telemetry_warning_at >= 60 then
-            telemetry_warning_at = now
-            windower.add_to_chat(123, '[LA] InventoryCore telemetry is unavailable; retrying silently.')
-        end
+    if not ok or not request_ok or not tonumber(code) then
+        api_mark_failure()
         return false
     end
-    return true
+    api_mark_success()
+    return tonumber(code) == 200
 end
 
 local function player_name()
@@ -231,17 +273,18 @@ local function collect_key_items()
     return output
 end
 
-local function send_telemetry()
+local function send_telemetry(force)
     local name = player_name()
-    if not name then return end
+    if not name then return false end
     local items = windower.ffxi.get_items() or {}
-    post_json('/api/telemetry', {
+    local sent = post_json('/api/telemetry', {
         character = name,
         gil = items.gil or 0,
         key_items = collect_key_items(),
         currencies = currencies,
-    })
+    }, force)
     last_telemetry = os.time()
+    return sent
 end
 
 local function request_currencies()
@@ -262,7 +305,7 @@ end
 
 windower.register_event('load', function()
     load_cache()
-    send_telemetry()
+    send_telemetry(true)
     coroutine.schedule(request_currencies, 1)
 end)
 windower.register_event('prerender', function()
@@ -308,8 +351,13 @@ windower.register_event('addon command', function(command, ...)
         load_cache()
     elseif command == 'telemetry' then
         request_currencies()
-        send_telemetry()
-        windower.add_to_chat(158, '[LA] Character telemetry sent to InventoryCore.')
+        if send_telemetry(true) then
+            windower.add_to_chat(158,
+                '[LA] Character telemetry sent to InventoryCore.')
+        else
+            windower.add_to_chat(123,
+                '[LA] Telemetry was not sent; InventoryCore remains unavailable.')
+        end
     elseif command == 'item' then
         local query = table.concat({...}, ' '):lower()
         for id, item in pairs(res.items) do

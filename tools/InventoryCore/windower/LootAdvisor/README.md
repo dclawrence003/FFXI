@@ -70,6 +70,11 @@ Snapshots are sent once per minute and after login or zoning. Currency packets
 are requested every five minutes. Data is posted only to
 `http://127.0.0.1:8787`; no remote telemetry service is used.
 
+Version 0.2.2 limits each localhost request to 100 milliseconds and opens a
+60-to-300-second circuit breaker when InventoryCore is unavailable. Cached
+recommendations remain usable during an outage, network warning spam is
+suppressed, and `//la telemetry` forces an immediate recovery attempt.
+
 Limbus chest detection was moved to the standalone `LimbusTracker` addon in
 version 0.2.1. LootAdvisor no longer observes chest interactions or writes
 Limbus events.

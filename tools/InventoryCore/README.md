@@ -107,10 +107,14 @@ powershell -ExecutionPolicy Bypass -File .\Install-AutoStart.ps1
 ```
 
 The task starts InventoryCore at logon, keeps the server attached to the task so
-Windows can restart it after a failure, and does not open the dashboard. It
-serves the existing database immediately; FindAll's file watcher performs the
-next refresh after inventory changes. The launcher checks the normal Node.js
-install locations and Codex's bundled Node runtime in addition to `PATH`.
+Windows can restart it after a failure, and does not open the dashboard. A
+five-minute watchdog trigger also recovers a task that was manually terminated
+or otherwise escaped the normal process-failure restart policy. While the
+foreground server is healthy, `MultipleInstances=IgnoreNew` makes those
+watchdog triggers no-ops. The service serves the existing database immediately;
+FindAll's file watcher performs the next refresh after inventory changes. The
+launcher checks the normal Node.js install locations and Codex's bundled Node
+runtime in addition to `PATH`.
 
 Manual commands:
 
@@ -164,6 +168,12 @@ currencies. Load it on every tracked character. It posts only to the localhost
 service, sends a full character snapshot once per minute, refreshes currency
 packets every five minutes, and refreshes after login or zoning.
 `//la telemetry` forces an immediate snapshot and currency request.
+
+LootAdvisor 0.2.2 caps localhost calls at 100 milliseconds and uses a shared
+60-to-300-second circuit breaker for both telemetry and uncached loot lookups.
+If InventoryCore is stopped, cached recommendations continue without repeated
+game-thread stalls or warning spam. `//la telemetry` bypasses the backoff for an
+immediate recovery test, and the addon reports when the connection is restored.
 
 The standalone LimbusTracker addon recognizes the eight authoritative
 final-floor rotation chest targets, confirms the resulting 3,000- or

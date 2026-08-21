@@ -11,7 +11,16 @@ if (-not (Test-Path -LiteralPath $Launcher)) {
 $PowerShellExe = (Get-Command powershell.exe -ErrorAction Stop).Source
 $Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Launcher`" -NoBrowser -Foreground -SkipRefresh"
 $Action = New-ScheduledTaskAction -Execute $PowerShellExe -Argument $Arguments -WorkingDirectory $PSScriptRoot
-$Trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$LogonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+# A manually terminated task is not always covered by Task Scheduler's
+# process-failure restart policy. Reassert the task every five minutes; with
+# MultipleInstances=IgnoreNew these triggers are no-ops while the foreground
+# server is healthy, but recover a task that was stopped unexpectedly.
+$WatchdogTrigger = New-ScheduledTaskTrigger `
+    -Once `
+    -At (Get-Date).AddMinutes(1) `
+    -RepetitionInterval (New-TimeSpan -Minutes 5) `
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 $Settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
@@ -24,7 +33,7 @@ $Settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask `
     -TaskName $TaskName `
     -Action $Action `
-    -Trigger $Trigger `
+    -Trigger @($LogonTrigger, $WatchdogTrigger) `
     -Settings $Settings `
     -Description 'Keeps the local FFXI InventoryCore and LootAdvisor recommendation service available.' `
     -Force | Out-Null
