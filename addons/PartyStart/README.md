@@ -644,10 +644,13 @@ Tackleberry.
   the stack, and the profile now prints a specific Drill Claw warning.
 - As soon as Breadwinner is engaged (or the first Warble is observed), Barney
   switches to dedicated mechanic duty, matching the archived Difficult
-  strategy. Routine songs, Elegy, Reraise refresh, and nonessential buffs stop
-  for the rest of that activation; reactive elemental Bars, the short Urchin
-  discovery/sleep queue, and default Barstone repair remain active. Reapply the
-  profile outside combat for a fresh setup cycle.
+  strategy. Elegy, Reraise refresh, nonessential buffs, and arbitrary song
+  recasts stop for the rest of that activation; reactive elemental Bars, the
+  Urchin discovery/sleep queue, and default Barstone repair remain active. One
+  missing song may be repaired during a six-second window immediately after
+  each completed Warble, covering long fights or an unavailable Troubadour
+  without starting an eight-second song during an unpredictable warning.
+  Reapply the profile outside combat for a fresh setup cycle.
 - Barney's V1 GearSwap controller attempts a learned self-Cure only below 40%
   HP as a last-resort backstop while isolated. Earthshaker's potent Paralyze
   can interrupt it, so this does not replace returning to Smalls/Tackleberry.
@@ -806,9 +809,10 @@ AutoWS2 reservation, and total completed cures.
 - Three-song BRD operation assumes a working additional-song instrument. The
   current roster uses Blurred Harp +1.
 - Barney's normal GearSwap job tick is the sole party-song scheduler. V1 uses
-  that unchanged scheduler for its opening songs, then suppresses routine song
-  refresh after Breadwinner engagement so an eight-second song cast cannot
-  occupy the four-second Warble warning.
+  that unchanged scheduler for its opening songs, then suppresses arbitrary
+  song refresh after Breadwinner engagement. It exposes at most one song repair
+  immediately after each completed Warble, so an eight-second song cannot begin
+  during an unpredictable four-second warning.
   PartyStart's independent 0.75-second heartbeat runs encounter maintenance
   only; it must not invoke the song routine a second time. Use
   `//gs c pstartbrd status` to see every required song as `UP` or `MISSING`,

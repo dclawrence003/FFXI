@@ -419,6 +419,8 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("gs c pstartbrd %s %d", ADDON)
         self.assertIn("requested == 'warble' or requested == 'warblecomplete'", BRD)
         self.assertIn("pstart_brd_v1_mechanic_duty_active()", BRD)
+        self.assertIn("PSTART_BRD_V1_SONG_WINDOW = 6", BRD)
+        self.assertIn("pstart_brd.v1_song_window_available = false", BRD)
         maintenance = BRD.split("local function pstart_brd_maintenance", 1)[1]
         maintenance = maintenance.split("\nend", 1)[0]
         self.assertLess(

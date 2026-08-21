@@ -194,6 +194,8 @@ local pstart_brd = {
     startup_ja_index = 1,
     v1_combat_started = false,
     v1_combat_announced = false,
+    v1_song_window_until = 0,
+    v1_song_window_available = false,
 }
 
 local PSTART_BRD_DEBUFF_RETRY = 90
@@ -202,6 +204,7 @@ local PSTART_BRD_WARBLE_WINDOW = 4.25
 local PSTART_BRD_URCHIN_SLEEP_WINDOW = 15
 local PSTART_BRD_URCHIN_APPEAR_DELAY = 0.15
 local PSTART_BRD_URCHIN_DISCOVERY_WINDOW = 2
+local PSTART_BRD_V1_SONG_WINDOW = 6
 local PSTART_BRD_HORDE_MAX_RADIUS = 8
 local PSTART_BRD_REISSUE_DELAY = 1.25
 local PSTART_BRD_SLEEP_CHOICES = {
@@ -378,6 +381,8 @@ local function pstart_brd_reset_reactions()
     pstart_brd.startup_ja_index = 1
     pstart_brd.v1_combat_started = false
     pstart_brd.v1_combat_announced = false
+    pstart_brd.v1_song_window_until = 0
+    pstart_brd.v1_song_window_available = false
 end
 
 local function pstart_brd_clear_urchin_sleep()
@@ -803,6 +808,11 @@ local function pstart_brd_queue_warble(ability)
         blocker_reported = false,
         last_blocker = nil,
     }
+    -- A new warning always closes the post-Warble maintenance slot. Even when
+    -- the matching Barspell is already active, Barney must not start a song
+    -- during the warning itself.
+    pstart_brd.v1_song_window_until = 0
+    pstart_brd.v1_song_window_available = false
     add_to_chat(158, ('PartyStart BRD trigger: %s -> reserve %s.')
         :format(ability.en, reaction.spell))
     -- Wake Selendrile's heartbeat immediately if another action currently
@@ -830,6 +840,11 @@ local function pstart_brd_complete_warble(ability)
     end
     pstart_brd.last_warble_complete_key = completion_key
     pstart_brd.last_warble_complete_at = now
+    -- One routine song may be repaired immediately after the mechanic. This is
+    -- a bounded fallback for long fights or unavailable Troubadour, rather than
+    -- unrestricted song casting at arbitrary times between Warbles.
+    pstart_brd.v1_song_window_until = now + PSTART_BRD_V1_SONG_WINDOW
+    pstart_brd.v1_song_window_available = true
 
     local request = pstart_brd.warble
     if request and request.ability == ability.en
@@ -1001,8 +1016,9 @@ local function pstart_brd_maintenance(profile)
     if pstart_brd_v1_mechanic_duty_active() then
         -- Once Breadwinner is engaged, the encounter guide assigns Barney to
         -- Barspell duty. Only a near-death Cure and default Barstone repair are
-        -- allowed between reactive casts; songs, Elegy, and routine buffs wait
-        -- until the profile is reapplied outside combat.
+        -- allowed between reactive casts. The normal GearSwap job tick owns a
+        -- separate one-song post-Warble repair slot; this independent heartbeat
+        -- never becomes a second song scheduler.
         if pstart_brd_cast_self_heal(profile) then return true end
         return pstart_brd_cast_default_bar(profile)
     end
@@ -1201,7 +1217,21 @@ function check_song()
     if pstart_brd_cast_urchin_sleep() then return true end
     if pstart_brd_v1_mechanic_duty_active() then
         if pstart_brd_cast_self_heal(profile) then return true end
-        return pstart_brd_cast_default_bar(profile)
+        if pstart_brd_cast_default_bar(profile) then return true end
+        local now = os.clock()
+        if pstart_brd.v1_song_window_available
+            and now <= (pstart_brd.v1_song_window_until or 0)
+            and pstart_brd_original_check_song
+            and pstart_brd_original_check_song()
+        then
+            pstart_brd.v1_song_window_available = false
+            pstart_brd.v1_song_window_until = 0
+            return true
+        end
+        if now > (pstart_brd.v1_song_window_until or 0) then
+            pstart_brd.v1_song_window_available = false
+        end
+        return false
     end
     if pstart_brd_cast_self_heal(profile) then return true end
     if pstart_brd_cast_sleep() then return true end

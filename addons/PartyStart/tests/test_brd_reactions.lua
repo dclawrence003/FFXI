@@ -142,9 +142,10 @@ silent_can_use = function() return true end
 add_to_chat = function() end
 update_job_states = function() end
 local native_check_song_calls = 0
+local native_song_result = false
 check_song = function()
     native_check_song_calls = native_check_song_calls + 1
-    return false
+    return native_song_result
 end
 
 assert(loadfile('addons/PartyStart/gearswap/PartyStart_BRD.lua'))()
@@ -288,10 +289,17 @@ job_aftercast({
     interrupted=false,
 }, nil, {})
 assert(selected_target == housemaker, 'prior observer target was not restored')
+-- Combat permits exactly one native-song repair in the short window following
+-- a completed Warble. This keeps long fights buffed without arbitrary casts.
 local song_calls_in_combat = native_check_song_calls
+native_song_result = true
 check_song()
-assert(native_check_song_calls == song_calls_in_combat,
-    'V1 mechanic duty allowed routine song casting after engagement')
+assert(native_check_song_calls == song_calls_in_combat + 1,
+    'V1 post-Warble song repair window did not reach the native scheduler')
+native_song_result = false
+check_song()
+assert(native_check_song_calls == song_calls_in_combat + 1,
+    'V1 post-Warble song repair window allowed more than one song')
 
 local function command_count(needle)
     local count = 0
