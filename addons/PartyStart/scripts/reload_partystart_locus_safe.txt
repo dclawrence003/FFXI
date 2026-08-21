@@ -1,0 +1,24 @@
+echo PartyStart-only Locus recovery beginning. GearSwap, PartyCombat, and FastFollow are untouched.
+send Dolomedes lua r PartyStart
+wait 3
+send Tackleberry lua r PartyStart
+wait 3
+send Kickpuncher lua r PartyStart
+wait 3
+send Barneystinson lua r PartyStart
+wait 3
+send Smalls lua r PartyStart
+wait 3
+send Achoo lua r PartyStart
+wait 5
+send Dolomedes pstart use progression locusbats
+wait 12
+send Dolomedes pstart status
+send Dolomedes pc status
+send Dolomedes r2 status
+send Tackleberry gs c pstartpld status
+send Kickpuncher gs c pstartdnc status
+send Barneystinson gs c pstartbrd status
+send Smalls gs c pstartrdm status
+send Achoo gs c pstartgeo status
+echo Recovery complete. Confirm PartyStart client acknowledgements 6/6 before //pc on.

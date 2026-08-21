@@ -19,6 +19,9 @@ LOCUS_RELOAD = (ROOT / "scripts" / "reload_locusbats_safe.txt").read_text(
 LOCUS_ACTIVATE = (
     ROOT / "scripts" / "activate_locusbats_safe.txt"
 ).read_text(encoding="utf-8")
+LOCUS_PARTYSTART_RELOAD = (
+    ROOT / "scripts" / "reload_partystart_locus_safe.txt"
+).read_text(encoding="utf-8")
 
 
 class PartyStartSourceGuards(unittest.TestCase):
@@ -141,6 +144,21 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("and session.decision == 'commit'", prerender)
         self.assertIn("announce_decision(session)", prerender)
         self.assertIn("if not session or session.applied", ADDON)
+        self.assertIn("STATE_SYNC_INTERVAL = 2", ADDON)
+        self.assertIn("local applied_generations = {}", ADDON)
+        self.assertIn("math.floor(os.clock() * 1000) * 1000", ADDON)
+        self.assertIn("local function announce_state(session)", ADDON)
+        self.assertIn("announce_state(active_session)", prerender)
+        self.assertGreaterEqual(ADDON.count("if applied_generations[nonce]"), 2)
+        apply_profile = ADDON.split("local function apply_profile", 1)[1]
+        apply_profile = apply_profile.split(
+            "local function schedule_zone_rearm", 1
+        )[0]
+        self.assertIn(
+            "applied_generations[session.nonce] = true", apply_profile
+        )
+        self.assertIn("acknowledge_profile(session)", apply_profile)
+        self.assertIn("elseif kind == 'ack' then", ADDON)
 
     def test_job_change_suspends_then_revalidates(self):
         self.assertIn("windower.register_event('job change'", ADDON)
@@ -498,7 +516,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.7'", ADDON)
+        self.assertIn("_addon.version = '1.4.8'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -518,7 +536,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.7'", ADDON)
+        self.assertIn("_addon.version = '1.4.8'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -568,7 +586,9 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("windower.register_event('gain buff'", ADDON)
         self.assertIn("buff_id == 269", ADDON)
         self.assertIn("schedule_zone_rearm(3)", ADDON)
-        for script in (LOCUS_RELOAD, LOCUS_ACTIVATE):
+        for script in (
+            LOCUS_RELOAD, LOCUS_ACTIVATE, LOCUS_PARTYSTART_RELOAD
+        ):
             self.assertIn("pstart use progression locusbats", script)
             self.assertIn("pstart status", script)
             self.assertIn("pc status", script)
@@ -588,6 +608,16 @@ class PartyStartSourceGuards(unittest.TestCase):
             LOCUS_RELOAD.index("pstart use progression locusbats"),
         )
         self.assertIn("wait 12", LOCUS_RELOAD)
+        self.assertNotIn("gs reload", LOCUS_PARTYSTART_RELOAD.lower())
+        self.assertNotIn("lua r PartyCombat", LOCUS_PARTYSTART_RELOAD)
+        self.assertNotIn("ffo ", LOCUS_PARTYSTART_RELOAD.lower())
+        for name in (
+            "Dolomedes", "Tackleberry", "Kickpuncher", "Barneystinson",
+            "Smalls", "Achoo",
+        ):
+            self.assertIn(
+                f"send {name} lua r PartyStart", LOCUS_PARTYSTART_RELOAD
+            )
 
     def test_support_stop_and_reload_revoke_stale_combat_readiness(self):
         self.assertIn("issue('pc invalidate partystart')", ADDON)

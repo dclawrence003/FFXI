@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.7'
+_addon.version = '1.4.8'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -22,7 +22,9 @@ local DISCOVERY_TIMEOUT = 8
 local START_RETRY_INTERVAL = 0.75
 local DECISION_RETRY_INTERVAL = 0.75
 local DECISION_RETRY_WINDOW = 5
+local STATE_SYNC_INTERVAL = 2
 local sessions = {}
+local applied_generations = {}
 local current_profile = nil
 local current_composition = nil
 local autows2_owned = false
@@ -30,6 +32,7 @@ local last_profile = 'master'
 local last_composition = 'progression'
 local next_maintenance = 0
 local MAINTENANCE_INTERVAL = 0.75
+local next_state_sync = 0
 local zone_rearm_at = nil
 local active_session = nil
 local zone_epoch = 0
@@ -613,8 +616,13 @@ end
 
 local function new_nonce(player)
     nonce_counter = nonce_counter + 1
+    -- os.time alone can repeat when PartyStart is reloaded and restarted in the
+    -- same second. Process-clock milliseconds survive an addon reload and keep
+    -- the generation distinct for clients that still remember the old nonce.
+    local clock_token = math.floor(os.clock() * 1000) * 1000
+        + (nonce_counter % 1000)
     return ('%d-%d-%d'):format(
-        os.time(), player and player.id or 0, nonce_counter)
+        os.time(), player and player.id or 0, clock_token)
 end
 
 local function split(value, separator)
@@ -1067,6 +1075,28 @@ local function announce_decision(session)
     session.next_decision_at = os.clock() + DECISION_RETRY_INTERVAL
 end
 
+local function announce_state(session)
+    if not session or session.decision ~= 'commit'
+        or not session.encoded_roster
+    then
+        return
+    end
+    -- Start plus the consolidated decision form a self-contained state beacon.
+    -- A client that missed the original commit window (or reloaded PartyStart
+    -- later) can reconstruct the session and converge without making clients
+    -- that already applied this generation restart their job controllers.
+    announce_start(session)
+    announce_decision(session)
+end
+
+local function acknowledge_profile(session)
+    local player = windower.ffxi.get_player()
+    if not session or not player or not valid_name(player.name) then return end
+    send_ipc{
+        PREFIX, 'ack', session.nonce, player.name, session.profile,
+    }
+end
+
 local function decode_roster(session, encoded)
     local roster = {}
     if type(encoded) ~= 'string' then return roster end
@@ -1433,7 +1463,10 @@ local function apply_profile(session)
     active_session = session
     last_profile = session.profile
     last_composition = session.composition
+    applied_generations[session.nonce] = true
+    next_state_sync = 0
     reset_encounter_guards(current_profile)
+    acknowledge_profile(session)
     chat(158, ('%s/%s ready as %s/%s; AutoWS2 %s; PartyCombat policy %s.')
         :format(session.composition, session.profile,
             player.main_job, player.sub_job,
@@ -1522,6 +1555,7 @@ local function begin(composition_name, profile_name, preview, revalidation)
         next_start_at = 0,
         next_report_at = 0,
         applied = false,
+        acks = {},
     }
     sessions[nonce] = session
     pending_revalidation = nil
@@ -1573,6 +1607,7 @@ local function stop_local(options)
     zone_rearm_at = nil
     zone_epoch = zone_epoch + 1
     next_maintenance = 0
+    next_state_sync = 0
     if not options.preserve_revalidation then
         pending_revalidation = nil
         job_revalidate_at = nil
@@ -1615,6 +1650,10 @@ windower.register_event('ipc message', function(message)
     if not valid_nonce(nonce) then return end
 
     if kind == 'start' then
+        -- Persistent state beacons are deliberately repetitive. Remember each
+        -- applied generation for this addon lifetime so an old beacon cannot
+        -- restart songs, rolls, colures, or opening rotations.
+        if applied_generations[nonce] then return end
         local composition_name = normalize_composition(fields[4])
         local composition = composition_name and compositions[composition_name]
         local profile_name = fields[5]
@@ -1644,6 +1683,7 @@ windower.register_event('ipc message', function(message)
             discovery_deadline = os.clock() + DISCOVERY_TIMEOUT,
             next_report_at = 0,
             applied = false,
+            acks = {},
         }
         pending_revalidation = nil
         job_revalidate_at = nil
@@ -1656,6 +1696,7 @@ windower.register_event('ipc message', function(message)
             session.roster[name] = {main_job=main_job, sub_job=sub_job}
         end
     elseif kind == 'decision' then
+        if applied_generations[nonce] then return end
         local session = sessions[nonce]
         local decision, encoded, requester = fields[4], fields[5], fields[6]
         if not session or session.applied
@@ -1674,6 +1715,21 @@ windower.register_event('ipc message', function(message)
         elseif decision == 'commit' then
             chat(167, 'Rejected an invalid consolidated PartyStart commit; '
                 ..'no automation changed on this client.')
+        end
+    elseif kind == 'ack' then
+        local session = sessions[nonce]
+        if not session and active_session
+            and active_session.nonce == nonce
+        then
+            session = active_session
+        end
+        local name, profile_name = fields[4], fields[5]
+        if session and valid_name(name)
+            and profile_name == session.profile
+            and contains_name(session.names, name)
+        then
+            session.acks = session.acks or {}
+            session.acks[name:lower()] = true
         end
     elseif kind == 'stop' then
         stop_local{invalidate_combat=true}
@@ -1761,6 +1817,20 @@ windower.register_event('prerender', function()
         then
             sessions[nonce] = nil
         end
+    end
+
+    -- The short discovery/decision retry window makes startup fast, but it
+    -- cannot guarantee delivery while one client is settling after a zone or
+    -- battlefield exit. Keep publishing the one validated active generation.
+    -- applied_generations makes this a convergence heartbeat, not a periodic
+    -- profile restart.
+    if active_session and is_requester(active_session)
+        and active_session.decision == 'commit'
+        and active_session.encoded_roster
+        and now >= next_state_sync
+    then
+        next_state_sync = now + STATE_SYNC_INTERVAL
+        announce_state(active_session)
     end
 
     if pending_revalidation and job_revalidate_at
@@ -1884,6 +1954,19 @@ windower.register_event('addon command', function(command, ...)
         chat(207, ('Active: %s/%s | Selected: %s/%s')
             :format(current_composition or 'off', current_profile or 'off',
                 last_composition, last_profile))
+        if active_session then
+            local acknowledged = 0
+            for _, name in ipairs(active_session.names or {}) do
+                if active_session.acks
+                    and active_session.acks[name:lower()]
+                then
+                    acknowledged = acknowledged + 1
+                end
+            end
+            chat(207, ('Generation %s | client acknowledgements %d/%d')
+                :format(active_session.nonce, acknowledged,
+                    #(active_session.names or {})))
+        end
     elseif command == 'version' then
         chat(207, ('Version %s | selected %s/%s')
             :format(_addon.version, last_composition, last_profile))

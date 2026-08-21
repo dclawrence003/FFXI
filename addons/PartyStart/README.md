@@ -190,6 +190,20 @@ For recovery when no code reload is needed, use
 verification pass. Do not arm combat until PartyStart reports
 `Active: progression/locusbats`, PartyCombat reports `support-ready Yes`, and
 the role controllers report active.
+When only PartyStart itself changed, use
+`//exec reload_partystart_locus_safe.txt`. It staggers the six PartyStart
+reloads, reapplies `progression/locusbats`, and prints every role status without
+reloading GearSwap, PartyCombat, or touching FastFollow.
+
+PartyStart 1.4.8 republishes the active validated generation every two seconds.
+A client that misses the initial multibox commit, commonly while settling after
+a battlefield exit or profile transition, reconstructs and applies that exact
+generation automatically. Applied generation IDs are remembered in memory, so
+this heartbeat does not restart songs, rolls, colures, or opening rotations.
+`//pstart status` reports client acknowledgements; wait for `6/6` before leaving
+an unattended camp. This repairs PartyStart delivery, but it is not a substitute
+for reloading a GearSwap file whose controller source actually changed.
+
 Load GearSwap changes by restarting the affected clients normally, or reload
 GearSwap on one named client at a time with several seconds between clients.
 
