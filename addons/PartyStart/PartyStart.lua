@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.8'
+_addon.version = '1.4.9'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -619,8 +619,11 @@ local function new_nonce(player)
     -- os.time alone can repeat when PartyStart is reloaded and restarted in the
     -- same second. Process-clock milliseconds survive an addon reload and keep
     -- the generation distinct for clients that still remember the old nonce.
-    local clock_token = math.floor(os.clock() * 1000) * 1000
-        + (nonce_counter % 1000)
+    -- Keep the token below one billion. Windower's 32-bit Lua formatter can
+    -- turn a larger %d value negative; receivers intentionally reject a
+    -- negative nonce before creating a session.
+    local clock_millis = math.floor((os.clock() % 1000) * 1000)
+    local clock_token = clock_millis * 1000 + (nonce_counter % 1000)
     return ('%d-%d-%d'):format(
         os.time(), player and player.id or 0, clock_token)
 end

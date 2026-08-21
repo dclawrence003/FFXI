@@ -146,7 +146,8 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("if not session or session.applied", ADDON)
         self.assertIn("STATE_SYNC_INTERVAL = 2", ADDON)
         self.assertIn("local applied_generations = {}", ADDON)
-        self.assertIn("math.floor(os.clock() * 1000) * 1000", ADDON)
+        self.assertIn("math.floor((os.clock() % 1000) * 1000)", ADDON)
+        self.assertIn("clock_millis * 1000 + (nonce_counter % 1000)", ADDON)
         self.assertIn("local function announce_state(session)", ADDON)
         self.assertIn("announce_state(active_session)", prerender)
         self.assertGreaterEqual(ADDON.count("if applied_generations[nonce]"), 2)
@@ -159,6 +160,14 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
         self.assertIn("acknowledge_profile(session)", apply_profile)
         self.assertIn("elseif kind == 'ack' then", ADDON)
+
+    def test_generation_nonce_token_is_safe_for_windower_32_bit_formatting(self):
+        for clock_value in (0, 0.001, 999.999, 1000, 86400, 999999):
+            clock_millis = int((clock_value % 1000) * 1000)
+            for counter in (1, 999, 1000, 1000000):
+                token = clock_millis * 1000 + (counter % 1000)
+                self.assertGreaterEqual(token, 0)
+                self.assertLess(token, 1_000_000_000)
 
     def test_job_change_suspends_then_revalidates(self):
         self.assertIn("windower.register_event('job change'", ADDON)
@@ -516,7 +525,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.8'", ADDON)
+        self.assertIn("_addon.version = '1.4.9'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -536,7 +545,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.8'", ADDON)
+        self.assertIn("_addon.version = '1.4.9'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,

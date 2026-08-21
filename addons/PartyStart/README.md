@@ -195,7 +195,7 @@ When only PartyStart itself changed, use
 reloads, reapplies `progression/locusbats`, and prints every role status without
 reloading GearSwap, PartyCombat, or touching FastFollow.
 
-PartyStart 1.4.8 republishes the active validated generation every two seconds.
+PartyStart 1.4.9 republishes the active validated generation every two seconds.
 A client that misses the initial multibox commit, commonly while settling after
 a battlefield exit or profile transition, reconstructs and applies that exact
 generation automatically. Applied generation IDs are remembered in memory, so
