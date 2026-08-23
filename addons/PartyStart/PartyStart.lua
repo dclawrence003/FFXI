@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.4.9'
+_addon.version = '1.5.0'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -203,6 +203,53 @@ local profiles = {
             {'Addle II', 'Addle'},
         },
     },
+    fishfly = {
+        label = 'Vermillion Fishfly: BLU AoE Support',
+        -- The popper receives independent hate from every fly. Tackleberry
+        -- therefore activates the junction and remains disengaged: autoattacks
+        -- must not push one fly ahead of Dolo's synchronized BLU AoE burn.
+        -- Dolo remains the manual command leader but is deliberately not an
+        -- authorized PartyCombat attacker/targeter. Achoo alone is authorized
+        -- because offensive GEO bubbles and Entrust are gated on combat.
+        stationary = true,
+        target_source = 'command_leader',
+        attackers = {'Achoo'},
+        force_autows2_off = true,
+        reraise = true,
+        pld_controller = true,
+        brd = {'Sage Etude', "Sentinel's Scherzo", 'Victory March'},
+        geo = {indi='Acumen', geo='Malaise', entrust='INT', lean=true,
+            zerg=false, entrust_jobs={'BLU'}},
+        rdm = {
+            haste_scope='attackers', refresh_scope='mp',
+            phalanx_scope='tank', defense_scope='party',
+            gearswap_healing=true, status_removal=false,
+        },
+        brd_debuffs = {},
+        rdm_debuffs = {},
+        required_sub_jobs = {
+            Barneystinson = {
+                jobs={'WHM'},
+                reason='Baraera/Barsilencera and emergency recovery',
+            },
+            Smalls = {
+                jobs={'WHM'},
+                reason='backup cures and recovery after the magic counter volley',
+            },
+            Achoo = {
+                jobs={'WHM'},
+                reason='backup recovery after Acumen/Malaise/Entrust are established',
+            },
+        },
+        advisories = {
+            'Fishfly: use the progression-blu composition. Tackleberry must activate the Ethereal Junction so all independent opening hate begins on the PLD.',
+            'Fishfly: the flies are immune to Sleep, Bind, Gravity, and Petrification. No single-target debuff, Step, melee, or automatic weapon-skill rotation is armed.',
+            'Fishfly: Barney maintains Sage Etude, Scherzo, March, Baraera, and Barsilencera. Smalls maintains Shell/Phalanx/Haste/Refresh and prioritizes cures; HealBot Erase work is suppressed during the burn.',
+            'Fishfly: Achoo must stand beside Dolo, engage Dolo\'s selected fly, and establish Indi-Acumen, Geo-Malaise, and entrusted Indi-INT. AutoZerg/Bolster is deliberately Off.',
+            'Fishfly: after support is established, Dolo manually targets, engages, and uses his own BLU AoE rotation. PartyCombat observes his damage target but never authorizes or steers Dolo.',
+            'Fishfly: magic damage triggers Debilitating Drone and the first early death makes every survivor weapon-skill. Keep HP balanced and finish the pack as close together as possible.',
+        },
+    },
     safe = {
         cor = {'chaos', 'gallant'},
         brd = {'Victory March', "Sentinel's Scherzo", 'Blade Madrigal'},
@@ -338,6 +385,10 @@ local profile_aliases = {
     ambu2 = 'ambuscade-v2',
     ambuv2 = 'ambuscade-v2',
     ['ambu-v2'] = 'ambuscade-v2',
+    vermillion = 'fishfly',
+    vermillionfishfly = 'fishfly',
+    vfishfly = 'fishfly',
+    fishflies = 'fishfly',
 }
 
 local composition_warning = nil
@@ -1272,16 +1323,18 @@ local function apply_rdm(
     issue(('gs c pstartrdm %s %s %s %s %s %s'):format(
         profile_name, target_source, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets), csv(defense_targets)))
+    local status_removal = encounter_policy.status_removal == false
+        and 'hb disable na; ' or 'hb enable na; '
     if sustained or encounter_policy.gearswap_healing then
         -- GearSwap owns all HP decisions in the sustained profile. HealBot is
         -- retained on RDM only for packet-backed status removal; letting it
         -- also cure creates a race with PLD and drains the RDM first.
         issue('hb deactivateindoors off; hb disable cure; '
-            ..'hb enable na; hb disable buff; hb db off; '
+            ..status_removal..'hb disable buff; hb db off; '
             ..'hb as off; hb as attack off; hb on')
     else
         issue('hb deactivateindoors off; hb enable cure; hb mincure 1; '
-            ..'hb enable na; hb disable buff; hb db off; '
+            ..status_removal..'hb disable buff; hb db off; '
             ..'hb as off; hb as attack off; hb on')
     end
 end
@@ -1323,6 +1376,11 @@ local function apply_geo(player, profile_name, profile, roster)
     else
         issue('gs c pstartgeo restore')
     end
+    if geo.zerg == false then
+        issue('gs c unset AutoZergMode')
+    elseif geo.zerg == true then
+        issue('gs c set AutoZergMode')
+    end
     issue(('gs c autoindi %s; gs c autogeo %s; gs c autoentrust %s; '
         ..'gs c autoentrustee %s; gs c set AutoBuffMode Auto')
         :format(geo.indi, geo.geo, geo.entrust, entrustee))
@@ -1333,10 +1391,21 @@ end
 local function apply_pld(profile_name, profile, leader)
     -- AutoTankMode and AutoWSMode are boolean Mote states. Boolean states use
     -- `set`/`unset`; appending true/false does not reliably change them.
-    issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
-        ..'gs c unset AutoTankFull; '
-        ..'gs c set HybridMode Tank; '
-        ..'gs c unset AutoWSMode')
+    if profile_name == 'fishfly' then
+        -- The pop itself gives Tackleberry hate on all ten flies. Native
+        -- AutoTank would otherwise cast Flash/Provoke at only one target and
+        -- undermine the synchronized AoE kill; the PartyStart PLD controller
+        -- still owns Majesty recovery and emergency defensive cooldowns.
+        issue('gs c set AutoBuffMode Auto; gs c unset AutoTankMode; '
+            ..'gs c unset AutoTankFull; '
+            ..'gs c set HybridMode Tank; '
+            ..'gs c unset AutoWSMode')
+    else
+        issue('gs c set AutoBuffMode Auto; gs c set AutoTankMode; '
+            ..'gs c unset AutoTankFull; '
+            ..'gs c set HybridMode Tank; '
+            ..'gs c unset AutoWSMode')
+    end
     if profile.sustained or profile.pld_controller then
         -- HealBot's optional PartyOps gate can reject a newer PartyOps phase
         -- before action selection. The PLD controller therefore lives in
@@ -1451,11 +1520,18 @@ local function apply_profile(session)
         apply_cor(profile)
     elseif player.main_job == 'BLU' then
         -- Uses the existing BLU GearSwap command surface; no BLU file is changed.
-        issue('gs c set AutoBuffMode Auto')
+        -- Fishfly is intentionally driven by the user: do not even change
+        -- Dolo's AutoBuffMode in that isolated profile.
+        if session.profile ~= 'fishfly' then
+            issue('gs c set AutoBuffMode Auto')
+        end
         issue('hb db off; hb as off; hb as attack off; hb off')
     end
 
-    if profile.physical_offense then
+    if profile.force_autows2_off then
+        issue('aws2 off')
+        autows2_owned = false
+    elseif profile.physical_offense then
         apply_physical_offense(player, composition, session.attackers)
     else
         stop_owned_autows2()
@@ -1980,12 +2056,12 @@ windower.register_event('addon command', function(command, ...)
         chat(207, 'Compositions: '..table.concat(names, ', '))
         chat(207, 'Profiles: master (Apex Efts), apexbats (bats), '
             ..'locusbats (locus/direbats/tombbats), apexcrabs (crabs), '
-            ..'limbus (lim), physical, accuracy, magic, safe, '
+            ..'limbus (lim), fishfly (vermillion), physical, accuracy, magic, safe, '
             ..'ambuscade-v1 (v1), ambuscade-v2 (v2)')
     else
         chat(207, 'Commands: use <composition> <profile> | preview '
             ..'<composition> <profile> | on | off | master | apexbats | '
-            ..'locusbats | apexcrabs | limbus | sleep | '
+            ..'locusbats | apexcrabs | limbus | fishfly | sleep | '
             ..'physical | accuracy | magic | safe | v1 | v2 | status | '
             ..'version | list')
     end
@@ -2000,7 +2076,8 @@ end)
 
 chat(158, 'Loaded v'.._addon.version..'. Sustained aliases: '
     ..'//pstart efts, bats, or crabs. '
-    ..'Limbus: //pstart limbus; Ambuscade: //pstart v1 or v2.')
+    ..'Limbus: //pstart limbus; Fishfly: //pstart blu fishfly; '
+    ..'Ambuscade: //pstart v1 or v2.')
 if composition_warning then
     chat(167, 'Composition policy unavailable; activation is blocked. '
         ..composition_warning)

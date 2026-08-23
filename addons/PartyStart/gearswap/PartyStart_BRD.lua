@@ -7,7 +7,7 @@
 --     include('Common/PartyStart_BRD.lua')
 --
 -- PartyStart drives it with:
---     gs c pstartbrd <master|apexbats|locusbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
+--     gs c pstartbrd <master|apexbats|locusbats|apexcrabs|limbus|fishfly|physical|accuracy|magic|safe|ambuscade-v1|ambuscade-v2> <leader>
 --     gs c pstartbrd sleep
 --     gs c pstartbrd off
 
@@ -115,6 +115,28 @@ local pstart_brd_profiles = {
             {'Carnage Elegy', 'Battlefield Elegy'},
             {'Pining Nocturne'},
         },
+    },
+    fishfly = {
+        song_mode = 'Fishfly',
+        self_heal_hpp = 45,
+        startup_jas = {'Nightingale', 'Troubadour'},
+        self_buffs = {
+            {spell='Reraise', buff='Reraise'},
+        },
+        -- One high-tier INT Etude improves Dolo's magical Blue Magic without
+        -- introducing same-icon double-Etude tracking into the proven song
+        -- scheduler. Scherzo is the pack-counter safety layer; March shortens
+        -- casting/recast when Dolo's own magic-haste buffs are not capped.
+        songs = {
+            {spell='Sage Etude', buff='etude'},
+            {spell="Sentinel's Scherzo", buff='scherzo'},
+            {spell='Victory March', buff='march'},
+        },
+        party_buffs = {
+            {spell='Baraera', buff='Baraero'},
+            {spell='Barsilencera', buff='Barsilence'},
+        },
+        debuffs = {},
     },
     safe = {
         song_mode = 'Tank',
@@ -1188,7 +1210,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart BRD usage: gs c pstartbrd '
-            ..'<master|apexbats|locusbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'<master|apexbats|locusbats|apexcrabs|limbus|fishfly|physical|accuracy|magic|safe|ambuscade-v1|'
             ..'ambuscade-v2|off> <leader>; or gs c pstartbrd sleep')
     end
 

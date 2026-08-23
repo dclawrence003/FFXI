@@ -30,6 +30,7 @@ local PSTART_DNC_ACTIONS = {
 }
 
 local PSTART_DNC_EMERGENCY_HPP = 42
+local PSTART_DNC_FISHFLY_EMERGENCY_HPP = 65
 local PSTART_DNC_CRITICAL_HPP = 25
 local PSTART_DNC_STEP_RETRY = 45
 local PSTART_DNC_NO_FOOT_RISE_HEALTHY_HPP = 70
@@ -248,11 +249,15 @@ local function pstart_dnc_action()
     end
 
     local lowest = pstart_dnc_lowest_party_member()
-    if lowest and lowest.hpp < PSTART_DNC_EMERGENCY_HPP then
+    local heal_only = pstart_dnc.profile == 'fishfly'
+    local emergency_hpp = heal_only
+        and PSTART_DNC_FISHFLY_EMERGENCY_HPP
+        or PSTART_DNC_EMERGENCY_HPP
+    if lowest and lowest.hpp < emergency_hpp then
         -- AutoWS2 normally consumes TP at 1000. Pause it before that threshold
         -- so the DNC can actually accumulate enough TP for a Waltz instead of
         -- being only an opportunistic healer.
-        if not pstart_dnc.autows_paused then
+        if not heal_only and not pstart_dnc.autows_paused then
             windower.send_command('aws2 off')
             pstart_dnc.autows_paused = true
             add_to_chat(207,
@@ -273,6 +278,13 @@ local function pstart_dnc_action()
         windower.send_command('aws2 on')
         pstart_dnc.autows_paused = false
         pstart_dnc.last_action = 'party stabilized; AutoWS2 resumed'
+    end
+
+    if heal_only then
+        -- One premature single-target kill triggers the surviving swarm's
+        -- collective TP-move volley. Fishfly therefore grants DNC only its
+        -- TP-funded emergency Waltz path: no Samba, Step, Flourish, or AutoWS.
+        return false
     end
 
     if pstart_dnc_haste_samba() then return true end
@@ -320,7 +332,7 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_dnc.autows_paused = false
         add_to_chat(122, 'PartyStart DNC support is Off.')
     elseif requested and S{
-        'master','apexbats','locusbats','apexcrabs','limbus','physical','accuracy','magic','safe',
+        'master','apexbats','locusbats','apexcrabs','limbus','fishfly','physical','accuracy','magic','safe',
         'ambuscade-v1','ambuscade-v2'
     }:contains(requested)
         and pstart_dnc_valid_name(commandArgs[3])
@@ -333,16 +345,22 @@ function user_job_self_command(commandArgs, eventArgs)
         pstart_dnc.stepped_targets = {}
         pstart_dnc.autows_paused = false
         tickdelay = 0
-        add_to_chat(122,
-            'PartyStart DNC: Haste Samba, Box Step, safe No Foot Rise, '
-            ..'Reverse Flourish, and emergency Waltz are On; Saber Dance remains Off.')
+        if requested == 'fishfly' then
+            add_to_chat(122,
+                'PartyStart DNC Fishfly: emergency Waltz support is On; '
+                ..'melee, Samba, Steps, Flourishes, and AutoWS remain Off.')
+        else
+            add_to_chat(122,
+                'PartyStart DNC: Haste Samba, Box Step, safe No Foot Rise, '
+                ..'Reverse Flourish, and emergency Waltz are On; Saber Dance remains Off.')
+        end
         -- PartyStart configures AutoWS2 immediately after this command. The
         -- shared maintenance heartbeat performs the first DNC action after
         -- that ownership handoff, allowing emergency mode to pause it safely.
     else
         add_to_chat(123,
             'PartyStart DNC usage: gs c pstartdnc '
-            ..'<master|apexbats|locusbats|apexcrabs|limbus|physical|accuracy|magic|safe|ambuscade-v1|'
+            ..'<master|apexbats|locusbats|apexcrabs|limbus|fishfly|physical|accuracy|magic|safe|ambuscade-v1|'
             ..'ambuscade-v2|status|off> <leader>')
     end
 end
@@ -350,6 +368,11 @@ end
 local pstart_dnc_original_user_job_tick = user_job_tick
 function user_job_tick()
     if pstart_dnc_action() then return true end
+    if pstart_dnc.active and pstart_dnc.profile == 'fishfly' then
+        -- Consume the idle heartbeat as well: no native DNC automation may
+        -- slip a Samba, Step, or Flourish between emergency-Waltz checks.
+        return true
+    end
     if pstart_dnc_original_user_job_tick then
         return pstart_dnc_original_user_job_tick()
     end

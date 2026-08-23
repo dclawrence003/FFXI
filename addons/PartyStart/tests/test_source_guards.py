@@ -22,6 +22,9 @@ LOCUS_ACTIVATE = (
 LOCUS_PARTYSTART_RELOAD = (
     ROOT / "scripts" / "reload_partystart_locus_safe.txt"
 ).read_text(encoding="utf-8")
+FISHFLY_RELOAD = (
+    ROOT / "scripts" / "reload_fishfly_safe.txt"
+).read_text(encoding="utf-8")
 
 
 class PartyStartSourceGuards(unittest.TestCase):
@@ -525,7 +528,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         brd = BRD.split("    apexbats = {", 1)[1].split(
             "    locusbats = {", 1
         )[0]
-        self.assertIn("_addon.version = '1.4.9'", ADDON)
+        self.assertIn("_addon.version = '1.5.0'", ADDON)
         self.assertIn("label = 'Sustained Apex Bats: Dho Gates'", addon)
         self.assertIn("sustained = true", addon)
         self.assertIn("Mage's Ballad III", addon)
@@ -540,12 +543,12 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("apexbats=true", PLD)
         self.assertIn("PSTART_PLD_SUSTAINED_PROFILES", PLD)
         self.assertIn(
-            "'master','apexbats','locusbats','apexcrabs','limbus','physical'",
+            "'master','apexbats','locusbats','apexcrabs','limbus','fishfly','physical'",
             DNC,
         )
 
     def test_friendly_composition_profile_shorthand_and_version_diagnostic(self):
-        self.assertIn("_addon.version = '1.4.9'", ADDON)
+        self.assertIn("_addon.version = '1.5.0'", ADDON)
         self.assertIn(
             "direct_composition and compositions[direct_composition] and args[1]",
             ADDON,
@@ -705,7 +708,7 @@ class PartyStartSourceGuards(unittest.TestCase):
         for profile in (master, bats, locus_bats, crabs):
             self.assertIn("sustained = true", profile)
             self.assertIn("stationary = true", profile)
-        self.assertEqual(4, ADDON.count("stationary = true"))
+        self.assertEqual(5, ADDON.count("stationary = true"))
         self.assertIn("profile.stationary and 'stationary' or 'mobile'", ADDON)
 
     def test_limbus_is_mobile_dolo_driven_and_has_one_shot_pack_sleep(self):
@@ -738,7 +741,68 @@ class PartyStartSourceGuards(unittest.TestCase):
         self.assertIn("debuff_mp_floor = 35", rdm)
         self.assertIn("limbus=true", PLD)
         self.assertIn("pstart_pld.profile == 'limbus'", PLD)
-        self.assertIn("'apexcrabs','limbus','physical'", DNC)
+        self.assertIn("'apexcrabs','limbus','fishfly','physical'", DNC)
+
+    def test_fishfly_is_isolated_blu_aoe_support(self):
+        addon = ADDON.split("    fishfly = {", 1)[1].split(
+            "    safe = {", 1
+        )[0]
+        rdm = RDM.split("    fishfly = {", 1)[1].split(
+            "    safe = {", 1
+        )[0]
+        brd = BRD.split("    fishfly = {", 1)[1].split(
+            "    safe = {", 1
+        )[0]
+        blu = COMPOSITIONS.split("['progression-blu'] = {", 1)[1]
+
+        self.assertIn("Dolomedes = {main='BLU'}", blu)
+        self.assertIn("blu = 'progression-blu'", COMPOSITIONS)
+        self.assertIn("target_source = 'command_leader'", addon)
+        self.assertIn("attackers = {'Achoo'}", addon)
+        self.assertIn("force_autows2_off = true", addon)
+        self.assertNotIn("physical_offense = true", addon)
+        self.assertIn("indi='Acumen', geo='Malaise', entrust='INT'", addon)
+        self.assertIn("zerg=false", addon)
+        self.assertIn("status_removal=false", addon)
+        self.assertIn("brd_debuffs = {}", addon)
+        self.assertIn("rdm_debuffs = {}", addon)
+        self.assertIn("vermillion = 'fishfly'", ADDON)
+        self.assertIn("if profile.force_autows2_off then", ADDON)
+        self.assertIn("if session.profile ~= 'fishfly' then", ADDON)
+        self.assertIn("if profile_name == 'fishfly' then", ADDON)
+        self.assertIn("gs c unset AutoTankMode", ADDON)
+
+        self.assertIn("song_mode = 'Fishfly'", brd)
+        self.assertIn("{spell='Sage Etude', buff='etude'}", brd)
+        self.assertIn("Sentinel's Scherzo", brd)
+        self.assertIn("{spell='Baraera', buff='Baraero'}", brd)
+        self.assertIn("{spell='Barsilencera', buff='Barsilence'}", brd)
+        self.assertIn("debuffs = {}", brd)
+
+        self.assertIn("party_shell = true", rdm)
+        self.assertIn("healing = true", rdm)
+        self.assertIn("heal_hpp = 75", rdm)
+        self.assertIn("debuffs = {}", rdm)
+        self.assertIn("fishfly=true", PLD)
+        self.assertIn("pstart_pld.profile == 'fishfly'", PLD)
+        self.assertIn("local heal_only = pstart_dnc.profile == 'fishfly'", DNC)
+        self.assertIn("PSTART_DNC_FISHFLY_EMERGENCY_HPP = 65", DNC)
+        self.assertIn(
+            "pstart_dnc.active and pstart_dnc.profile == 'fishfly'", DNC
+        )
+        self.assertNotIn("send Dolomedes gs reload", FISHFLY_RELOAD)
+        self.assertNotIn("@all", FISHFLY_RELOAD)
+        for name in ("Tackleberry", "Kickpuncher", "Barneystinson", "Smalls"):
+            self.assertEqual(FISHFLY_RELOAD.count(f"send {name} gs reload"), 1)
+        for name in (
+            "Dolomedes", "Tackleberry", "Kickpuncher",
+            "Barneystinson", "Smalls", "Achoo",
+        ):
+            self.assertEqual(
+                FISHFLY_RELOAD.count(f"send {name} lua r PartyStart"), 1
+            )
+        self.assertIn("pstart preview blu fishfly", FISHFLY_RELOAD)
+        self.assertNotIn("pstart use", FISHFLY_RELOAD)
 
 
 if __name__ == "__main__":

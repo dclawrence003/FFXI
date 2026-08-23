@@ -176,6 +176,12 @@ Tackleberry, Kickpuncher, Barney, and Smalls's changed GearSwap controllers,
 with ten-second gaps, then refreshes PartyStart one client at a time. It never
 reloads Dolo's GearSwap. Run it out of combat, then preview and apply
 `progression/limbus`.
+For the Vermillion Fishfly profile, `//exec reload_fishfly_safe.txt` uses the
+same conservative reload pattern for Tackleberry, Kickpuncher, Barney, and
+Smalls, then refreshes PartyStart across all six clients. It never reloads
+Dolo's GearSwap, never activates combat, and ends with an inert
+`progression-blu/fishfly` preview. After verifying the lineup, explicitly run
+`//pstart blu fishfly`.
 For the Locus Dire Bat profile, `//exec reload_locusbats_safe.txt` first
 refreshes PartyStart across all six clients, then reloads only Barney's
 GearSwap so its BRD controller matches the refreshed addon. It never reloads
@@ -228,6 +234,8 @@ Run from any character in the party:
 //pstart use legacy master
 //pstart preview progression-blu master
 //pstart use progression-blu master
+//pstart preview blu fishfly
+//pstart blu fishfly
 //pstart physical
 //pstart master
 //pstart bats
@@ -237,6 +245,7 @@ Run from any character in the party:
 //pstart sleep
 //pstart accuracy
 //pstart magic
+//pstart fishfly
 //pstart safe
 //pstart v1
 //pstart v2
@@ -301,8 +310,10 @@ Dolo drives mobile floor-clearing while Tackleberry remains the puller for
 unattended Apex profiles. The composition file itself is not changed.
 
 The BLU compositions call Dolomedes' already-existing `TizThib` weapon state
-and configure AutoWS2 for Expiacion/level-3 aftermath. PartyStart does not
-contain or modify his BLU GearSwap file.
+and configure AutoWS2 for Expiacion/level-3 aftermath in physical-offense
+profiles. `fishfly` is the deliberate exception: it forces AutoWS2 off and
+leaves Dolo's Blue Magic and target timing entirely manual. PartyStart does
+not contain or modify his BLU GearSwap file.
 
 When any participating client changes jobs, an active policy is suspended on
 all clients. After a ten-second quiet window, the old composition is
@@ -557,6 +568,68 @@ combat event arms it.
 `physical` retains Dia, Distract, and Elegy for fights where those debuffs are
 worth their time and MP cost.
 
+## Vermillion Fishfly BLU support profile
+
+`fishfly` is an isolated Unity Wanted profile for the `progression-blu`
+composition. It does not inherit or alter any Ambuscade, Limbus, or unattended
+XP profile:
+
+```text
+//exec reload_fishfly_safe.txt
+//pstart preview blu fishfly
+//pstart blu fishfly
+//pstart status
+```
+
+Wait for all six acknowledgements and finish the opening support rotation
+before activating the Ethereal Junction. `//pstart vermillion`, `//pstart
+vermillionfishfly`, `//pstart vfishfly`, and `//pstart fishflies` select the
+same tactical profile on the last composition; the explicit `blu fishfly`
+form is safest after changing Dolo from COR to BLU.
+
+The encounter spawns ten identically named flies with independent opening
+hate on the character who activates the junction. Tackleberry must therefore
+perform the pop and remain disengaged. A single-target swing or weapon skill
+can put one fly ahead of the pack; its death makes every survivor link and
+weapon-skill, then unlocks Silencega. All flies are immune to Sleep, Bind,
+Gravity, and Petrification, so the profile arms none of those controls and no
+single-target debuff rotation.
+
+Support policy:
+
+- Barney uses the character-local `Fishfly` song preset: Sage Etude,
+  Sentinel's Scherzo, and Victory March, plus Baraera and Barsilencera. This
+  adds one high-tier INT Etude without changing any established Melee,
+  Sustain, Tank, or Mage preset.
+- Achoo uses Indi-Acumen, Geo-Malaise, and entrusted Indi-INT on the first BLU
+  in the roster. He must stand beside Dolo and enter combat so the existing GEO
+  controller is allowed to place its offensive bubble and Entrust spell.
+  AutoZerg is forced off; Bolster remains a manual strategic choice.
+- Smalls applies Haste/Refresh, Phalanx II to Tackleberry, and party Shell,
+  then provides GearSwap backup cures below 75%. One-target enfeebles and
+  HealBot status-removal work are disabled during the short burn so recovery
+  wins the action queue.
+- Tackleberry uses the responsive linked-pack Majesty cure policy. The profile
+  suppresses single-target Provoke and offensive `/WAR` cycling because the
+  pop already gives him hate on every fly; emergency Defender remains
+  available. Chivalry cannot re-enable AutoWS2 in this profile.
+- Kickpuncher is emergency-Waltz-only below 65% party HP. Haste Samba, Steps,
+  Flourishes, autoattack authorization, and AutoWS2 remain off so he cannot
+  create an early single kill.
+
+After Tackleberry pops, Dolo selects one fly and arms PartyCombat. Achoo is the
+only authorized attacker, and movement is stationary. Dolo remains the manual
+command leader but is not a PartyCombat attacker or synchronized targeter: his
+first damaging action tells Achoo which fly to engage without taking Dolo's
+target or controls. Wait for Indi-INT and Geo-Malaise, then Dolo manually
+engages and performs the BLU AoE rotation. PartyStart neither casts Blue Magic
+nor changes Dolo's BLU AutoBuffMode. Keep Echo Drops available for the
+post-first-kill Silencega window and prioritize high-element AoE: the local
+BG Wiki data lists Ice at 150% damage, Fire/Thunder/Light/Water/Dark at 130%,
+and Wind/Earth at 100%. Visually airborne flies are ordinary melee/magic
+targets; AoE Blue Magic and AoE weapon skills can hit them, but this profile
+intentionally leaves all damage to Dolo for HP synchronization.
+
 - PLD: Majesty healing, native Flash and `/WAR` enmity actions, controlled
   Sentinel/Rampart/Palisade, Naegling + Savage Blade
 - COR driver: Chaos Roll + Samurai Roll; DualSavage + Savage Blade
@@ -723,6 +796,7 @@ Tackleberry.
 | `physical` | March / Minuet / Madrigal | Fury / Frailty |
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
+| `fishfly` (`vermillion`) | Sage Etude / Scherzo / March; Baraero / Barsilence; no hostile songs | Acumen / Malaise; Entrust INT on BLU; AutoZerg off |
 | `safe` | March / Scherzo / Madrigal | Barrier / Frailty |
 | `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; default Barstone / Barsilence; packet-reactive elemental Bars and one Horde Lullaby per activated Urchin wave; opportunistic Breadwinner Elegy only while manually targeted | Fury / Frailty; Entrust Wilt on PLD |
 | `ambuscade-v2` (`v2`) | March / Minuet / Madrigal; Barstone / Barsleep; Penelope Elegy | Fury / Frailty; Entrust Refresh |
@@ -739,6 +813,7 @@ RDM enfeebles by profile:
 | `physical` | Dia, Distract (suspended below 45% MP or below 50% target HP) |
 | `accuracy` | Frazzle, Dia, Distract |
 | `magic` | Frazzle, Dia, Addle |
+| `fishfly` (`vermillion`) | None; Shell/Phalanx/Haste/Refresh and backup healing take priority |
 | `safe` | Frazzle, Dia, Distract, Slow, Paralyze, Blind, Addle |
 | `ambuscade-v1` | Priority Stymie/Saboteur/Silence with result confirmation, Paralyze, Dia, and Distract on Breadwinner only |
 | `ambuscade-v2` | Dia on Popular Penelope only |
@@ -843,10 +918,13 @@ AutoWS2 reservation, and total completed cures.
   two-song or three-song mode is active whenever BRD automation starts.
 - DNC emergency healing temporarily pauses AutoWS2 only on that DNC client;
   this lets TP rise beyond the normal 1000-TP weapon-skill threshold. It
-  resumes AutoWS2 when no in-range member remains below 42% HP.
+  resumes AutoWS2 when no in-range member remains below 42% HP. `fishfly` is
+  heal-only at 65% and never enables, pauses, or resumes AutoWS2.
 - PLD similarly pauses only its own AutoWS2 when Chivalry is ready and MP falls
   below 45%; it resumes after Chivalry, if Chivalry ceases to be available, or
-  when MP has already recovered above 55%. `//pstart off` never re-enables it.
+  when MP has already recovered above 55%. `fishfly` bypasses Chivalry because
+  all weapon skills are intentionally disabled. `//pstart off` never
+  re-enables AutoWS2.
 - In `master`, `apexbats`, `locusbats`, and `apexcrabs`, Sentinel is attempted only after Flash lands on
   the current target or after a five-second establishment fallback. V1 suppresses that
   pull-time Sentinel and all pre-threshold automated tank cooldowns, then uses

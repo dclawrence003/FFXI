@@ -164,6 +164,25 @@ local pstart_rdm_profiles = {
             {spells={'Addle II', 'Addle'}, duration=150},
         },
     },
+    fishfly = {
+        -- The encounter is decided by Dolo's synchronized AoE, not by a long
+        -- one-target enfeeble rotation. Establish durable magic defense and
+        -- keep every action free for recovery once the counter volley begins.
+        gain = {spells={'Gain-MND'}, buff='MND Boost'},
+        temper = false,
+        lean = true,
+        reraise = true,
+        party_shell = true,
+        party_protect = false,
+        routine_buff_mp_floor = 20,
+        tank_buff_mp_floor = 10,
+        debuff_mp_floor = 100,
+        debuff_min_target_hpp = 100,
+        healing = true,
+        heal_hpp = 75,
+        heal_mp_floor = 15,
+        debuffs = {},
+    },
     safe = {
         gain = {spells={'Gain-VIT'}, buff='VIT Boost'},
         temper = false,

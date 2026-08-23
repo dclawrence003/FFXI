@@ -68,6 +68,7 @@ local PSTART_PLD_PROFILES = {
     locusbats=true,
     apexcrabs=true,
     limbus=true,
+    fishfly=true,
     ['ambuscade-v1']=true,
     ['ambuscade-v2']=true,
 }
@@ -123,7 +124,8 @@ local PSTART_PLD_CRAB_HEAL_POLICY = {
 
 local function pstart_pld_heal_policy()
     return (pstart_pld.profile == 'apexcrabs'
-            or pstart_pld.profile == 'limbus')
+            or pstart_pld.profile == 'limbus'
+            or pstart_pld.profile == 'fishfly')
         and PSTART_PLD_CRAB_HEAL_POLICY
         or PSTART_PLD_DEFAULT_HEAL_POLICY
 end
@@ -284,6 +286,30 @@ local function pstart_pld_war_subjob_enmity()
     end
 
     local hpp = tonumber(player.hpp) or 100
+    if pstart_pld.profile == 'fishfly' then
+        -- The PLD already owns independent opening hate on every fly because
+        -- he activates the junction. Do not spend the short burn cycling
+        -- single-target Provoke or offensive /WAR abilities, and never apply
+        -- Berserk while tanking the swarm. Defender remains an HP emergency.
+        if hpp < PSTART_PLD_DEFENDER_TRIGGER_HPP then
+            if pstart_pld_cancel_offense_for_defender() then return true end
+            if not buffactive['Defender'] then
+                return pstart_pld_use_war_ability(
+                    PSTART_PLD_DEFENDER_ACTION_ID, '<me>',
+                    ('Defender emergency at %d%% HP'):format(hpp))
+            end
+        elseif buffactive['Defender']
+            and hpp >= PSTART_PLD_DEFENDER_RELEASE_HPP
+        then
+            windower.send_command('cancel defender')
+            tickdelay = os.clock() + 0.5
+            pstart_pld.last_action = ('Defender released at %d%% HP')
+                :format(hpp)
+            add_to_chat(158, '[PartyStart PLD] '..pstart_pld.last_action)
+            return true
+        end
+        return false
+    end
     if hpp < PSTART_PLD_DEFENDER_TRIGGER_HPP then
         if pstart_pld_cancel_offense_for_defender() then return true end
         if not buffactive['Defender']
@@ -538,6 +564,11 @@ local function pstart_pld_chivalry_ready()
 end
 
 local function pstart_pld_sustain_mp()
+    if pstart_pld.profile == 'fishfly' then
+        -- AutoWS2 is deliberately hard-Off for this profile, so the PLD must
+        -- never re-enable it through the normal Chivalry reservation path.
+        return false
+    end
     local policy = pstart_pld_heal_policy()
     if pstart_pld.autows_paused then
         local chivalry_still_ready = pstart_pld_chivalry_ready()
@@ -764,7 +795,7 @@ function user_job_self_command(commandArgs, eventArgs)
     else
         add_to_chat(123,
             'PartyStart PLD usage: gs c pstartpld '
-            ..'<master|apexbats|locusbats|apexcrabs|limbus|ambuscade-v1|ambuscade-v2|status|off> <leader>')
+            ..'<master|apexbats|locusbats|apexcrabs|limbus|fishfly|ambuscade-v1|ambuscade-v2|status|off> <leader>')
     end
 end
 
