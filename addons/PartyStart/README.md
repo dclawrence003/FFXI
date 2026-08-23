@@ -617,14 +617,15 @@ Support policy:
   Flourishes, autoattack authorization, and AutoWS2 remain off so he cannot
   create an early single kill.
 
-After Tackleberry pops, Dolo selects one fly and arms PartyCombat. Achoo is the
-only authorized attacker, and movement is stationary. Dolo remains the manual
-command leader but is not a PartyCombat attacker or synchronized targeter: his
-first damaging action tells Achoo which fly to engage without taking Dolo's
-target or controls. Wait for Indi-INT and Geo-Malaise, then Dolo manually
-engages and performs the BLU AoE rotation. PartyStart neither casts Blue Magic
-nor changes Dolo's BLU AutoBuffMode. Keep Echo Drops available for the
-post-first-kill Silencega window and prioritize high-element AoE: the local
+After Tackleberry pops, Dolo selects one fly and issues `//pc force`. Achoo is
+the only authorized attacker, and movement is stationary, so this engages
+Achoo without engaging or retargeting Dolo. Dolo remains the manual command
+leader but is not a PartyCombat attacker or synchronized targeter; later Dolo
+damage merely keeps Achoo synchronized. Wait for Indi-INT and Geo-Malaise,
+then Dolo manually engages and performs the BLU AoE rotation. PartyStart
+neither casts Blue Magic nor changes Dolo's BLU AutoBuffMode. Keep Echo Drops
+available for the post-first-kill Silencega window and prioritize high-element
+AoE: the local
 BG Wiki data lists Ice at 150% damage, Fire/Thunder/Light/Water/Dark at 130%,
 and Wind/Earth at 100%. Visually airborne flies are ordinary melee/magic
 targets; AoE Blue Magic and AoE weapon skills can hit them, but this profile
