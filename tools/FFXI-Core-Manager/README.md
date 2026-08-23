@@ -45,6 +45,8 @@ generator has not been built yet.
   taskbars visible.
 - Detects a configured monitor disappearing/reappearing and reapplies affected
   layouts after the monitor is stable.
+- Coordinates the native Timers plugin's single global settings file so each
+  character can load a different vertical timer position without changing X.
 - Reloads `config.json` automatically after it changes.
 
 ## Configuration
@@ -122,12 +124,22 @@ to `Windower\scripts\init.txt`.
 //core apply
 //core layout
 //core aspect
+//core timers
 ```
 
 - `status` shows the companion's latest result for the current character.
 - `apply` requests an affinity reapply.
 - `layout` requests and consumes the saved window rectangle.
 - `aspect` recalculates aspect ratio from the saved dimensions.
+- `timers` sequentially unloads Timers, writes each configured character's Y,
+  and loads that client before advancing. This avoids shared-file races and is
+  forwarded to Dolomedes when invoked from another client.
+
+CoreManager also applies the Timers sequence automatically after login. The
+current personal layout uses Y 300 for Dolomedes, Y 149 for Tackleberry,
+Kickpuncher, and Barneystinson, and Y 125 for Smalls and Achoo. The native
+Timers plugin does not retain per-character sections in `timers.xml`, which is
+why a coordinated load is required.
 
 The Windows companion applies affinity even when the Windower addon is not
 loaded.
