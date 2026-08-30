@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'LimbusTracker'
 _addon.author = 'OpenAI Codex at the direction of Dolomedes'
-_addon.version = '0.4.2'
+_addon.version = '0.4.3'
 _addon.commands = {'limbustracker', 'lt'}
 
 local config = require('config')
@@ -120,6 +120,17 @@ local duplicate_window = 300
 local pending_timeout = 120
 local history_version = 2
 
+local expected_zone = {Temenos = 37, Apollyon = 38}
+
+local function area_for_target(target_id)
+    target_id = tonumber(target_id)
+    for area, targets in pairs(final_chest_targets) do
+        local chest = target_id and targets[target_id] or nil
+        if chest then return area, chest end
+    end
+    return nil, nil
+end
+
 local function validated_chest(area, target_id, requested_chest)
     local automatic = final_chest_targets[area]
         and final_chest_targets[area][target_id] or nil
@@ -156,6 +167,10 @@ local function new_state(name)
         character = name,
         targets = {Temenos = {}, Apollyon = {}},
         events = {Temenos = {}, Apollyon = {}},
+        runtime = {
+            units = {},
+            pending_chest = nil,
+        },
     }
 end
 
@@ -202,6 +217,39 @@ local function normalize_state(value, name)
         value.targets[area] = clean_targets
         value.events[area] = clean_events
     end
+
+    if type(value.runtime) ~= 'table' then
+        value.runtime = {}
+        changed = true
+    end
+    if type(value.runtime.units) ~= 'table' then
+        value.runtime.units = {}
+        changed = true
+    end
+    for _, field in ipairs({'Temenos Units', 'Apollyon Units'}) do
+        local amount = tonumber(value.runtime.units[field])
+        if value.runtime.units[field] ~= nil and amount == nil then changed = true end
+        value.runtime.units[field] = amount
+    end
+    local pending = value.runtime.pending_chest
+    local pending_area, pending_chest_name = nil, nil
+    if type(pending) == 'table' then
+        pending_area, pending_chest_name = area_for_target(pending.target_id)
+    end
+    if type(pending) ~= 'table' or pending.area ~= pending_area
+        or pending.chest ~= pending_chest_name
+    then
+        if pending ~= nil then changed = true end
+        value.runtime.pending_chest = nil
+    else
+        pending.target_id = tonumber(pending.target_id)
+        pending.started = tonumber(pending.started) or 0
+        pending.last_seen = tonumber(pending.last_seen) or pending.started
+        pending.units_before = tonumber(pending.units_before)
+        pending.sources = type(pending.sources) == 'table'
+            and pending.sources or {}
+    end
+
     return value, changed
 end
 
@@ -280,6 +328,39 @@ local function save_history()
     return true
 end
 
+local function restore_runtime_state()
+    local changed = false
+    previous_units = {}
+    pending_chest = nil
+    if not state or type(state.runtime) ~= 'table' then return changed end
+
+    for _, field in ipairs({'Temenos Units', 'Apollyon Units'}) do
+        previous_units[field] = tonumber(state.runtime.units
+            and state.runtime.units[field])
+    end
+    pending_chest = state.runtime.pending_chest
+
+    local now = os.time()
+    if pending_chest and now - tonumber(pending_chest.last_seen
+        or pending_chest.started or 0) > pending_timeout
+    then
+        pending_chest = nil
+        changed = true
+    end
+    return changed
+end
+
+local function persist_runtime_state()
+    if not state then return false end
+    state.runtime = state.runtime or {}
+    state.runtime.units = {
+        ['Temenos Units'] = tonumber(previous_units['Temenos Units']),
+        ['Apollyon Units'] = tonumber(previous_units['Apollyon Units']),
+    }
+    state.runtime.pending_chest = pending_chest
+    return save_history()
+end
+
 local function initialize_character()
     local name = player_name()
     if not name then return false end
@@ -289,7 +370,8 @@ local function initialize_character()
         history_path = path
         local migrated = false
         state, migrated = load_history_file(history_path, name)
-        if migrated then save_history() end
+        local runtime_changed = restore_runtime_state()
+        if migrated or runtime_changed then persist_runtime_state() end
     end
     return true
 end
@@ -508,6 +590,21 @@ local function backfill_target(area, target_id, chest)
     end
 end
 
+-- Windower supplies both the untouched packet and the packet after earlier
+-- addon handlers have modified it. The untouched packet is authoritative for
+-- target recognition; fall back to the modified copy only when necessary.
+local function parse_relevant_packet(direction, original, modified, predicate)
+    local seen = {}
+    for _, raw in ipairs({original, modified}) do
+        if type(raw) == 'string' and #raw > 0 and not seen[raw] then
+            seen[raw] = true
+            local ok, packet = pcall(packets.parse, direction, raw)
+            if ok and packet and predicate(packet) then return packet end
+        end
+    end
+    return nil
+end
+
 local function record_chest(area, target_id, chest, units, signature)
     if not initialize_character() then return false end
     chest = validated_chest(area, target_id, chest)
@@ -539,13 +636,15 @@ local function record_chest(area, target_id, chest, units, signature)
     return true
 end
 
-local function begin_chest(target_id, source)
-    local area = current_area()
-    if not area then return end
+local function begin_chest(target_id, source, packet_zone)
     target_id = tonumber(target_id)
-    local chest = target_id and final_chest_targets[area]
-        and final_chest_targets[area][target_id] or nil
+    local area, chest = area_for_target(target_id)
     if not chest then return end
+    packet_zone = tonumber(packet_zone)
+    if packet_zone and expected_zone[area] ~= packet_zone then return end
+    local live_area = current_area()
+    if live_area and live_area ~= area then return end
+
     initialize_character()
     local field = area .. ' Units'
     local now = os.time()
@@ -575,8 +674,13 @@ local function begin_chest(target_id, source)
             sources = {[source] = true},
         }
     end
-    coroutine.schedule(request_currency_two, 0.5)
-    coroutine.schedule(request_currency_two, 2)
+
+    persist_runtime_state()
+    coroutine.schedule(request_currency_two, 0.25)
+    coroutine.schedule(request_currency_two, 1)
+    coroutine.schedule(request_currency_two, 3)
+    coroutine.schedule(request_currency_two, 6)
+    return true
 end
 
 local function finish_chest_if_ready(packet)
@@ -584,6 +688,7 @@ local function finish_chest_if_ready(packet)
         or pending_chest.started or 0) > pending_timeout
     then
         pending_chest = nil
+        persist_runtime_state()
         return false
     end
     local field = pending_chest.area .. ' Units'
@@ -599,6 +704,7 @@ local function finish_chest_if_ready(packet)
         local recorded = record_chest(pending_chest.area, pending_chest.target_id,
             pending_chest.chest, gained, signature)
         pending_chest = nil
+        persist_runtime_state()
         return recorded
     end
     return false
@@ -684,7 +790,12 @@ windower.register_event('login', function()
 end)
 
 windower.register_event('zone change', function()
-    pending_chest = nil
+    if pending_chest and os.time() - tonumber(pending_chest.last_seen
+        or pending_chest.started or 0) > pending_timeout
+    then
+        pending_chest = nil
+        persist_runtime_state()
+    end
     coroutine.schedule(function()
         request_currency_two()
         render()
@@ -693,16 +804,26 @@ end)
 
 windower.register_event('outgoing chunk', function(id, original, modified)
     if id == 0x01A then
-        local ok, packet = pcall(packets.parse, 'outgoing', modified or original)
-        if ok and packet and packet.Target and packet.Category == 0 then
-            begin_chest(packet.Target, 'action')
+        local packet = parse_relevant_packet('outgoing', original, modified,
+            function(candidate)
+                local _, chest = area_for_target(candidate.Target)
+                return chest ~= nil and candidate.Category == 0
+            end)
+        if packet then
+            begin_chest(packet.Target, 'action', packet.Zone)
         end
     elseif id == 0x05B then
         -- Some interaction paths expose the final coffer reliably only as the
         -- dialog choice. This is still restricted to the eight known targets.
-        local ok, packet = pcall(packets.parse, 'outgoing', modified or original)
-        if ok and packet and packet.Target then
-            begin_chest(packet.Target, 'dialog')
+        local packet = parse_relevant_packet('outgoing', original, modified,
+            function(candidate)
+                local _, chest = area_for_target(candidate.Target)
+                return chest ~= nil
+            end)
+        if packet then
+            local source = packet['Automated Message'] == true
+                and 'dialog-result' or 'dialog'
+            begin_chest(packet.Target, source, packet.Zone)
         end
     end
 end)
@@ -711,18 +832,34 @@ windower.register_event('incoming chunk', function(id, original, modified)
     if id == 0x032 or id == 0x034 then
         -- The server menu identifies the coffer even when an injected or
         -- mirrored interaction bypasses the normal outgoing action event.
-        local ok, packet = pcall(packets.parse, 'incoming', modified or original)
-        if ok and packet and packet.NPC then
-            begin_chest(packet.NPC, 'menu')
+        local packet = parse_relevant_packet('incoming', original, modified,
+            function(candidate)
+                local _, chest = area_for_target(candidate.NPC)
+                return chest ~= nil
+            end)
+        if packet then
+            begin_chest(packet.NPC, 'menu', packet.Zone)
         end
         return
     end
     if id ~= 0x118 then return end
-    local ok, packet = pcall(packets.parse, 'incoming', modified or original)
-    if not ok or not packet then return end
+    local packet = parse_relevant_packet('incoming', original, modified,
+        function(candidate)
+            return candidate['Temenos Units'] ~= nil
+                and candidate['Apollyon Units'] ~= nil
+        end)
+    if not packet then return end
+
     finish_chest_if_ready(packet)
-    previous_units['Temenos Units'] = packet['Temenos Units']
-    previous_units['Apollyon Units'] = packet['Apollyon Units']
+    local changed = false
+    for area in pairs(sectors) do
+        local field = area .. ' Units'
+        local before = tonumber(previous_units[field])
+        local after = tonumber(packet[field])
+        if after ~= before then changed = true end
+        previous_units[field] = after
+    end
+    if changed then persist_runtime_state() end
 end)
 
 windower.register_event('prerender', function()

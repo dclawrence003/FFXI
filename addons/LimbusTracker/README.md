@@ -19,6 +19,14 @@ For each local character, the addon:
 History is not reset at the weekly tally. It remains available after zoning,
 logout, Windower reloads, and computer restarts.
 
+Version 0.4.3 reads the untouched packet before any addon-modified copy,
+derives the Limbus area from the authoritative coffer target rather than a
+timing-sensitive live-zone lookup, and persists the currency baseline and
+pending coffer observation immediately. This prevents another addon, a zone
+state timing race, or a LimbusTracker reload from silently discarding the
+coffer-to-reward correlation. Ordinary 3,000-unit Code and roaming `???`
+rewards still cannot create history by themselves.
+
 Version 0.4.2 recognizes each final coffer through three independent packet
 stages: the initial action, the server's NPC menu, and the outgoing dialog
 choice. This covers normal, injected, and mirrored interactions while retaining
@@ -130,17 +138,18 @@ Disable this optional integration without affecting tracking:
 
 ## Detection limitations
 
-- LimbusTracker needs an initial Currencies 2 baseline before it can calculate
-  a chest gain. It requests that baseline on load, login, zoning, and every
-  five minutes.
+- LimbusTracker requests a Currencies 2 baseline on load, login, zoning, and
+  every five minutes. Version 0.4.3 also persists the last baseline, pending
+  final coffer, so a reload does not discard the observation.
 - An event is intentionally not recorded unless the observed increase is
   exactly 3,000 or 5,000 units.
 - An award is intentionally ignored unless it follows interaction with one of
   the eight recognized final-floor rotation chests. This prevents roaming
   3,000-unit `???` rewards from polluting rotation history.
 - The tracker listens for the initial action, incoming NPC menu, and outgoing
-  dialog choice. Seeing several of these for the same coffer extends one pending
-  event without replacing its pre-award currency baseline.
+  dialog choice. It prefers the untouched packet over copies modified by other
+  addons. Seeing several stages for the same coffer extends one pending event
+  without replacing its pre-award currency baseline.
 - Repeated packets or interactions for the same final chest within five
   minutes are treated as one opening.
 - Load it before opening the chest. Loading it for the first time after the
