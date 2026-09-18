@@ -1,5 +1,19 @@
 # Host and puller integration
 
+`test_coordinator_host.lua` connects six actual PartyTactics coordinators to
+six actual stable GearSwap hosts for ordinary Locus readiness probes. Synthetic
+host replies are disabled. Real host replies establish six-client readiness;
+withheld replies cannot report full readiness. Replies delivered after stop
+cannot restore full readiness or emit another combat ON command. Fresh
+activation succeeds afterward. A dropped-reply control must fail the normal
+readiness assertion with its specific marker.
+
+Ordinary Locus readiness is advisory. This test does not introduce a combat
+startup gate. Other helper readiness remains synthetic, PartyCombat commands
+are recorded, and job files/adapters are not loaded in this scenario. It does
+not combine the separate host/puller and combat-consumer fixtures into one
+full-stack test. Production source is unchanged.
+
 `test_locus_host_puller_integration.lua` extends the existing opener fixture
 to route activation, commands and events through the actual stable GearSwap
 host, versioned Locus adapter and LocusPuller addon.
