@@ -4,7 +4,9 @@ Purpose: catch cross-profile control failures outside the game by executing
 commands in their real consumer, rather than merely recording command strings.
 
 `test_profile_consumer_lab.lua` runs six production PartyTactics coordinators
-and six production PartyCombat instances. It reuses the existing coordinator
+and six production PartyCombat instances. Real stable hosts and five PartyStart
+job helpers answer readiness probes through `readiness_clients.lua`; their
+synthetic host/helper responses are disabled. It reuses the existing coordinator
 fixture through an explicit test-only export. No production addon is changed.
 
 The reconstructed scenario activates the explicit Skomora Sortie profile,
@@ -25,7 +27,8 @@ build and does not prove arbitrary delayed command strings are fenced.
 
 | Executes production code | Simulated or omitted |
 |---|---|
-| Six PartyTactics coordinators, compiler/profile handling and Skomora runtime | GearSwap host, legacy helpers and controller readiness responses inherited from the coordinator fixture |
+| Six PartyTactics coordinators, compiler/profile handling and Skomora runtime | Fight-controller readiness remains synthesized by the coordinator fixture |
+| Six stable hosts and five PartyStart job helper probe handlers | Full job ticks, helper profile setup/casting and GEO delayed boot-idle command are not executed; startup commands are recorded |
 | Six PartyCombat command, IPC and combat handlers | Windower clock, command delivery and IPC transport |
 | Policy changes, emitted target packets and stop commands | Immediate simulated server acknowledgement of attack packets; no retail packets sent |
 | Actual ordinary Locus profile configuration | Job-file casts, equipment changes, AutoWS2, SignetKeeper, ExpeditionGuide and movement physics are not executed |
@@ -52,6 +55,10 @@ The runner requires the normal scenario's success marker and the fault run's
 specific injection and failure markers. An arbitrary Lua error does not count
 as a successful fault control. Fengari can return zero on Lua assertion errors,
 so exit code alone is not enough.
+
+An additional `--drop-helper-ack` control drops the actual GEO helper's reply.
+The ordinary Locus full-readiness assertion must fail specifically. Readiness
+remains advisory; this does not introduce or prove a combat startup gate.
 
 The next boundary to replace must follow evidence of a missing behavior. Do
 not call this a complete game simulator or add unrelated profile fixes here.

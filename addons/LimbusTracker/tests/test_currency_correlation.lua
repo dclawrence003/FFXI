@@ -56,7 +56,7 @@ local function session(existing_files, zone, character)
                 close=function() test.files[path] = table.concat(chunks) end,
             }
         end},
-        dofile=function(path) return assert(loadstring(assert(test.files[path], path)))() end,
+        dofile=function(path) return assert((loadstring or load)(assert(test.files[path], path)))() end,
         coroutine={schedule=function(callback, delay)
             test.scheduled[#test.scheduled + 1] = {callback=callback, delay=delay}
         end},
@@ -72,10 +72,11 @@ local function session(existing_files, zone, character)
             register_event=function(name, callback) test.callbacks[name] = callback end,
         },
     }, {__index=_G})
-    setfenv(assert(loadfile(addon_path)), env)()
+    if setfenv then setfenv(assert(loadfile(addon_path)), env)()
+    else assert(loadfile(addon_path, 't', env))() end
     test.callbacks.load()
     function test:state()
-        return assert(loadstring(assert(self.files[self.history_path])))()
+        return assert((loadstring or load)(assert(self.files[self.history_path])))()
     end
     function test:packet(direction, id, fields, modified_fields)
         self.packet_id = self.packet_id + 1

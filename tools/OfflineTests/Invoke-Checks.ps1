@@ -3,7 +3,7 @@
 param(
     [string]$NodeExe,
     [string]$PythonExe = 'python',
-    [ValidateSet('All','PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')]
+    [ValidateSet('All','PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory','Harness','AutoWS2','PartyCombat','PartyStart','CombatRecorder','LimbusTracker','THHUD','Roller2','SalvageCells','EventGuard')]
     [string]$Suite = 'All'
 )
 $ErrorActionPreference = 'Stop'
@@ -19,16 +19,23 @@ if (-not $NodeExe -and (Test-Path -LiteralPath $settingsPath)) {
 if (-not $NodeExe) { throw 'Supply -NodeExe pointing to Node 24.18.0, or configure local.settings.json.' }
 $tools = & (Join-Path $PSScriptRoot 'Resolve-TestTools.ps1') -NodeExe $NodeExe -PythonExe $PythonExe
 $suites = if ($Suite -eq 'All') {
-    @('PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')
+    @('PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory','Harness','AutoWS2','PartyCombat','PartyStart','CombatRecorder','LimbusTracker','THHUD','Roller2','SalvageCells','EventGuard')
 } else { @($Suite) }
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
 $reportRoot = Join-Path $PSScriptRoot "reports/$runId"
 New-Item -ItemType Directory -Path $reportRoot | Out-Null
+$sourceSnapshot = Join-Path $reportRoot 'source-snapshot.json'
+& $tools.Python -B (Join-Path $PSScriptRoot 'source_snapshot.py') $sourceSnapshot
+if ($LASTEXITCODE -ne 0) { throw 'Source snapshot failed.' }
 $results = @()
 foreach ($name in $suites) {
     $runner = Join-Path $workspace "addons/$name/tests/run_tests.ps1"
     $extraArguments = @()
-    if ($name -in @('InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')) {
+    if ($name -in @('AutoWS2','PartyCombat','PartyStart','CombatRecorder','LimbusTracker','THHUD','Roller2','SalvageCells','EventGuard')) {
+        $runner = Join-Path $PSScriptRoot 'Invoke-AdditionalChecks.ps1'
+        $extraArguments = @('-Suite', $name)
+    }
+    if ($name -in @('InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory','Harness')) {
         $runner = Join-Path $PSScriptRoot 'Invoke-AuxiliaryChecks.ps1'
         $extraArguments = @('-Suite', $name)
     }
@@ -49,6 +56,10 @@ foreach ($name in $suites) {
     $results += $record
     Write-Output "$name finished: exit $code, $($record.seconds) seconds."
 }
+$sourceAfter = Join-Path $reportRoot 'source-after.json'
+& $tools.Python -B (Join-Path $PSScriptRoot 'source_snapshot.py') $sourceAfter
+if ($LASTEXITCODE -ne 0) { throw 'Final source snapshot failed.' }
+$sourceUnchanged = (Get-FileHash -LiteralPath $sourceSnapshot).Hash -eq (Get-FileHash -LiteralPath $sourceAfter).Hash
 [ordered]@{
     recorded_at = (Get-Date).ToString('o')
     workspace = $workspace
@@ -57,7 +68,11 @@ foreach ($name in $suites) {
     lock_sha256 = (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'package-lock.json')).Hash.ToLowerInvariant()
     installed_file_checks = $false
     live_commands = $false
+    source_snapshot = $sourceSnapshot
+    source_snapshot_sha256 = (Get-FileHash -LiteralPath $sourceSnapshot).Hash.ToLowerInvariant()
+    source_unchanged_during_run = $sourceUnchanged
     suites = $results
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $reportRoot 'result.json') -Encoding utf8
 Write-Output "Report: $reportRoot"
+if (-not $sourceUnchanged) { throw 'Source changed during the test run. Do not treat these results as one tested version.' }
 if (@($results | Where-Object { $_.exit_code -ne 0 }).Count) { throw 'One or more suites failed. See the named suite logs.' }

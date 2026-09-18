@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 param([Parameter(Mandatory)][string]$NodeExe, [string]$PythonExe = 'python',
-    [Parameter(Mandatory)][ValidateSet('InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')][string]$Suite)
+    [Parameter(Mandatory)][ValidateSet('InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory','Harness')][string]$Suite)
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $tools = & "$PSScriptRoot/Resolve-TestTools.ps1" -NodeExe $NodeExe -PythonExe $PythonExe
@@ -9,6 +9,7 @@ Push-Location $workspace
 try {
     $env:FFXI_TEST_NODE_EXE = $tools.Node
     switch ($Suite) {
+        'Harness' { & $tools.Python -B -m unittest discover -s tools/OfflineTests -p test_case_runners.py }
         'InventoryCore' { & $tools.Node --test 'tools/InventoryCore/test/*.test.js' }
         'CoreManager' { & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -File 'tools/FFXI-Core-Manager/Test-LocalConfiguration.ps1' }
         'ReleasePackage' { & $tools.Python -B -m unittest discover -s tools/OfflineTests -p test_release_package.py }

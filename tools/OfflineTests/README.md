@@ -27,7 +27,7 @@ are pinned to exact commits.  Reports are retained as workflow artifacts for
 14 days.  This checks source without a Windower install or private PartyOps
 repository; it does not deploy or verify loaded clients.
 
-Run all eleven configured suites with one command:
+Run all configured suites with one command:
 
 ```powershell
 ./tools/OfflineTests/Invoke-Checks.ps1 -NodeExe $node
@@ -35,8 +35,13 @@ Run all eleven configured suites with one command:
 
 Use `-Suite LocusPuller` (or another configured addon name) for a focused run.
 Each run writes separate logs and a JSON result under ignored `reports/`.
-The suite includes six addon groups plus InventoryCore, CoreManager local
-configuration, ReleasePackage, FastFollow candidate guards and IncidentMemory. The
+Reports include the Git commit and SHA-256 hashes of non-ignored source files
+under addons, patches, tools and .github. A before/after comparison rejects
+source changes during the run. Installed files and loaded clients are not
+included in that proof.
+The suite accounts for all 15 public addon folders plus InventoryCore,
+CoreManager local configuration, ReleasePackage, FastFollow and IncidentMemory.
+Coverage varies by addon; see [COVERAGE.md](COVERAGE.md). The
 roster-specific installed GearSwap tests remain separate and have documented
 failures in tools/PARTYOPS_ANALYSIS.md.
 Failures remain failures even if another suite passes.  Machine-specific

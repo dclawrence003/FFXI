@@ -78,6 +78,16 @@ local function attach(c)
     end
 end
 for _,c in ipairs(lab.clients) do attach(c) end
+local readiness={host=0,helper=0}
+local drop_helper=arg and arg[1]=='--drop-helper-ack'
+assert(loadfile('addons/PartyTactics/tests/readiness_clients.lua'))()(lab,function(c,s)
+    local kind=s:find('__legacy_helper_ready',1,true) and 'helper' or 'host'
+    readiness[kind]=readiness[kind]+1
+    if drop_helper and kind=='helper' and c.player.name=='Achoo' then
+        print('INJECTED FAULT: dropped actual helper reply')
+        return false
+    end
+end)
 local function drain()
     local pending=queue; queue={}
     for _,entry in ipairs(pending) do
@@ -127,6 +137,14 @@ for i=1,4 do tick(0.5) end
 lab.fire(dolo,'addon command','locus')
 for i=1,10 do tick(0.5) end
 assert_policy('pt-locus-bats')
+local first_chat=#dolo.chats+1
+lab.fire(dolo,'addon command','status')
+local fully_ready=false
+for i=first_chat,#dolo.chats do
+    fully_ready=fully_ready or dolo.chats[i].message:find('acks 6/6',1,true)~=nil
+end
+assert(readiness.host>=6 and readiness.helper>=5,'Real readiness handlers were not exercised')
+assert(fully_ready,'HELPER_READINESS_FAILURE: actual helper reply missing')
 local target={id=50001,index=501,name='Locus Dire Bat',spawn_type=16,
     valid_target=true,hpp=100,claim_id=dolo.player.id,distance=4,x=2,y=0,z=0}
 for _,c in ipairs(lab.clients) do c.mobs[target.index]=target; c.current_target=target end

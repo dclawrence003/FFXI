@@ -55,6 +55,14 @@ try {
         throw 'The dropped-ACK control did not fail at the expected readiness assertion.'
     }
     Write-Output 'Dropped-ACK negative control failed at the expected readiness assertion.'
+    $skFault = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_locus_host_puller_integration.lua' --drop-sk-ack 2>&1
+    $skFaultText = $skFault -join "`n"
+    if ($skFaultText -notmatch 'INJECTED FAULT: dropped real SK readiness ACK at transport' -or
+        $skFaultText -notmatch 'READINESS FAILURE: real SK ACK did not reach actual GearSwap host/adapter' -or
+        $skFaultText -match 'integration and stopped-late-ACK checks passed') {
+        throw 'The dropped-SignetKeeper-ACK control did not fail at the expected readiness assertion.'
+    }
+    Write-Output 'Actual SignetKeeper dropped-ACK control detected missing readiness.'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_sortie_c_profile.lua' 'Sortie C profile Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_sortie_c_magic_burst_profile.lua' 'Sortie C Magic Burst profile Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_sortie_c_magic_burst_runtime.lua' 'Sortie C Magic Burst runtime Lua tests'
@@ -105,6 +113,14 @@ try {
         throw 'Consumer fault control did not detect a real combat stop.'
     }
     Write-Output 'Consumer fault control detected the injected stop in actual PartyCombat.'
+    $helperFault = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' --drop-helper-ack 2>&1
+    $helperFaultText = $helperFault -join "`n"
+    if ($helperFaultText -notmatch 'INJECTED FAULT: dropped actual helper reply' -or
+        $helperFaultText -notmatch 'HELPER_READINESS_FAILURE: actual helper reply missing' -or
+        $helperFaultText -match 'PASS - real coordinator/consumer') {
+        throw 'Helper fault control did not detect the dropped readiness reply.'
+    }
+    Write-Output 'Actual helper dropped-reply control detected missing readiness.'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_preflight.lua' 'Preflight evaluator Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_v1_runtime.lua' 'V1 runtime Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_genmei_runtime.lua' 'Genmei runtime Lua tests'

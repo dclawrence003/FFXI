@@ -25,6 +25,8 @@ local adapter
 local host
 local host_callbacks = {}
 local fault = arg and arg[1] == '--drop-lp-ack'
+local sk_fault = arg and arg[1] == '--drop-sk-ack'
+local sk_callbacks = {}
 
 local function tokens(value)
     local result = {}
@@ -49,6 +51,10 @@ local function dispatch_one(command)
             for index = 3, #fields do args[#args + 1] = fields[index] end
             callbacks['addon command'](fields[2],
                 (table.unpack or unpack)(args))
+        elseif fields[1] == 'sk' and sk_callbacks['addon command'] then
+            local args = {}
+            for index = 2, #fields do args[#args+1] = fields[index] end
+            sk_callbacks['addon command']((table.unpack or unpack)(args))
         elseif fields[1] == 'gs' and fields[2] == 'c'
             and fields[3] == 'ptgs'
         then
@@ -56,6 +62,8 @@ local function dispatch_one(command)
             for index = 3, #fields do args[#args + 1] = fields[index] end
             if fault and fields[6] == 'companion-ready' and fields[10] == 'lp' then
                 print('INJECTED FAULT: dropped real LP readiness ACK at transport')
+            elseif sk_fault and fields[6] == 'companion-ready' and fields[10] == 'sk' then
+                print('INJECTED FAULT: dropped real SK readiness ACK at transport')
             else
                 local event = {}
                 user_job_self_command(args, event)
@@ -119,10 +127,19 @@ windower = {
             return {p0={name=player.name, mob={id=player.id}}}
         end,
         get_spell_recasts=function() return {[112]=0} end,
+        get_items=function() return {equipment={},inventory={}} end,
     },
 }
 
 assert(loadfile(puller_path))()
+local sk_env=setmetatable({_addon={},os=os}, {__index=_G})
+sk_env._G=sk_env
+sk_env.require=function(name) error('Optional dependency unavailable: '..name) end
+sk_env.windower=setmetatable({register_event=function(name,fn) sk_callbacks[name]=fn end},
+    {__index=windower})
+local sk_path=test_dir..'/../../SignetKeeper/SignetKeeper.lua'
+if setfenv then setfenv(assert(loadfile(sk_path)),sk_env)()
+else assert(loadfile(sk_path,'t',sk_env))() end
 include = function(path)
     assert(path == 'Common/PartyTactics/adapters/'
         ..PROFILE_ID..'/'..PROFILE_VERSION..'.lua')
@@ -158,19 +175,14 @@ flush_commands()
 
 -- The LP ACK above traveled through its real addon command dispatcher and
 -- back through the adapter action parser. The exact controller probe is ready
--- even before SK's independent ACK, while SK still withholds pull release
--- until its six-client Signet census is complete.
+-- independent of SK's ACK. Both real local companion reply paths are exercised;
+-- this fixture does not tick the six-client Signet census.
 assert(adapter._test_state.companion_ready.lp == true,
     'READINESS FAILURE: real LP ACK did not reach actual GearSwap host/adapter')
 assert(count_contains('pt __controller_ready locus-signet '..GENERATION
     ..' 0 2') == 1)
-accepted, reason = action('locus-signet', 'companion-ready', {
-    GENERATION, '0', '2', 'sk', PROFILE_ID, PROFILE_VERSION,
-    ENGINE_VERSION, SIGNATURE, 'Tackleberry', 'PLD',
-    '1789437000-1000000',
-})
-assert(accepted, reason)
-flush_commands()
+assert(adapter._test_state.companion_ready.sk == true,
+    'READINESS FAILURE: real SK ACK did not reach actual GearSwap host/adapter')
 assert(count_contains('pt __controller_ready locus-signet '..GENERATION
     ..' 0 2') == 1)
 
