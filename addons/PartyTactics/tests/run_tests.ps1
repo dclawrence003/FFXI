@@ -75,6 +75,21 @@ try {
     Invoke-LuaTest 'addons/PartyTactics/tests/test_supplemental_aliases.lua' 'Supplemental alias Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_action_api.lua' 'Typed action API Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_six_client_activation.lua' 'Six-client Lua tests'
+    $consumerOutput = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' 2>&1
+    $consumerText = $consumerOutput -join "`n"
+    $consumerOutput | ForEach-Object { Write-Output $_ }
+    if ($LASTEXITCODE -ne 0 -or $consumerText -match 'stack traceback:' -or
+        $consumerText -notmatch 'PASS - real coordinator/consumer stale Sortie stop isolation and explicit stop') {
+        throw 'Coordinator/consumer integration failed.'
+    }
+    $consumerFault = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' --inject-stale-stop 2>&1
+    $consumerFaultText = $consumerFault -join "`n"
+    if ($consumerFaultText -notmatch 'INJECTED FAULT: leaked old-owner OFF reaches real PartyCombat' -or
+        $consumerFaultText -notmatch 'STALE_SORTIE_DISRUPTED_REPLACEMENT:' -or
+        $consumerFaultText -match 'PASS - real coordinator/consumer') {
+        throw 'Consumer fault control did not detect a real combat stop.'
+    }
+    Write-Output 'Consumer fault control detected the injected stop in actual PartyCombat.'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_preflight.lua' 'Preflight evaluator Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_v1_runtime.lua' 'V1 runtime Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_genmei_runtime.lua' 'Genmei runtime Lua tests'

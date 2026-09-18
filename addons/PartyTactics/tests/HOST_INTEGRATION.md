@@ -16,3 +16,7 @@ SignetKeeper acknowledgement is still synthetic.  The PartyTactics coordinator,
 six-client activation, full job files and retail behavior are not covered.
 The injected fault is a test control, not proof of the historical startup cause.
 No production behavior was changed to make this test pass.
+
+For a separate six-client slice that executes PartyCombat as the real command
+consumer, see [CONSUMER_LAB.md](CONSUMER_LAB.md). Its different mocks and scope
+are listed explicitly; the two fixtures are not a single full-stack simulator.

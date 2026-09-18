@@ -416,6 +416,7 @@ local function build_client(player)
                     end
                 end
             end
+            if client.command_sink then client.command_sink(command) end
         end,
         send_ipc_message=function(message)
             client.ipc_messages[#client.ipc_messages + 1] = message
@@ -613,6 +614,15 @@ end
 local function render_all(delta)
     now = now + delta
     for _, client in ipairs(clients) do fire(client, 'prerender') end
+end
+
+-- Reuse the existing coordinator fixture in consumer-integration scenarios.
+-- Its readiness mocks remain explicit; consumers attach their own boundaries.
+if PARTYTACTICS_EXPORT_FIXTURE then
+    return {clients=clients, named=client_named, fire=fire, tick=render_all,
+        now=function() return now end,
+        hold=function(predicate) held_ipc={}; hold_ipc=predicate end,
+        release=function() hold_ipc=nil; return held_ipc end}
 end
 
 local dolo = client_named('Dolomedes')
