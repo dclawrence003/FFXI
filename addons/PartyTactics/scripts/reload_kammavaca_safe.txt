@@ -1,0 +1,62 @@
+echo Kammavaca v1.2 / PartyTactics v0.10.5 reload beginning. Run only while all six characters are out of combat. The active tactic will be stopped and nothing will be armed.
+send Dolomedes pt off
+wait 3
+echo Reloading PartyCombat v0.6.9 inert on all six clients for typed force-by-ID and observer selection. Explicit unload/load pairs also repair a client where PartyCombat was missing.
+send Dolomedes lua unload PartyCombat
+wait 1
+send Dolomedes lua load PartyCombat
+wait 2
+send Tackleberry lua unload PartyCombat
+wait 1
+send Tackleberry lua load PartyCombat
+wait 2
+send Kickpuncher lua unload PartyCombat
+wait 1
+send Kickpuncher lua load PartyCombat
+wait 2
+send Barneystinson lua unload PartyCombat
+wait 1
+send Barneystinson lua load PartyCombat
+wait 2
+send Smalls lua unload PartyCombat
+wait 1
+send Smalls lua load PartyCombat
+wait 2
+send Achoo lua unload PartyCombat
+wait 1
+send Achoo lua load PartyCombat
+wait 3
+echo Reloading Barney GearSwap for the current-target Bard sleep queue and Smalls GearSwap for the exact-ID RDM priority queue. GearSwap remains the equipment owner.
+send Barneystinson gs reload
+wait 10
+send Smalls gs reload
+wait 10
+echo Reloading PartyTactics v0.10.5 and the isolated Kammavaca v1.2 runtime on all six clients.
+send Dolomedes lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 2
+send Tackleberry lua unload PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 2
+send Kickpuncher lua unload PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 2
+send Barneystinson lua unload PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 2
+send Smalls lua unload PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 2
+send Achoo lua unload PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 3
+send Dolomedes pc status
+send Dolomedes pt version
+send Dolomedes pt status
+echo Reload complete and inert. Use //pt preview kammavaca, then //pt use kammavaca; wait for ACK 6/6 and PREFLIGHT PASS 6/6. The profile controls auto-target, immediately prioritizes exact CLMA adds, and treats queued Silence and Sleep as non-blocking support; do not //pt arm for the normal opener.

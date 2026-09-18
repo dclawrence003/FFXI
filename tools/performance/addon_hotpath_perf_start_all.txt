@@ -1,0 +1,11 @@
+// Starts bounded addon and GearSwap timing on all six clients.
+send @all lua c GearSwap perf start
+wait 1
+send @all lua c BattleMod perf start
+wait 1
+send @all lua c HealBot perf start
+wait 1
+send @all lua c PartyTactics perf start
+wait 1
+send @all lua c React perf start
+echo GearSwap and addon hot-path profilers started on all clients.

@@ -1,0 +1,24 @@
+echo Fishfly direct support activation. HealBot cure ownership is being removed.
+send Smalls hb disable cure
+send Smalls hb off
+send Tackleberry hb disable cure
+send Tackleberry hb off
+wait 1
+send Smalls gs c pstartrdm off
+send Tackleberry gs c pstartpld off
+wait 1
+send Smalls gs c pstartrdm fishfly Dolomedes Dolomedes,Barneystinson,Smalls,Tackleberry,Kickpuncher,Achoo Smalls,Tackleberry,Dolomedes,Barneystinson,Achoo Tackleberry Dolomedes,Barneystinson,Smalls,Tackleberry,Kickpuncher,Achoo
+send Tackleberry gs c pstartpld fishfly Dolomedes
+wait 1
+send Smalls gs c pstartrdm tick
+send Tackleberry gs c pstartpld tick
+wait 3
+send Smalls gs c pstartrdm tick
+send Tackleberry gs c pstartpld tick
+wait 3
+send Smalls gs c pstartrdm tick
+send Tackleberry gs c pstartpld tick
+wait 3
+send Smalls gs c pstartrdm status
+send Tackleberry gs c pstartpld status
+echo Direct support active. Smalls should Refresh first; PLD cures below 95 and RDM cures below 92.

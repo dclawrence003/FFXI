@@ -26,3 +26,32 @@ node_modules/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local assistant work and personal evidence
+/tools/FFXI-Core-Manager/local/
+/.codex/
+/.codex-tmp/
+/.codex-backups/
+/.pytest_cache/
+/Dolomedes_rank_export.txt
+/tools/INVENTORY_CLEANUP_*
+/tools/AH_GEAR_GAPS_*
+/tools/*_partyops.json
+/addons/CombatRecorder/INCIDENT-*.md
+/tools/performance/ffxi-*.csv
+/tools/performance/addon-lifecycle-audit-*.md
+/tools/performance/PresentMon-*.exe
+/patches/FastFollow/INCIDENT-*.md
+
+# PartyTactics ships these profile definitions as source.
+!addons/PartyTactics/data/
+addons/PartyTactics/data/*
+!addons/PartyTactics/data/profile_registry.lua
+!addons/PartyTactics/data/profile_identities/
+addons/PartyTactics/data/profile_identities/*
+!addons/PartyTactics/data/profile_identities/*.lua
+!addons/PartyTactics/data/profile_identities/README.md
+!addons/PartyTactics/data/supplemental_aliases/
+addons/PartyTactics/data/supplemental_aliases/*
+!addons/PartyTactics/data/supplemental_aliases/*.lua
+!addons/PartyTactics/data/supplemental_aliases/README.md

@@ -95,6 +95,28 @@ function ingestTelemetry(db, payload, config) {
       }
     }
 
+    if (payload.equipment && typeof payload.equipment === 'object') {
+      const upsert = db.prepare(`INSERT INTO equipment
+        (character,slot,item_id,name,bag,bag_index,observed_at)
+        VALUES(?,?,?,?,?,?,?) ON CONFLICT(character,slot) DO UPDATE SET
+        item_id=excluded.item_id,name=excluded.name,bag=excluded.bag,
+        bag_index=excluded.bag_index,observed_at=excluded.observed_at`);
+      for (const slot of ['main']) {
+        const equipped = payload.equipment[slot];
+        if (!equipped || typeof equipped !== 'object') continue;
+        const itemId = finiteInteger(equipped.id);
+        const rawName = typeof equipped.name === 'string' ? equipped.name.trim().slice(0, 160) : '';
+        const name = itemId === 0 ? 'Unequipped' : rawName;
+        const bag = equipped.bag === null || equipped.bag === undefined
+          ? null : finiteInteger(equipped.bag);
+        const bagIndex = equipped.index === null || equipped.index === undefined
+          ? null : finiteInteger(equipped.index);
+        if (itemId !== null && itemId >= 0 && name) {
+          upsert.run(character, slot, itemId, name, bag, bagIndex, observedAt);
+        }
+      }
+    }
+
     db.prepare(`INSERT INTO source_status(source,ok,updated_at,details)
       VALUES(?,1,?,?) ON CONFLICT(source) DO UPDATE SET
       ok=1,updated_at=excluded.updated_at,details=excluded.details`)
@@ -114,7 +136,10 @@ function recordLimbusChest(db, payload, config) {
   const units = finiteInteger(payload.units);
   const signature = typeof payload.signature === 'string'
     ? payload.signature.slice(0, 240) : '';
-  if (!area || targetId === null || targetId <= 0 || ![3000, 5000].includes(units) || !signature) {
+  // Store the actual coffer award. Storage caps can clip a bonus between
+  // 3,000 and 5,000; do not discard the opening or round away its evidence.
+  if (!area || targetId === null || targetId <= 0 || units === null
+      || units < 3000 || units > 5000 || Number(payload.units) !== units || !signature) {
     throw new Error('Invalid Limbus chest event.');
   }
   const finalChest = LIMBUS_FINAL_TARGETS[area]?.[targetId] || null;
@@ -153,7 +178,7 @@ function computeRotation(events, sectors) {
     next = sectors.reduce((oldest, sector) =>
       lastOpened.get(sector) < lastOpened.get(oldest) ? sector : oldest, sectors[0]);
   }
-  const lastBonus = events.find((event) => event.units === 5000) || null;
+  const lastBonus = events.find((event) => event.units > 3000) || null;
   return { next, learned: lastOpened.size, total: sectors.length, last_bonus: lastBonus, recent };
 }
 
@@ -191,6 +216,14 @@ function currencyView(db, config) {
   };
 }
 
+function equipmentView(db, config) {
+  return {
+    characters: Object.keys(config.characters || {}),
+    rows: db.prepare(`SELECT character,slot,item_id id,name,bag,bag_index,observed_at
+      FROM equipment ORDER BY slot,character`).all()
+  };
+}
+
 module.exports = {
   LIMBUS_SECTORS,
   LIMBUS_FINAL_TARGETS,
@@ -199,5 +232,6 @@ module.exports = {
   computeRotation,
   dashboard,
   keyItemView,
-  currencyView
+  currencyView,
+  equipmentView
 };

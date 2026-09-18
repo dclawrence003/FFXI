@@ -1,0 +1,13 @@
+echo Reloading only the two Locus Signet companions and restarting the current profile.
+send Dolomedes pt off
+wait 2
+send Dolomedes lua reload SignetKeeper
+send Tackleberry lua reload SignetKeeper
+send Kickpuncher lua reload SignetKeeper
+send Barneystinson lua reload SignetKeeper
+send Smalls lua reload SignetKeeper
+send Achoo lua reload SignetKeeper
+send Tackleberry lua reload LocusPuller
+wait 2
+send Dolomedes pt locus-signet
+echo Locus Signet bridge recovery submitted. Staff renewal will proceed automatically.

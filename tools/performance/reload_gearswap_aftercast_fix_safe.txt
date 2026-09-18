@@ -1,0 +1,26 @@
+echo Fully unloading and loading corrected GearSwap on all six clients, one at a time.
+send Dolomedes lua unload GearSwap
+wait 2
+send Dolomedes lua load GearSwap
+wait 4
+send Tackleberry lua unload GearSwap
+wait 2
+send Tackleberry lua load GearSwap
+wait 4
+send Kickpuncher lua unload GearSwap
+wait 2
+send Kickpuncher lua load GearSwap
+wait 4
+send Barneystinson lua unload GearSwap
+wait 2
+send Barneystinson lua load GearSwap
+wait 4
+send Smalls lua unload GearSwap
+wait 2
+send Smalls lua load GearSwap
+wait 4
+send Achoo lua unload GearSwap
+wait 2
+send Achoo lua load GearSwap
+wait 4
+echo GearSwap aftercast rollback loaded on all six clients.

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { config, runtimeDir, ensureRuntime, atomicWrite } = require('./common');
 const { parseItems } = require('./resources');
-const { readAll } = require('./findall');
+const { readAll, syncInventory } = require('./findall');
 const { buildIndex, normalize, parseWiki } = require('./wiki');
 const { evaluate } = require('./recommend');
 const { updatePrices } = require('./ffxiah');
@@ -21,6 +21,12 @@ async function main() {
   const resources = parseItems(config.paths.itemsResource);
   console.log(`Loaded ${resources.size.toLocaleString()} item records.`);
   const findAll = readAll(config.paths.findAll, Object.keys(config.characters));
+  const snapshotDb = openDb();
+  try {
+    syncInventory(snapshotDb, findAll);
+  } finally {
+    snapshotDb.close();
+  }
   const uniqueIds = [...new Set(findAll.rows.map((row) => row.itemId))];
   console.log(`Found ${findAll.rows.length.toLocaleString()} bag entries and ${uniqueIds.length.toLocaleString()} unique items.`);
   console.log('Indexing local BG Wiki item pages...');
@@ -40,9 +46,7 @@ async function main() {
 
   db.exec('BEGIN IMMEDIATE');
   try {
-    db.exec('DELETE FROM inventory; DELETE FROM items; DELETE FROM recommendations; DELETE FROM ah_prices; DELETE FROM source_status;');
-    const insertInventory = db.prepare('INSERT INTO inventory(character,bag,item_id,count) VALUES (?,?,?,?)');
-    for (const row of findAll.rows) insertInventory.run(row.character, row.bag, row.itemId, row.count);
+    db.exec('DELETE FROM items; DELETE FROM recommendations; DELETE FROM ah_prices;');
 
     const insertItem = db.prepare(`INSERT INTO items
       (id,name,long_name,category,level,item_level,jobs,description,flags_text,vendor_price,wiki_file,wiki_uses,ah_category,stack_size)
@@ -101,7 +105,9 @@ async function main() {
       cache[id] = { ...recommendation, name: item.name, owners };
     }
 
-    const statusInsert = db.prepare('INSERT INTO source_status(source,ok,updated_at,details) VALUES (?,?,?,?)');
+    const statusInsert = db.prepare(`INSERT INTO source_status(source,ok,updated_at,details)
+      VALUES (?,?,?,?) ON CONFLICT(source) DO UPDATE SET
+      ok=excluded.ok,updated_at=excluded.updated_at,details=excluded.details`);
     statusInsert.run('Windower resources', 1, fs.statSync(config.paths.itemsResource).mtime.toISOString(), `${resources.size} items`);
     statusInsert.run('BG Wiki', 1, now, `${wikiIndex.size} indexed pages`);
     statusInsert.run(
@@ -110,9 +116,6 @@ async function main() {
       fs.statSync(vendorResult.cacheFile).mtime.toISOString(),
       `${vendorResult.prices.size} prices; weekly cache; BG Wiki overrides`
     );
-    for (const source of findAll.sources) {
-      statusInsert.run(`FindAll:${source.character}`, source.ok ? 1 : 0, source.updatedAt, source.file);
-    }
     statusInsert.run(
       'FFXIAH:Valefor',
       ahResult.errors.length === 0 ? 1 : 0,

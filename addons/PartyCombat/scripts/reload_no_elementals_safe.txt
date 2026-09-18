@@ -1,0 +1,32 @@
+echo Pause EasyFarm before running this script. Only PartyCombat and AutoWS2 will reload; GearSwap and PartyStart stay loaded.
+send Dolomedes pc stop
+wait 1
+send Dolomedes lua r PartyCombat
+wait 2
+send Dolomedes lua r AutoWS2
+wait 2
+send Tackleberry lua r PartyCombat
+wait 2
+send Tackleberry lua r AutoWS2
+wait 2
+send Kickpuncher lua r PartyCombat
+wait 2
+send Kickpuncher lua r AutoWS2
+wait 2
+send Barneystinson lua r PartyCombat
+wait 2
+send Barneystinson lua r AutoWS2
+wait 2
+send Smalls lua r PartyCombat
+wait 2
+send Smalls lua r AutoWS2
+wait 2
+send Achoo lua r PartyCombat
+wait 2
+send Achoo lua r AutoWS2
+wait 3
+send Dolomedes pt use limbus
+wait 12
+send Dolomedes pc status
+send Tackleberry pc status
+echo Reload complete. Wait for PartyTactics activation and confirm pc status says Target exclusions elemental. Load the updated Tackleberry-PLD-PartyCombat.eup in EasyFarm, then pc on from Tackleberry and resume pulls.

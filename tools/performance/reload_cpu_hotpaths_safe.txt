@@ -1,0 +1,45 @@
+echo Safe CPU-hot-path reload beginning. Run only while all six characters are out of combat. The active tactic will be stopped and nothing will be rearmed.
+send Dolomedes pt off
+wait 3
+echo Reloading the complete GearSwap addon one client at a time.
+send Dolomedes lua reload GearSwap
+wait 6
+send Tackleberry lua reload GearSwap
+wait 6
+send Kickpuncher lua reload GearSwap
+wait 6
+send Barneystinson lua reload GearSwap
+wait 6
+send Smalls lua reload GearSwap
+wait 6
+send Achoo lua reload GearSwap
+wait 6
+echo Reloading PartyTactics one client at a time.
+send Dolomedes lua reload PartyTactics
+wait 3
+send Tackleberry lua reload PartyTactics
+wait 3
+send Kickpuncher lua reload PartyTactics
+wait 3
+send Barneystinson lua reload PartyTactics
+wait 3
+send Smalls lua reload PartyTactics
+wait 3
+send Achoo lua reload PartyTactics
+wait 3
+echo Reloading MultiCtrl one client at a time.
+send Dolomedes lua reload multictrl
+wait 3
+send Tackleberry lua reload multictrl
+wait 3
+send Kickpuncher lua reload multictrl
+wait 3
+send Barneystinson lua reload multictrl
+wait 3
+send Smalls lua reload multictrl
+wait 3
+send Achoo lua reload multictrl
+wait 3
+send Dolomedes pt version
+send Dolomedes pt status
+echo CPU-hot-path reload complete and inert. Re-select and arm a PartyTactics profile only when you are ready.

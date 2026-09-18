@@ -1,0 +1,13 @@
+send @all ffo stop
+send @all lua unload NpcInteract
+send @all lua unload SellNPC
+
+ccash floor REPLACE_WITH_ONE_PURCHASE_FLOOR
+ccash preview
+ccash start confirm
+
+echo Only after the one-character canary completes successfully:
+echo ccash all floor REPLACE_WITH_DESIRED_FLOOR
+echo ccash all status
+echo ccash all start confirm
+echo Emergency stop: ccash all stop

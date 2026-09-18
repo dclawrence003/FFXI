@@ -4,8 +4,11 @@ const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 const { runtimeDir, ensureRuntime } = require('./common');
 
+let schemaInitialized = false;
+
 function initializeDb(db) {
   db.exec(`
+    PRAGMA busy_timeout = 1000;
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS items (
       id INTEGER PRIMARY KEY, name TEXT NOT NULL, long_name TEXT, category TEXT,
@@ -41,6 +44,11 @@ function initializeDb(db) {
       amount INTEGER NOT NULL, observed_at TEXT NOT NULL,
       PRIMARY KEY(character,page,name)
     );
+    CREATE TABLE IF NOT EXISTS equipment (
+      character TEXT NOT NULL, slot TEXT NOT NULL, item_id INTEGER NOT NULL,
+      name TEXT NOT NULL, bag INTEGER, bag_index INTEGER, observed_at TEXT NOT NULL,
+      PRIMARY KEY(character,slot)
+    );
     CREATE TABLE IF NOT EXISTS limbus_chest_targets (
       area TEXT NOT NULL, target_id INTEGER NOT NULL, chest TEXT NOT NULL,
       learned_at TEXT NOT NULL, PRIMARY KEY(area,target_id)
@@ -70,7 +78,13 @@ function initializeDb(db) {
 
 function openDb() {
   ensureRuntime();
-  return initializeDb(new DatabaseSync(path.join(runtimeDir, 'inventory.db')));
+  const db = new DatabaseSync(path.join(runtimeDir, 'inventory.db'));
+  db.exec('PRAGMA busy_timeout = 1000;');
+  if (!schemaInitialized) {
+    initializeDb(db);
+    schemaInitialized = true;
+  }
+  return db;
 }
 
 module.exports = { openDb, initializeDb };

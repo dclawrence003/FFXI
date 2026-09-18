@@ -36,7 +36,7 @@ diagnosis and recording model. NpcInteract source is not redistributed here:
 https://github.com/DiscipleOfEris/NpcInteract
 
 EventGuard-specific code and modifications:
-Copyright (c) 2026 OpenAI. Distributed under the same BSD-style terms above.
+Copyright (c) 2026 Don Lawrence. Distributed under the same BSD-style terms above.
 ]]
 
 _addon.name = 'EventGuard'

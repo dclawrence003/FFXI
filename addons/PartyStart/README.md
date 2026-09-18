@@ -1,4 +1,4 @@
-﻿# PartyStart
+# PartyStart
 
 PartyStart is a Windower 4 addon for atomically configuring a multibox party's
 support and offense policy from one command. It discovers the live jobs
@@ -37,6 +37,13 @@ PartyStart establishes clear ownership:
   `limbus` keeps GearSwap healing ownership, gives every attacker Haste and
   every MP job Refresh, applies Phalanx II to PLD, establishes one long Shell
   pass, and limits routine enfeebling to low-cost Dia.
+  `fishfly` uses a separate burst policy: one Shellra, Dolo-first Haste II and
+  Refresh III, Phalanx II on PLD, fast reactive recasts after confirmed losses,
+  and aggressive backup cures below 90% HP. HealBot owns only packet-backed
+  Silence/Slow/INT-Down removal there; it never owns cures or routine buffs.
+  The reusable `magicboss` controller preset provides a separate magic-boss
+  policy for PartyTactics: Shell/Haste/Refresh/Phalanx, backup cures below 85%,
+  and a bounded broad enfeeble pass. It contains no encounter-name branch.
 - PLD GearSwap is the primary healer in sustained profiles. It evaluates HP
   before the
   native PLD tick, maintains Majesty through the native controller, casts
@@ -52,17 +59,24 @@ PartyStart establishes clear ownership:
   AutoWS stays off so AutoWS2 remains the only weapon-skill owner.
   V1 reserves Sentinel and Rampart for Breadwinner's 50% Hundred Fists
   transition. V2 deliberately leaves Sentinel manual for hate recovery after
-  Sweet Breath.
+  Sweet Breath. The reusable `manualsc` preset preserves healing and Provoke
+  while prohibiting Chivalry TP use, AutoWS2 re-enable, Warcry, Aggressor, and
+  Berserk so another orchestrator can own a manual skillchain safely.
 - DNC GearSwap maintains Haste Samba and Presto/Box Step, uses learned and
   ready No Foot Rise only with zero finishing moves, a synchronized in-range
   target, healthy party HP, and less than 900 TP, then converts finishing moves
   with Reverse Flourish. It also supplies a TP-funded emergency Waltz path.
   Saber Dance stays off because it disables Waltzes.
+  The reusable `tankheal` preset exposes only the higher-threshold emergency
+  Waltz path; it never runs melee, Samba, Step, Flourish, or AutoWS behavior.
 - The character's native BRD GearSwap controller is the sole owner of party
   songs. PartyStart selects its Melee, Sustain, Tank, or Mage preset and
   separately maintains hostile songs plus encounter-specific AoE barspells.
-  In `limbus`, `//pstart sleep` queues exactly one best-learned Lullaby on the
-  synchronized active target; it is never maintained automatically.
+  In `limbus`, `//pstart sleep` requests one best-learned Lullaby on Barney's
+  selected enemy or existing battle target; it is never maintained automatically.
+  `magicboss` selects the character-native `MagicTank` mode (March, Minne,
+  Ballad III); the character file and normal GearSwap scheduler still own the
+  instrument and every song gear decision.
 - GEO supplies the selected Indi/Geo bubbles and Entrust effect. Sustained
   profiles suppress its redundant native Haste/Refresh/Aurorastorm loop while
   Fury/Frailty/Entrust automation remains active. Encounter profiles that set
@@ -79,14 +93,15 @@ PartyStart establishes clear ownership:
   status effect directly.
 
 RDM, BRD, and DNC GearSwap read the active profile's synchronized target
-source (normally the composition puller; Limbus deliberately uses its command
-leader, with the leader also serving as fallback). They use
+source (normally the composition puller, including Limbus; the command leader
+remains the fallback). They use
 only a synchronized local target and never engage it themselves. RDM selects the best learned tier of
 each profile's enfeebles. BRD uses Carnage Elegy (falling back to Battlefield
 Elegy); `magic` and `safe` also use Pining Nocturne. Threnody remains
-manual/content-specific. Lullaby is likewise manual except for Limbus's
-explicit one-cast pack-sleep command; indiscriminate periodic sleep would be
-counterproductive.
+manual/content-specific. Lullaby is likewise manual. The BRD controller accepts
+the same explicit one-cast current-target pack-sleep request used by Limbus even
+when a route profile disables routine song upkeep; indiscriminate periodic sleep
+would be counterproductive.
 PartyCombat 0.4+ can synchronize a local `<t>` to an observer without
 engaging, facing, approaching, or stopping FastFollow.
 
@@ -177,11 +192,11 @@ with ten-second gaps, then refreshes PartyStart one client at a time. It never
 reloads Dolo's GearSwap. Run it out of combat, then preview and apply
 `progression/limbus`.
 For the Vermillion Fishfly profile, `//exec reload_fishfly_safe.txt` uses the
-same conservative reload pattern for Tackleberry, Kickpuncher, Barney, and
-Smalls, then refreshes PartyStart across all six clients. It never reloads
-Dolo's GearSwap, never activates combat, and ends with an inert
-`progression-blu/fishfly` preview. After verifying the lineup, explicitly run
-`//pstart blu fishfly`.
+same conservative reload pattern for all five followers, including Achoo, then
+refreshes PartyStart across all six clients. It never reloads Dolo's GearSwap
+or activates PartyCombat. The script finishes by applying the isolated
+`progression-blu/fishfly` support policy and printing controller status; wait
+for its ready checklist before Tackleberry activates the junction.
 For the Locus Dire Bat profile, `//exec reload_locusbats_safe.txt` first
 refreshes PartyStart across all six clients, then reloads only Barney's
 GearSwap so its BRD controller matches the refreshed addon. It never reloads
@@ -304,10 +319,10 @@ target and camera free. Explicitly use `//pc on` or
 `//pc force` from either the configured leader or puller when combat should
 begin.
 
-Profiles normally synchronize from the composition's configured puller.
-`limbus` overrides only that runtime target source to the command leader, so
-Dolo drives mobile floor-clearing while Tackleberry remains the puller for
-unattended Apex profiles. The composition file itself is not changed.
+Profiles synchronize from the composition's configured puller. In the current
+progression and progression-BLU lineups, Tackleberry therefore drives Limbus
+and the unattended Apex profiles. Dolomedes remains command leader, so either
+Dolomedes or Tackleberry may arm or force PartyCombat.
 
 The BLU compositions call Dolomedes' already-existing `TizThib` weapon state
 and configure AutoWS2 for Expiacion/level-3 aftermath in physical-offense
@@ -530,17 +545,40 @@ backup cure below 45% HP while preserving 25% MP.
 
 ## Limbus speed profile
 
-`limbus` is a mobile, mixed-family floor-clearing profile for the current
-progression composition. It deliberately avoids family-specific barspells,
-Dispel rules, and long enfeeble rotations. Dolo is the synchronized target
-source, all six characters are authorized attackers, and each uses the weapon,
-weapon skill, and 1000-TP threshold in `data/compositions.lua`.
+`limbus` is a mixed-family floor-clearing profile for the current progression
+composition. It deliberately avoids family-specific barspells, Dispel rules,
+and long enfeeble rotations. Tackleberry is the synchronized target source,
+and all six attackers are planted. PartyCombat still targets, turns, faces,
+and engages every attacker, but it issues no translational movement. Each uses
+the weapon, weapon skill, and 1000-TP threshold in `data/compositions.lua`.
 
 ```text
 //pstart preview progression limbus
 //pstart use progression limbus
 //pc on
 ```
+
+Run `//pc on` from Tackleberry to arm damage/Flash-driven synchronization, then
+pull with Flash. Use `//pc force` instead when Tackleberry already has the
+intended enemy selected and the party should engage it immediately. Neither
+command translates any attacker under this profile; Flash must bring the enemy
+into the stationary camp. `//pc status` reports movement `stationary`.
+
+After installing or changing this policy, run
+`//exec reload_limbus_stationary_safe.txt`. It stagger-reloads PartyCombat and
+PartyStart without touching GearSwap, reapplies `progression/limbus`, and
+prints status on Dolomedes and Tackleberry. Both must show PartyCombat v0.6.5 or later
+and movement `stationary` before `//pc on` is used.
+
+PartyCombat v0.6.6 excludes enemies with the whole word `Elemental` in their
+name on every synchronized character, including forced and previously stored
+targets. AutoWS2 v0.3.2 adds an independent WS check. Tackleberry's EasyFarm
+Ignored list must also contain `\bElemental\b` so it selects another pull
+instead of waiting on an enemy the party refuses to attack. The two local
+Tackleberry pull-profile files have been updated without changing their other
+settings. Pause EasyFarm and use `//exec reload_no_elementals_safe.txt` from
+Dolo, then load the updated EasyFarm profile before resuming. This reloads
+only PartyCombat/AutoWS2 and reapplies Limbus; GearSwap is not reloaded.
 
 The support stack is Chaos/Samurai, March/Minuet/Madrigal,
 Fury/Frailty/Entrust Refresh on PLD, Haste II on all six attackers, Refresh on
@@ -551,13 +589,86 @@ uses the responsive linked-pack/AoE cure policy shared with Apex Crabs, while
 Smalls supplies a backup Cure below 50% HP and Kickpuncher retains emergency
 Waltz ownership.
 
-From Dolo, `//pstart sleep` queues one cast for up to eight seconds. Barney
-prefers Horde Lullaby II, then Horde Lullaby; Foe Lullaby II/I are safe
-learned-spell fallbacks but are single-target rather than pack control. The
-  target is Dolo's synchronized current target, while Horde Lullaby's area is
-  centered on Barney. The party continues damaging that target while nearby links sleep, which is the useful shape for
-"kill just enough, get the floor item, then leave." An interrupted cast gets a
-short retry window; a completed cast is never automatically refreshed.
+Smalls also supplies **selective pull Silence in `limbus` only**. Caster
+detection uses actual spell-start/completion events for Tackleberry's current
+party-claimed enemy, keyed by server ID, index, and zone; enemy names are not
+used to infer jobs. Elementals remain excluded, matching PartyCombat's
+whole-word rule. Identically named mobs do not share caster state. If casting
+was not observed, a target still more than six yalms from Tackleberry after
+five seconds without at least half a yalm of progress receives one trial
+Silence. Moving the camp or reaching melee distance resets that stall clock.
+
+Silence takes the next usable RDM support action ahead of routine buffs and
+Dia, but emergency cures and Convert recovery remain first. Smalls must be
+stationary, able to cast, within 20.9 yalms, and able to retain 20% MP after the
+cast. The cast uses GearSwap's numeric server-ID target support, through its
+normal precast/midcast/aftercast equipment handling. It does not wait for
+Smalls's selected or battle target to synchronize: a caster beyond the 10-yalm
+melee cutoff is still eligible for Silence within spell range. No target
+selection packet, engagement, movement, turning, or FastFollow command is
+sent. Other profiles, buff choices, and healing thresholds are unchanged.
+
+Known casters receive at most three attempts per unresolved Silence cycle,
+respecting recast and retry delays; the unconfirmed stalled-pull fallback gets
+only one. Confirmed Silence or a no-effect result stops retries. A new cast
+after coverage or a matching Silence wear-off permits another bounded cycle;
+a complete resistance stops attempts on that pull. Target changes, loss of
+party claim, profile changes, and zoning discard the old pending request.
+A target stalled for 30 seconds produces one warning. This does **not** pause
+EasyFarm or guarantee that an immune, ranged, or path-blocked enemy will move.
+
+PartyTactics can also reserve one explicit exact-target Silence with
+`gs c pstartrdm silence <server-id>`. This narrow request is independent of
+routine RDM upkeep: it remains available when the support profile is off, but
+does nothing until invoked. The controller accepts only a live, party-claimed
+enemy's uint32 ID, revalidates the same ID/index/zone before every attempt, and
+casts through GearSwap's normal numeric-target resolver without selecting or
+engaging the mob.
+
+That explicit Silence owns Smalls's next legal action. A cast already underway
+finishes, then routine GearSwap ticks and new non-recovery actions remain held
+until Silence dispatches, succeeds, exhausts three attempts, becomes unsafe, or
+the 30-second request expires. Repeated requests for the same ID coalesce and
+cannot extend the deadline or reset attempts. Movement, recast, range, MP, and
+incapacitation pause rather than discard the request; Echo Drops, Remedy, and
+Panacea remain usable if Smalls is silenced. Death, claim loss, profile change,
+`pstartrdm off`, zoning, and logout release it. The profile-level `//pt silence`
+adapter additionally requires an exact-name whitelist and party claim before
+it can send this typed request.
+
+To activate an updated RDM controller, pause pulling, run
+`//send Smalls gs reload` from Dolo, wait for Smalls's GearSwap to finish
+loading, then run `//pstart limbus`. Wait for PartyStart's ready message and
+use `//pc on` from Tackleberry to resume normal synchronization. No other
+character needs a GearSwap reload. On Smalls, `//gs c pstartrdm status` shows
+selective Silence's current mob ID, attempt count, and last result.
+
+From Dolo, `//pstart sleep` immediately attempts one Lullaby on Barney's own
+selected living enemy, falling back to his existing battle target if necessary.
+It does not wait for Tackleberry's target to match or for the routine buff
+scheduler's tick delay. Barney prefers Horde Lullaby II, then Horde Lullaby;
+Foe Lullaby II/I remain learned-spell fallbacks and are single-target rather
+than pack control. Horde's area is centered on Barney. The party keeps
+damaging its current victim while nearby links sleep.
+
+Manual CC reserves Barney's **next action through Lullaby completion**. Any cast
+already underway finishes normally, then Lullaby gets the first legal casting
+slot (including the game's action-recovery delay). A request-only 0.1-second
+poll does not wait for the normal buff heartbeat. Native ticks, already queued
+songs/cures/debuffs, and AutoWS2 cannot start a different action while it is
+reserved. Repeated button presses coalesce into that same request, not more casts.
+Other characters' healing and automation are unaffected.
+
+Movement, recast, lack of MP, or a missing local enemy still block casting and
+are reported explicitly. Those waits are bounded to eight seconds; time spent
+finishing the current action or its recovery does not consume the window.
+The reservation stays held during command delivery and casting. An unstarted
+command can retry at most every two seconds within the existing window; an
+interrupted cast retains a short retry. Completion, zoning, logout, death,
+profile change, or stopping the bridge releases the reservation. Silence-removal
+items remain usable. A completed sleep is never maintained automatically.
+PartyStart does not change instruments or select another combat target for this
+manual request; the existing GearSwap spell path owns the cast and equipment.
 
 The supplied `init.txt` bindings are Alt-I for `pstart limbus`, Alt-L for one
 pack sleep, Alt-P for PartyCombat force, Alt-O for PartyCombat stop, and Alt-U
@@ -576,9 +687,16 @@ XP profile:
 
 ```text
 //exec reload_fishfly_safe.txt
-//pstart preview blu fishfly
+```
+
+That script performs a crash-safe staggered GearSwap reload on the five
+followers, reloads PartyStart on all six clients, and activates the profile. It
+never reloads or changes Dolo's BLU GearSwap. For later activations after the
+new files are already loaded, use either:
+
+```text
 //pstart blu fishfly
-//pstart status
+//exec activate_fishfly_safe.txt
 ```
 
 Wait for all six acknowledgements and finish the opening support rotation
@@ -595,34 +713,43 @@ weapon-skill, then unlocks Silencega. All flies are immune to Sleep, Bind,
 Gravity, and Petrification, so the profile arms none of those controls and no
 single-target debuff rotation.
 
-Support policy:
+The activation is ready to pop when the following opening state is visible:
 
-- Barney uses the character-local `Fishfly` song preset: Sage Etude,
-  Sentinel's Scherzo, and Victory March, plus Baraera and Barsilencera. This
-  adds one high-tier INT Etude without changing any established Melee,
-  Sustain, Tank, or Mage preset.
-- Achoo uses Indi-Acumen, Geo-Malaise, and entrusted Indi-INT on the first BLU
-  in the roster. He must stand beside Dolo and enter combat so the existing GEO
-  controller is allowed to place its offensive bubble and Entrust spell.
-  AutoZerg is forced off; Bolster remains a manual strategic choice.
-- Smalls applies Haste/Refresh, Phalanx II to Tackleberry, and party Shell,
-  then provides GearSwap backup cures below 75%. One-target enfeebles and
-  HealBot status-removal work are disabled during the short burn so recovery
-  wins the action queue.
+- Barney maintains Sage Etude, Learned Etude, and Sentinel's Scherzo, plus
+  Baraera and Barsilencera. The two Etudes share one generic FFXI buff icon, so
+  Fishfly uses separate per-spell timers and loss repair rather than falsely
+  treating the first Etude as proof that both are active. Haste II replaces
+  March and Refresh III replaces Ballad, leaving all three song slots available
+  for INT and survival.
+- Smalls opens with one party Shellra, then services Dolo, Tackleberry, himself,
+  Achoo, and Barney in encounter order with the best learned Refresh and Haste
+  tiers. Phalanx II is front-loaded on Tackleberry. He supplies aggressive
+  GearSwap backup cures below 90% HP on a 1.5-second decision interval.
+  Authoritative loss packets immediately invalidate the affected Haste,
+  Refresh, Phalanx, or Shell timer. HealBot's cure and buff queues remain off;
+  only status removal stays enabled for Silence, Slow, and INT Down. The six
+  non-INT stat-down variants are intentionally ignored so Debilitating Drone
+  cannot monopolize the action queue with low-value Erase casts.
+- Achoo establishes Indi-Acumen and entrusted Indi-Languor on Dolo before the
+  pop. As soon as the pack appears, he uses Dolo's exact selected Fishfly or the
+  nearest exact-name fallback, arms Blaze of Glory if it is ready, and places
+  Geo-Malaise without engaging, moving, or requiring PartyCombat. Acumen adds
+  magic attack; Malaise lowers magic defense; Languor lowers magic evasion for
+  every fly stacked around Dolo. AutoZerg is forced off, Bolster remains manual,
+  and GEO provides a sub-45% emergency Cure backstop after its core duties.
 - Tackleberry uses the responsive linked-pack Majesty cure policy. The profile
-  suppresses single-target Provoke and offensive `/WAR` cycling because the
-  pop already gives him hate on every fly; emergency Defender remains
-  available. Chivalry cannot re-enable AutoWS2 in this profile.
+  begins recovery at the first meaningful damage (routine below 90%, or at
+  least two members below 95%) and uses Cure IV earlier during the synchronized counter
+  volley. The profile suppresses single-target Provoke and offensive `/WAR`
+  cycling because the pop already gives him hate on every fly. Chivalry cannot
+  re-enable AutoWS2 in this profile.
 - Kickpuncher is emergency-Waltz-only below 65% party HP. Haste Samba, Steps,
   Flourishes, autoattack authorization, and AutoWS2 remain off so he cannot
   create an early single kill.
 
-After Tackleberry pops, Dolo selects one fly and issues `//pc force`. Achoo is
-the only authorized attacker, and movement is stationary, so this engages
-Achoo without engaging or retargeting Dolo. Dolo remains the manual command
-leader but is not a PartyCombat attacker or synchronized targeter; later Dolo
-damage merely keeps Achoo synchronized. Wait for Indi-INT and Geo-Malaise,
-then Dolo manually engages and performs the BLU AoE rotation. PartyStart
+No `//pc` command is used. Tackleberry pops only after the pre-pull buffs are
+ready; Achoo detects the spawned pack and places Geo-Malaise automatically.
+Dolo then performs the manual BLU AoE rotation. PartyStart
 neither casts Blue Magic nor changes Dolo's BLU AutoBuffMode. Keep Echo Drops
 available for the post-first-kill Silencega window and prioritize high-element
 AoE: the local
@@ -797,7 +924,7 @@ Tackleberry.
 | `physical` | March / Minuet / Madrigal | Fury / Frailty |
 | `accuracy` | March / Madrigal / Minuet | Torpor / Frailty |
 | `magic` | Ballad / March / Madrigal | Acumen / Malaise |
-| `fishfly` (`vermillion`) | Sage Etude / Scherzo / March; Baraero / Barsilence; no hostile songs | Acumen / Malaise; Entrust INT on BLU; AutoZerg off |
+| `fishfly` (`vermillion`) | Sage Etude / Learned Etude / Scherzo; Baraero / Barsilence; no hostile songs | Acumen / Malaise; Entrust Languor on BLU; nearest-pack fallback; AutoZerg off |
 | `safe` | March / Scherzo / Madrigal | Barrier / Frailty |
 | `ambuscade-v1` (`v1`) | March / Minuet / Madrigal; default Barstone / Barsilence; packet-reactive elemental Bars and one Horde Lullaby per activated Urchin wave; opportunistic Breadwinner Elegy only while manually targeted | Fury / Frailty; Entrust Wilt on PLD |
 | `ambuscade-v2` (`v2`) | March / Minuet / Madrigal; Barstone / Barsleep; Penelope Elegy | Fury / Frailty; Entrust Refresh |
@@ -821,7 +948,8 @@ RDM enfeebles by profile:
 
 On Smalls, `//gs c pstartrdm status` reports current MP,
 Haste/Refresh/Phalanx/defense target counts, the routine MP reserve, party
-Shell ownership, the active backup-cure threshold, and bounded Dispel count.
+Shell ownership, the active backup-cure threshold, bounded Dispel count, and
+the exact-target Silence queue state.
 On Tackleberry, `//gs c pstartpld status` reports the active cure policy and a
 second sustain line showing Majesty, Refresh, Ballad, Entrust, Chivalry,
 AutoWS2 reservation, and total completed cures.
@@ -887,10 +1015,14 @@ AutoWS2 reservation, and total completed cures.
   and Nocturne after 90 seconds because enemy debuff icons are not exposed to
   GearSwap. Encounter barspells use Barney's own `buffactive` state and are
   recast only after the corresponding local effect disappears.
-- Limbus pack sleep is a one-shot, eight-second request queue. It requires the
-  active Limbus profile, the command leader as requester, and Barney's local
-  target to match the synchronized live enemy. It does not find enemies,
-  retarget the party, judge sleep immunity, or maintain Lullaby.
+- Limbus pack sleep is a one-shot, highest-priority next-action reservation. It requires the
+  active Limbus profile, the command leader as requester, and a living enemy
+  selected or engaged on Barney. It does not wait for remote target agreement
+  or the routine buff timer, find enemies, retarget the party, judge sleep
+  immunity, or maintain Lullaby. The current action/recovery can finish without
+  expiring the request; other blockers have an eight-second window. Expiration
+  names the actual casting blocker. Non-CC actions are held only on Barney and
+  only until that explicit manual Limbus request finishes or is cleared.
 - RDM party-buff and enemy-debuff timers are maintained locally. Incoming
   action packets invalidate the exact party-buff timer when Haste, Refresh,
   Phalanx, Shell, or Protect is removed, allowing targeted repair after Geist
@@ -907,7 +1039,10 @@ AutoWS2 reservation, and total completed cures.
   only; it must not invoke the song routine a second time. Use
   `//gs c pstartbrd status` to see every required song as `UP` or `MISSING`,
   along with any active cast blocker.
-- PartyStart does not force BRD instruments. Barney's current `/WHM` support
+- PartyStart does not directly equip or lock BRD instruments. While a BRD
+  profile is active it selects Selindrile's native `FullLengthLock` extra-song
+  mode, which lets the normal final BRD midcast layer equip the character's
+  configured additional-song instrument. Barney's current `/WHM` support
   setup uses the single-wield `Naegling` weapon mode; `DualSavage` remains
   available only for a future dual-wield-capable subjob. Weapon modes
   intentionally do not own or lock the range slot, so the normal BRD song
@@ -942,6 +1077,20 @@ AutoWS2 reservation, and total completed cures.
   Quick Draw enhancement of Dia and richer damage rotations remain separate
   responsibilities.
 
+## Genmei semantic action queue
+
+`PartyStart_Genmei.lua` is a dormant GearSwap-side reservation layer used only
+by PartyTactics' Genbu runtime. It accepts four fixed meanings—open, close,
+Thunder proc, and Thunder burst—then maps them by local job. Every request is
+bound to one party-claimed Genbu ID, entity index, and zone and expires after a
+short deadline. It sends ordinary numeric-target `/ws`, `/ja`, and `/ma`
+commands through GearSwap; it never equips, locks, enables, or disables a slot.
+It also answers only the exact protocol-1 generation/epoch capability probe
+used by required preflight. Both GearSwap's `file_unload` callback and the raw
+addon unload event revoke that proof, so a reload cannot leave PartyTactics
+trusting a queue that is no longer loaded. Terminal failure packets re-enter
+the bounded retry path rather than being counted as successful actions.
+
 ## Attribution and integration boundaries
 
 PartyStart and its BRD, DNC, GEO, PLD, RDM, and WHM controllers were generated by OpenAI
@@ -956,3 +1105,12 @@ installation.
 PartyStart sends documented commands to Roller2 and
 [HealBot by Lorand](https://github.com/lorand-ffxi/HealBot), but it does not
 bundle either addon. No upstream author has endorsed or reviewed PartyStart.
+
+
+## Project credit and license
+
+Designed and directed by Don Lawrence.  Code developed with OpenAI Codex.
+
+This project's original contributions use the BSD 3-Clause terms in `LICENSE`.
+Existing upstream credits and third-party license notices remain applicable.
+AI assistance is documented separately from ownership and upstream authorship.

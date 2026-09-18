@@ -1,0 +1,71 @@
+echo Rancibus 1.1.0 / PartyTactics 0.11.1 safe reload beginning. Run only while all six characters are out of combat. The active tactic will stop; nothing will be selected or armed.
+send Dolomedes pt off
+wait 3
+echo Reloading PartyCombat 0.6.14 inert on all six clients for exact one-shot Dolo engage and Tackle/Kick melee control.
+send Dolomedes lua unload PartyCombat
+wait 1
+send Dolomedes lua load PartyCombat
+wait 2
+send Tackleberry lua unload PartyCombat
+wait 1
+send Tackleberry lua load PartyCombat
+wait 2
+send Kickpuncher lua unload PartyCombat
+wait 1
+send Kickpuncher lua load PartyCombat
+wait 2
+send Barneystinson lua unload PartyCombat
+wait 1
+send Barneystinson lua load PartyCombat
+wait 2
+send Smalls lua unload PartyCombat
+wait 1
+send Smalls lua load PartyCombat
+wait 2
+send Achoo lua unload PartyCombat
+wait 1
+send Achoo lua load PartyCombat
+wait 3
+echo Reloading all six GearSwap jobs so each stable host can discover the new private Rancibus adapter. GearSwap remains the sole equipment and instrument owner.
+send Dolomedes gs reload
+wait 10
+send Tackleberry gs reload
+wait 10
+send Kickpuncher gs reload
+wait 10
+send Barneystinson gs reload
+wait 10
+send Smalls gs reload
+wait 10
+send Achoo gs reload
+wait 10
+echo Reloading PartyTactics 0.11.1 on all six clients one at a time.
+send Dolomedes lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 2
+send Tackleberry lua unload PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 2
+send Kickpuncher lua unload PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 2
+send Barneystinson lua unload PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 2
+send Smalls lua unload PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 2
+send Achoo lua unload PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 3
+send Dolomedes pc status
+send Dolomedes pt version
+send Dolomedes pt list
+send Dolomedes pt errors
+echo Reload complete and inert. Inside direct Vagary, run //pt rancibus, position everyone, then issue //pt arm. Checks are advisory: do not wait for ACK or PASS. Arm starts best-effort lanes immediately. //pt disarm stops automation; manual targets, weaponskills, abilities, spells, and ranged attacks always remain available.

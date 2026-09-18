@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "sortie-objective-c-magic-burst-v1",
+    "version": "1.3.0"
+  },
+  "encounter": {
+    "volume": 1,
+    "boss_names": [
+      "Cachaemic Skeleton",
+      "Cachaemic Ghoul",
+      "Cachaemic Corse",
+      "Cachaemic Ghost"
+    ],
+    "add_names": []
+  },
+  "difficulty": {
+    "operator_declared": true,
+    "allowed": ["VE", "E", "N", "D", "VD"]
+  },
+  "signals": {
+    "monster_ability_ids": [],
+    "weapon_skill_ids": [25, 42],
+    "spell_ids": [164],
+    "job_ability_ids": []
+  },
+  "metrics": [
+    "time_from_arm_to_party_claim_seconds",
+    "time_from_bind_to_tackle_pull_seconds",
+    "tank_pull_fallbacks",
+    "time_to_1000_tp_pair_seconds",
+    "evisceration_requests",
+    "evisceration_confirmations",
+    "savage_blade_requests",
+    "fragmentation_confirmations",
+    "primary_thunder_requests",
+    "fallback_thunder_requests",
+    "magic_burst_confirmations",
+    "chain_rebuilds",
+    "target_hpp_at_fragmentation",
+    "target_hpp_at_magic_burst",
+    "manual_chain_step_recoveries",
+    "time_to_target_end_seconds"
+  ],
+  "outcomes": ["clear", "wipe", "timeout", "abort"],
+  "uncertainties": [
+    "The safe target-HP margin for the owned-gear Evisceration and Savage Blade pair needs live measurement across all four normal Cachaemic families.",
+    "The two-second tank-pull fallback is deliberately non-blocking and should be compared with Tackleberry's actual opening-action latency.",
+    "Chest appearance and temporary-item acquisition are not represented by combat action packets, so objective credit remains an external observation.",
+    "The three Sortie instance zone variants must be correlated with live run traces before route-level automatic profile switching is promoted."
+  ]
+}

@@ -1,0 +1,295 @@
+diff --git a/gearswap.lua b/gearswap.lua
+--- a/gearswap.lua
++++ b/gearswap.lua
+@@ -51,6 +51,131 @@ require 'lists'
+ require 'queues'
+ require 'sets'
+ 
++-- Opt-in, low-overhead timing for the GearSwap pipeline and user callbacks.
++-- It is disabled by default and performs no clock reads until //gs perf start.
++gs_perf = {
++    enabled = false,
++    started_clock = nil,
++    started_wall = nil,
++    stopped_duration = nil,
++    pipeline = {},
++    callbacks = {},
++    events = {},
++}
++
++function gs_perf_reset()
++    gs_perf.enabled = false
++    gs_perf.started_clock = nil
++    gs_perf.started_wall = nil
++    gs_perf.stopped_duration = nil
++    gs_perf.pipeline = {}
++    gs_perf.callbacks = {}
++    gs_perf.events = {}
++end
++
++function gs_perf_record(kind, key, elapsed)
++    if not gs_perf.enabled or not elapsed then return end
++    local bucket = gs_perf[kind]
++    if not bucket then return end
++
++    key = tostring(key or 'unknown')
++    local milliseconds = elapsed * 1000
++    local row = bucket[key]
++    if not row then
++        row = {calls=0, total_ms=0, max_ms=0, over_1ms=0, over_5ms=0, over_10ms=0}
++        bucket[key] = row
++    end
++    row.calls = row.calls + 1
++    row.total_ms = row.total_ms + milliseconds
++    if milliseconds > row.max_ms then row.max_ms = milliseconds end
++    if milliseconds >= 1 then row.over_1ms = row.over_1ms + 1 end
++    if milliseconds >= 5 then row.over_5ms = row.over_5ms + 1 end
++    if milliseconds >= 10 then row.over_10ms = row.over_10ms + 1 end
++end
++
++local function gs_perf_rows()
++    local rows = {}
++    for _, kind in ipairs({'pipeline', 'callbacks', 'events'}) do
++        for key, values in pairs(gs_perf[kind]) do
++            rows[#rows + 1] = {
++                kind=kind,
++                key=key,
++                calls=values.calls,
++                total_ms=values.total_ms,
++                average_ms=values.calls > 0 and values.total_ms / values.calls or 0,
++                max_ms=values.max_ms,
++                over_1ms=values.over_1ms,
++                over_5ms=values.over_5ms,
++                over_10ms=values.over_10ms,
++            }
++        end
++    end
++    table.sort(rows, function(left, right)
++        if left.total_ms == right.total_ms then return left.key < right.key end
++        return left.total_ms > right.total_ms
++    end)
++    return rows
++end
++
++local function gs_perf_csv(value)
++    return '"'..tostring(value or ''):gsub('"', '""')..'"'
++end
++
++function gs_perf_write_report()
++    local player_info = windower.ffxi.get_player()
++    local character = player_info and player_info.name or 'Unknown'
++    local stamp = os.date('%Y%m%d-%H%M%S', gs_perf.started_wall or os.time())
++    local directory = windower.addon_path..'data/performance/'
++    if not windower.dir_exists(directory) then windower.create_dir(directory) end
++    local path = directory..'gearswap-perf-'..character..'-'..stamp..'.csv'
++    local handle, open_error = io.open(path, 'w')
++    if not handle then
++        msg.addon_msg(123, 'GearSwap profiler could not write report: '..tostring(open_error))
++        return nil
++    end
++
++    local duration = gs_perf.stopped_duration
++        or (gs_perf.started_clock and os.clock() - gs_perf.started_clock)
++        or 0
++    handle:write('character,', gs_perf_csv(character), '\n')
++    handle:write('duration_seconds,', ('%.3f'):format(duration), '\n')
++    handle:write('kind,event,calls,total_ms,average_ms,max_ms,over_1ms,over_5ms,over_10ms\n')
++    local rows = gs_perf_rows()
++    for _, row in ipairs(rows) do
++        handle:write(gs_perf_csv(row.kind), ',', gs_perf_csv(row.key), ',', row.calls, ',',
++            ('%.6f'):format(row.total_ms), ',', ('%.6f'):format(row.average_ms), ',',
++            ('%.6f'):format(row.max_ms), ',', row.over_1ms, ',', row.over_5ms, ',', row.over_10ms, '\n')
++    end
++    handle:close()
++
++    msg.addon_msg(207, ('GearSwap profiler: %.1fs, %d measured paths.'):format(duration, #rows))
++    for index = 1, math.min(6, #rows) do
++        local row = rows[index]
++        msg.addon_msg(207, ('  %s/%s: %d calls, %.2fms total, %.3fms avg, %.2fms max'):format(
++            row.kind, row.key, row.calls, row.total_ms, row.average_ms, row.max_ms))
++    end
++    msg.addon_msg(207, 'GearSwap profiler report: '..path)
++    return path
++end
++
++function gs_perf_start()
++    gs_perf_reset()
++    gs_perf.enabled = true
++    gs_perf.started_clock = os.clock()
++    gs_perf.started_wall = os.time()
++    msg.addon_msg(207, 'GearSwap profiler started (timings remain in memory until report/stop).')
++end
++
++function gs_perf_stop()
++    if not gs_perf.started_clock then
++        msg.addon_msg(123, 'GearSwap profiler has not been started.')
++        return nil
++    end
++    gs_perf.stopped_duration = os.clock() - gs_perf.started_clock
++    gs_perf.enabled = false
++    return gs_perf_write_report()
++end
++
+ 
+ windower.text.create = function (str)
+     if __raw.text.registry[str] then
+@@ -159,7 +284,28 @@ windower.register_event('addon command',function (...)
+ 
+     local cmd = table.remove(splitup,1):lower()
+ 
+-    if cmd == 'c' then
++    if cmd == 'perf' then
++        local action = strip(splitup[1] or 'status')
++        if action == 'start' then
++            gs_perf_start()
++        elseif action == 'stop' then
++            gs_perf_stop()
++        elseif action == 'report' then
++            if gs_perf.started_clock then
++                gs_perf_write_report()
++            else
++                msg.addon_msg(123, 'GearSwap profiler has not been started.')
++            end
++        elseif action == 'reset' then
++            gs_perf_reset()
++            msg.addon_msg(207, 'GearSwap profiler reset.')
++        elseif action == 'status' then
++            local state = gs_perf.enabled and 'running' or (gs_perf.started_clock and 'stopped' or 'idle')
++            msg.addon_msg(207, 'GearSwap profiler is '..state..'.')
++        else
++            msg.addon_msg(123, 'Usage: //gs perf start|stop|report|reset|status')
++        end
++    elseif cmd == 'c' then
+         if gearswap_disabled then return end
+         if splitup[1] then
+             refresh_globals()
+@@ -279,6 +425,7 @@ function disenable(tab,funct,functname,pol)
+ end
+ 
+ function incoming_chunk(id,data,modified,injected,blocked)
++    local perf_started = gs_perf.enabled and (next_packet_events or (not injected and parse.i[id])) and os.clock() or nil
+     windower.debug('incoming chunk '..id)
+ 
+     if next_packet_events and next_packet_events.sequence_id ~= data:unpack('H',3) then
+@@ -307,14 +454,21 @@ function incoming_chunk(id,data,modified,injected,blocked)
+     if not injected and parse.i[id] then
+         parse.i[id](data,blocked)
+     end
++    if perf_started then
++        gs_perf_record('events',('core:incoming:0x%03X'):format(id),os.clock()-perf_started)
++    end
+ end
+ 
+ function outgoing_chunk(id,original,data,injected,blocked)
++    local perf_started = gs_perf.enabled and (not blocked and parse.o[id]) and os.clock() or nil
+     windower.debug('outgoing chunk '..id)
+ 
+     if not blocked and parse.o[id] then
+         parse.o[id](data,injected)
+     end
++    if perf_started then
++        gs_perf_record('events',('core:outgoing:0x%03X'):format(id),os.clock()-perf_started)
++    end
+ end
+ 
+ windower.register_event('incoming chunk',incoming_chunk)
+diff --git a/flow.lua b/flow.lua
+--- a/flow.lua
++++ b/flow.lua
+@@ -41,6 +41,8 @@
+ ---- Everything else : nil
+ -----------------------------------------------------------------------------------
+ function equip_sets(swap_type,ts,...)
++    local perf_started = gs_perf and gs_perf.enabled and os.clock() or nil
++    local perf_key = type(swap_type) == 'string' and swap_type or 'registered_user_event'
+     local results
+     local var_inps = {...}
+     local val1 = var_inps[1]
+@@ -179,10 +181,13 @@ function equip_sets(swap_type,ts,...)
+     windower.debug(tostring(swap_type)..' exit')
+ 
+     if type(swap_type) == 'function' then
++        if perf_started then gs_perf_record('pipeline', perf_key, os.clock() - perf_started) end
+         return unpack(results)
+     end
+ 
+-    return equip_sets_exit(swap_type,ts,val1)
++    local exit_result = equip_sets_exit(swap_type,ts,val1)
++    if perf_started then gs_perf_record('pipeline', perf_key, os.clock() - perf_started) end
++    return exit_result
+ end
+ 
+ 
+@@ -318,7 +323,9 @@ end
+ function user_pcall(str,...)
+     if user_env then
+         if type(user_env[str]) == 'function' then
+-            bool,err = pcall(user_env[str],...)
++            local perf_started = gs_perf and gs_perf.enabled and os.clock() or nil
++            local bool,err = pcall(user_env[str],...)
++            if perf_started then gs_perf_record('callbacks', str, os.clock() - perf_started) end
+             if not bool then error('\nGearSwap has detected an error in the user function '..str..':\n'..err) end
+         elseif user_env[str] then
+             msg.addon_msg(123,windower.to_shift_jis(tostring(str))..'() exists but is not a function')
+@@ -339,7 +346,9 @@ end
+ function user_pcall2(str,...)
+     if user_env then
+         if type(user_env[str]) == 'function' then
+-            bool,err = pcall(user_env[str],...)
++            local perf_started = gs_perf and gs_perf.enabled and os.clock() or nil
++            local bool,err = pcall(user_env[str],...)
++            if perf_started then gs_perf_record('callbacks', str, os.clock() - perf_started) end
+             if not bool then print('\nGearSwap has detected an error in the user function '..str..':\n'..err) end
+         elseif user_env[str] then
+             msg.addon_msg(123,windower.to_shift_jis(tostring(str))..'() exists but is not a function')
+diff --git a/user_functions.lua b/user_functions.lua
+--- a/user_functions.lua
++++ b/user_functions.lua
+@@ -257,7 +257,7 @@ function register_event_user(str,func)
+     elseif type(str) ~= 'string' then
+         error('\nGearSwap: windower.register_event() was passed an invalid value ('..tostring(str)..'). (must be a string)', 2)
+     end
+-    local id = windower.register_event(str,user_equip_sets(func))
++    local id = windower.register_event(str,user_equip_sets(func,str))
+     registered_user_events[id] = true
+     return id
+ end
+@@ -268,7 +268,18 @@ function raw_register_event_user(str,func)
+     elseif type(str) ~= 'string' then
+         error('\nGearSwap: windower.register_event() was passed an invalid value ('..tostring(str)..'). (must be a string)', 2)
+     end
+-    local id = windower.register_event(str,setfenv(func,user_env))
++    local user_func = setfenv(func,user_env)
++    local event_name = str
++    local wrapped = setfenv(function(...)
++        if not gearswap.gs_perf or not gearswap.gs_perf.enabled then
++            return user_func(...)
++        end
++        local perf_started = os.clock()
++        local results = {user_func(...)}
++        gearswap.gs_perf_record('events','raw:'..event_name,os.clock()-perf_started)
++        return unpack(results)
++    end,user_env)
++    local id = windower.register_event(str,wrapped)
+     registered_user_events[id] = true
+     return id
+ end
+@@ -281,9 +292,16 @@ function unregister_event_user(id)
+     registered_user_events[id] = nil
+ end
+ 
+-function user_equip_sets(func)
++function user_equip_sets(func,event_name)
+     return setfenv(function(...)
+             if not gearswap.gearswap_disabled then
++                if gearswap.gs_perf and gearswap.gs_perf.enabled then
++                    local perf_started = os.clock()
++                    gearswap.refresh_globals(true)
++                    local results = {gearswap.equip_sets(func,nil,...)}
++                    gearswap.gs_perf_record('events','registered:'..tostring(event_name or 'unknown'),os.clock()-perf_started)
++                    return unpack(results)
++                end
+                 gearswap.refresh_globals(true)
+                 return gearswap.equip_sets(func,nil,...)
+             end
+

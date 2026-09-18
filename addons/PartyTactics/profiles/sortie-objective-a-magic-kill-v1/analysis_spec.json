@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "sortie-objective-a-magic-kill-v1",
+    "version": "2.0.0"
+  },
+  "encounter": {
+    "volume": 1,
+    "boss_names": ["Abject Acuex"],
+    "add_names": []
+  },
+  "difficulty": {
+    "operator_declared": true,
+    "allowed": ["VE", "E", "N", "D", "VD"]
+  },
+  "signals": {
+    "monster_ability_ids": [],
+    "weapon_skill_ids": [34, 35],
+    "spell_ids": [146, 147, 148],
+    "job_ability_ids": []
+  },
+  "metrics": [
+    "time_from_bind_to_tackle_pull_seconds",
+    "tank_pull_fallbacks",
+    "time_to_tackle_1000_tp_seconds",
+    "time_to_smalls_1000_tp_seconds",
+    "flat_blade_requests",
+    "flat_blade_successes",
+    "red_lotus_blade_requests",
+    "red_lotus_blade_successes",
+    "liquefaction_packets",
+    "chain_retries",
+    "time_from_liquefaction_to_first_fire_seconds",
+    "time_from_magic_hold_to_target_end_seconds",
+    "fire_v_requests",
+    "fire_iv_requests",
+    "fire_iii_requests",
+    "magic_burst_packets",
+    "aquaveil_uptime_percent",
+    "smalls_convert_count",
+    "smalls_minimum_mp",
+    "last_damage_actor",
+    "last_damage_action",
+    "likely_qualifying_kills",
+    "physical_final_hits",
+    "time_to_target_end_seconds"
+  ],
+  "outcomes": ["clear", "wipe", "timeout", "abort"],
+  "uncertainties": [
+    "Combat packets can identify the final observed damage type but the resulting chest and temporary item remain authoritative objective evidence.",
+    "The 35 percent Fire-only hold is a conservative first calibration and should be tightened only after repeatable six-credit traces.",
+    "The 1.25-second tank-pull fallback is deliberately non-blocking and should be measured against Tackleberry's actual first-attack latency.",
+    "The legal-action queue prefers Fire V, then Fire IV, then Fire III; actual two-burst timing and recast contention require live validation.",
+    "Aquaveil status is locally observable on Smalls, but interruption cause attribution should be checked against action failures and the combat log."
+  ]
+}

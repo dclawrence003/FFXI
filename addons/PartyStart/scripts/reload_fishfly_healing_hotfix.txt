@@ -1,0 +1,15 @@
+echo Fishfly healing hotfix: reloading only Tackleberry and Smalls.
+send Tackleberry lua r PartyStart
+wait 3
+send Smalls lua r PartyStart
+wait 3
+send Tackleberry gs reload
+wait 8
+send Smalls gs reload
+wait 8
+pstart use blu fishfly
+wait 8
+pstart status
+send Tackleberry gs c pstartpld status
+send Smalls gs c pstartrdm status
+echo Fishfly healing hotfix active. Verify PLD cure threshold 95 and RDM backup cure threshold 92 before pulling.

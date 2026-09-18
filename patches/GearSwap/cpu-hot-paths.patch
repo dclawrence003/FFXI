@@ -1,0 +1,37 @@
+diff --git a/gearswap.lua b/gearswap.lua
+index 42abedd..7408152 100644
+--- a/gearswap.lua
++++ b/gearswap.lua
+@@ -258,6 +258,32 @@ require 'triggers'
+ initialize_packet_parsing()
+ gearswap_disabled = false
+ 
++-- PartyTactics' recurring role maintenance never equips gear itself. Routing
++-- those ticks through `gs c` nevertheless ran GearSwap's complete generic
++-- self-command/equipment pipeline on every supported client. Keep the
++-- coordinator's cadence and lifecycle gates, but give it a deliberately
++-- narrow entry point that can invoke only the matching reviewed helper.
++local party_tactics_maintenance_helpers = {
++    BRD='pstartbrd', RDM='pstartrdm', PLD='pstartpld',
++    DNC='pstartdnc', GEO='pstartgeo', WHM='pstartwhm',
++}
++
++function party_tactics_maintenance_tick()
++    if gearswap_disabled or not user_env or not player then return end
++    local helper = party_tactics_maintenance_helpers[player.main_job]
++    if not helper or type(user_env.user_job_self_command) ~= 'function' then
++        return
++    end
++
++    -- Coalesce with a very recent GearSwap refresh when possible. The normal
++    -- Sel-Include heartbeat also refreshes these globals, so this never turns
++    -- into an additional equipment pass.
++    refresh_globals(true)
++    helper = party_tactics_maintenance_helpers[player.main_job]
++    if not helper then return end
++    user_pcall('user_job_self_command', {helper, 'tick'}, {handled=false})
++end
++
+ windower.register_event('load',function()
+     windower.debug('load')
+     refresh_globals()

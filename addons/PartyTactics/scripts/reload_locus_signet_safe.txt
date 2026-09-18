@@ -1,0 +1,43 @@
+echo Locus Signet profile reload beginning. Run this only while all six characters are out of combat. PartyStart is neither loaded nor used, and nothing will be selected or armed.
+send Dolomedes pt off
+wait 3
+send Dolomedes lua unload SignetKeeper
+wait 1
+send Tackleberry lua unload SignetKeeper
+wait 1
+send Kickpuncher lua unload SignetKeeper
+wait 1
+send Barneystinson lua unload SignetKeeper
+wait 1
+send Smalls lua unload SignetKeeper
+wait 1
+send Achoo lua unload SignetKeeper
+wait 1
+send Dolomedes lua unload JubileeKeeper
+wait 1
+send Tackleberry lua unload LocusPuller
+wait 2
+send Dolomedes lua reload PartyCombat
+send Tackleberry lua reload PartyCombat
+send Kickpuncher lua reload PartyCombat
+send Barneystinson lua reload PartyCombat
+send Smalls lua reload PartyCombat
+send Achoo lua reload PartyCombat
+wait 3
+send Dolomedes lua reload GearSwap
+send Tackleberry lua reload GearSwap
+send Kickpuncher lua reload GearSwap
+send Barneystinson lua reload GearSwap
+send Smalls lua reload GearSwap
+send Achoo lua reload GearSwap
+wait 12
+send Dolomedes lua reload PartyTactics
+send Tackleberry lua reload PartyTactics
+send Kickpuncher lua reload PartyTactics
+send Barneystinson lua reload PartyTactics
+send Smalls lua reload PartyTactics
+send Achoo lua reload PartyTactics
+wait 5
+send Dolomedes pt version
+send Dolomedes pt status
+echo Reload complete and inert. SignetKeeper unloads are deliberately serialized; never use send @all lua reload SignetKeeper. Use //pt locus-signet once; it selects and arms the profile, then loads and proves SignetKeeper, JubileeKeeper, and LocusPuller before Tackle begins pulling. Ctrl-P reasserts ON; Alt-P stops immediately. Use //send @all sk status for Signet diagnostics.

@@ -3,16 +3,19 @@
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 const { URL } = require('node:url');
 const { root, config, runtimeDir } = require('./common');
 const { openDb } = require('./db');
-const { main: refreshInventory } = require('./refresh');
+const { readAll, syncInventory } = require('./findall');
 const { parseItems } = require('./resources');
 const { buildIndex, normalize, parseWiki } = require('./wiki');
 const { parseItemBasic } = require('./vendor');
 const { evaluate } = require('./recommend');
 const { getPriceState } = require('./ffxiah');
-const { ingestTelemetry, recordLimbusChest, dashboard, keyItemView, currencyView } = require('./telemetry');
+const {
+  ingestTelemetry, recordLimbusChest, dashboard, keyItemView, currencyView, equipmentView
+} = require('./telemetry');
 
 const host = '127.0.0.1';
 const port = Number(process.env.FFXI_INVENTORY_PORT || 8787);
@@ -133,8 +136,15 @@ function api(url, response) {
     if (url.pathname === '/api/currencies') {
       return json(response, currencyView(db, config));
     }
+    if (url.pathname === '/api/equipment') {
+      return json(response, equipmentView(db, config));
+    }
     if (url.pathname === '/api/status') {
       return json(response, db.prepare('SELECT * FROM source_status ORDER BY source').all());
+    }
+    if (url.pathname === '/api/inventory-revision') {
+      const row = db.prepare("SELECT updated_at revision FROM source_status WHERE source='Inventory snapshot'").get();
+      return json(response, { revision: row?.revision ?? null });
     }
     if (url.pathname === '/api/summary') {
       const totals = db.prepare(`SELECT COUNT(DISTINCT i.item_id) unique_items, SUM(i.count) total_items,
@@ -207,7 +217,12 @@ const server = http.createServer(async (request, response) => {
     response.writeHead(404).end('Not found');
     return;
   }
-  response.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
+  response.writeHead(200, {
+    'Content-Type': types[path.extname(file)] || 'application/octet-stream',
+    'Cache-Control': 'no-store, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  });
   fs.createReadStream(file).pipe(response);
 });
 
@@ -217,15 +232,81 @@ server.listen(port, host, () => {
 });
 
 let refreshTimer = null;
+let refreshProcess = null;
+let refreshQueued = false;
+let refreshReason = null;
+let inventorySyncTimer = null;
+
+function syncInventoryNow() {
+  inventorySyncTimer = null;
+  const snapshot = readAll(config.paths.findAll, Object.keys(config.characters));
+  const db = openDb();
+  try {
+    const result = syncInventory(db, snapshot);
+    console.log(`Inventory snapshot synchronized (${result.rows} bag entries).`);
+  } finally {
+    db.close();
+  }
+}
+
+function scheduleInventorySync(delay = 500) {
+  clearTimeout(inventorySyncTimer);
+  inventorySyncTimer = setTimeout(() => {
+    try {
+      syncInventoryNow();
+    } catch (error) {
+      console.error(`Inventory snapshot sync failed: ${error.stack || error.message}`);
+      inventorySyncTimer = setTimeout(() => {
+        try { syncInventoryNow(); }
+        catch (retryError) { console.error(`Inventory snapshot retry failed: ${retryError.stack || retryError.message}`); }
+      }, 2000);
+    }
+  }, delay);
+}
+
+function launchRefresh() {
+  refreshTimer = null;
+  if (refreshProcess) {
+    refreshQueued = true;
+    return;
+  }
+
+  const reason = refreshReason || 'FindAll changed';
+  refreshReason = null;
+  console.log(`${reason}; starting background InventoryCore refresh.`);
+
+  const child = spawn(process.execPath, [path.join(__dirname, 'refresh.js')], {
+    cwd: root,
+    windowsHide: true,
+    stdio: ['ignore', 'inherit', 'inherit']
+  });
+  refreshProcess = child;
+
+  child.once('error', (error) => {
+    console.error(`Automatic refresh could not start: ${error.stack || error.message}`);
+  });
+  child.once('close', (code) => {
+    if (refreshProcess === child) refreshProcess = null;
+    if (code === 0) console.log('Background InventoryCore refresh completed.');
+    else console.error(`Automatic refresh exited with code ${code}.`);
+
+    if (refreshQueued) {
+      refreshQueued = false;
+      refreshTimer = setTimeout(launchRefresh, 5000);
+    }
+  });
+}
+
 fs.watch(config.paths.findAll, { persistent: true }, (_event, filename) => {
   if (!filename || !filename.toLowerCase().endsWith('.lua')) return;
+  scheduleInventorySync();
+  refreshReason = `FindAll changed (${filename})`;
+  if (refreshProcess) {
+    refreshQueued = true;
+    return;
+  }
   clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(async () => {
-    try {
-      console.log(`FindAll changed (${filename}); refreshing InventoryCore.`);
-      await refreshInventory();
-    } catch (error) {
-      console.error(`Automatic refresh failed: ${error.stack || error.message}`);
-    }
-  }, 5000);
+  refreshTimer = setTimeout(launchRefresh, 5000);
 });
+
+scheduleInventorySync(0);

@@ -1,0 +1,29 @@
+echo Fishfly live repair: reloading only Tackleberry and Achoo. Dolo, Smalls, and Barney are untouched.
+send Tackleberry lua r PartyStart
+wait 3
+send Achoo lua r PartyStart
+wait 3
+send Tackleberry gs reload
+wait 8
+send Achoo gs reload
+wait 8
+send Tackleberry hb disable cure
+send Tackleberry hb disable na
+send Tackleberry hb off
+send Achoo hb disable cure
+send Achoo hb disable na
+send Achoo hb off
+send Tackleberry gs c set AutoBuffMode Auto
+send Tackleberry gs c unset AutoTankMode
+send Tackleberry gs c unset AutoTankFull
+send Tackleberry gs c set HybridMode Tank
+send Tackleberry gs c unset AutoWSMode
+send Tackleberry gs c pstartpld fishfly Dolomedes
+send Achoo gs c pstartgeo fishfly Dolomedes
+wait 2
+send Tackleberry gs c pstartpld tick
+send Achoo gs c pstartgeo tick
+wait 3
+send Tackleberry gs c pstartpld status
+send Achoo gs c pstartgeo status
+echo Fishfly repair active: Tackleberry cures automatically; Achoo follows Dolo's selected Fishfly with Acumen, Malaise, and entrusted INT. PartyCombat is not used.

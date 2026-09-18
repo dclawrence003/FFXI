@@ -1,4 +1,4 @@
-echo Staggered Vermillion Fishfly support reload beginning. Dolo GearSwap is untouched.
+echo Fishfly full safe reload beginning. Dolo GearSwap is deliberately untouched.
 send Tackleberry gs reload
 wait 10
 send Kickpuncher gs reload
@@ -6,6 +6,8 @@ wait 10
 send Barneystinson gs reload
 wait 10
 send Smalls gs reload
+wait 10
+send Achoo gs reload
 wait 10
 send Dolomedes lua r PartyStart
 wait 3
@@ -18,7 +20,5 @@ wait 3
 send Smalls lua r PartyStart
 wait 3
 send Achoo lua r PartyStart
-wait 5
-pstart version
-pstart preview blu fishfly
-echo Fishfly reload complete. Verify the BLU composition, then run //pstart blu fishfly. Dolo remains manual.
+wait 8
+exec activate_fishfly_safe.txt

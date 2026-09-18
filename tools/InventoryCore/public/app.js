@@ -18,8 +18,12 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
 
+function normalizeSearch(value) {
+  return String(value ?? '').normalize('NFKC').trim().toLowerCase();
+}
+
 function compactGil(value) {
-  if (!value) return 'â€”';
+  if (!value) return '\u2014';
   if (value >= 1000000) return `${(value / 1000000).toFixed(value >= 10000000 ? 0 : 1)}m`;
   if (value >= 1000) return `${Math.round(value / 1000)}k`;
   return String(value);
@@ -36,7 +40,7 @@ function valueText(row) {
       : compactGil(row.ah_median);
   }
   if (row.vendor_price) return `${compactGil(row.vendor_price)} NPC`;
-  return row.ah_category && row.ah_category !== '@NONE' ? 'No sales' : 'â€”';
+  return row.ah_category && row.ah_category !== '@NONE' ? 'No sales' : '\u2014';
 }
 
 async function loadSummary() {
@@ -51,13 +55,13 @@ async function loadSummary() {
 }
 
 function renderBags() {
-  const search = $('#search').value.trim().toLowerCase();
+  const search = normalizeSearch($('#search').value);
   const character = $('#character').value;
   const action = $('#action').value;
   const mode = document.querySelector('input[name="status-mode"]:checked').value;
   let rows = allRows.filter((row) =>
     (!character || row.character === character) &&
-    (!search || row.name.toLowerCase().includes(search))
+    (!search || normalizeSearch(row.name).includes(search))
   );
   if (action && mode === 'only') rows = rows.filter((row) => row.action === action);
 
@@ -79,7 +83,7 @@ function renderBags() {
     const itemRows = panel.rows.map((row) => {
       const matches = !action || row.action === action;
       const classes = `${row.action} ${action ? (matches ? 'match' : 'nonmatch') : ''}`;
-      const tooltip = `${row.action} Â· ${row.confidence} confidence\n${row.reason}\n${row.ah_median ? `Valefor single median: ${Number(row.ah_median).toLocaleString()} gil` : 'No Valefor single median'}${row.stack_median ? `\nValefor stack median: ${Number(row.stack_median).toLocaleString()} gil` : ''}${row.vendor_price ? `\nNPC resale: ${Number(row.vendor_price).toLocaleString()} gil each` : ''}`;
+      const tooltip = `${row.action} \u00b7 ${row.confidence} confidence\n${row.reason}\n${row.ah_median ? `Valefor single median: ${Number(row.ah_median).toLocaleString()} gil` : 'No Valefor single median'}${row.stack_median ? `\nValefor stack median: ${Number(row.stack_median).toLocaleString()} gil` : ''}${row.vendor_price ? `\nNPC resale: ${Number(row.vendor_price).toLocaleString()} gil each` : ''}`;
       return `<div class="bag-row ${classes}" title="${escapeHtml(tooltip)}">
         <span class="status-code">${statusCodes[row.action] || '?'}</span>
         <span class="item-name">${escapeHtml(row.name)}</span>
@@ -89,8 +93,8 @@ function renderBags() {
     }).join('');
     return `<section class="bag-card">
       <header class="bag-head">
-        <div class="bag-title"><strong>${escapeHtml(displayBag(panel.bag))}</strong> Â· ${escapeHtml(panel.character)}</div>
-        <div class="bag-count">${panel.rows.length} slots Â· ${quantity} qty</div>
+        <div class="bag-title"><strong>${escapeHtml(displayBag(panel.bag))}</strong> &middot; ${escapeHtml(panel.character)}</div>
+        <div class="bag-count">${panel.rows.length} slots &middot; ${quantity} qty</div>
       </header>
       <div class="bag-cols"><span>St</span><span>Item</span><span>Have/Max</span><span>Each/Stack</span></div>
       ${itemRows}
@@ -106,11 +110,12 @@ async function loadItems() {
 
 async function loadStatus() {
   const rows = await fetch('/api/status').then((response) => response.json());
-  $('#status').innerHTML = rows.map((row) => `<span class="source ${row.ok ? '' : 'bad'}">${row.ok ? 'â—' : 'â—‹'} ${escapeHtml(row.source)}</span>`).join('');
+  $('#status').innerHTML = rows.map((row) => `<span class="source ${row.ok ? '' : 'bad'}">${row.ok ? '&#9679;' : '&#9675;'} ${escapeHtml(row.source)}</span>`).join('');
 }
 
 let keyItemData = { characters, rows: [] };
 let currencyData = { characters, rows: [] };
+let inventoryRevision = null;
 
 function formatNumber(value) {
   return value === null || value === undefined ? '--' : Number(value).toLocaleString();
@@ -125,7 +130,7 @@ function renderRotation(area, rotation) {
   const next = rotation.next || `Learning ${rotation.learned}/${rotation.total}`;
   const bonus = rotation.last_bonus?.chest || '--';
   const recent = rotation.recent.length
-    ? rotation.recent.map((event) => `<span class="history-chip ${event.units === 5000 ? 'bonus' : ''}" title="${escapeHtml(shortTime(event.opened_at))}">${escapeHtml(event.chest || 'Learning')} <b>${event.units === 5000 ? '&#9733; 5000' : '3000'}</b></span>`).join('')
+    ? rotation.recent.map((event) => `<span class="history-chip ${event.units > 3000 ? 'bonus' : ''}" title="${escapeHtml(shortTime(event.opened_at))}">${escapeHtml(event.chest || 'Learning')} <b>${event.units > 3000 ? '&#9733; ' : ''}${escapeHtml(event.units)}</b></span>`).join('')
     : '<span class="muted">No chests recorded yet.</span>';
   return `<div class="rotation">
     <div class="rotation-name">${escapeHtml(area)}</div>
@@ -163,7 +168,10 @@ function pivotRows(data, value) {
 
 function renderMatrix(target, data, search, value) {
   const { roster, groups } = pivotRows(data, value);
-  const filtered = groups.filter((row) => !search || row.name.toLowerCase().includes(search));
+  const query = normalizeSearch(search);
+  const filtered = groups
+    .filter((row) => !query || normalizeSearch(row.name).includes(query))
+    .sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base', numeric: true }) || (a.page || 0) - (b.page || 0));
   const headings = roster.map((name) => `<span title="${escapeHtml(name)}">${escapeHtml(name.slice(0, 5))}</span>`).join('');
   const rows = filtered.map((row) => `<div class="matrix-row">
     <span class="matrix-name">${row.page ? `<small>C${row.page}</small> ` : ''}${escapeHtml(row.name)}</span>
@@ -174,19 +182,31 @@ function renderMatrix(target, data, search, value) {
     }).join('')}
   </div>`).join('');
   $(target).innerHTML = `<section class="matrix-card">
-    <div class="matrix-head"><span>Item</span>${headings}</div>
+    <div class="matrix-head"><span>${value === 'amount' ? 'Currency' : 'Key item'}</span>${headings}</div>
     ${rows || '<p class="empty">No matching entries.</p>'}
   </section>`;
 }
 
 async function loadKeyItems() {
   keyItemData = await fetch('/api/key-items').then((response) => response.json());
-  renderMatrix('#key-items-board', keyItemData, $('#key-search').value.trim().toLowerCase(), 'owned');
+  renderMatrix('#key-items-board', keyItemData, $('#key-search').value, 'owned');
 }
 
 async function loadCurrencies() {
   currencyData = await fetch('/api/currencies').then((response) => response.json());
-  renderMatrix('#currencies-board', currencyData, $('#currency-search').value.trim().toLowerCase(), 'amount');
+  renderMatrix('#currencies-board', currencyData, $('#currency-search').value, 'amount');
+}
+
+async function getInventoryRevision() {
+  const state = await fetch('/api/inventory-revision').then((response) => response.json());
+  return state.revision ?? null;
+}
+
+async function refreshInventoryIfChanged() {
+  const revision = await getInventoryRevision();
+  if (revision === inventoryRevision) return;
+  await Promise.all([loadItems(), loadSummary(), loadStatus()]);
+  inventoryRevision = revision;
 }
 
 function activateTab(id) {
@@ -206,14 +226,18 @@ $('#search').addEventListener('input', debounceRender);
 $('#character').addEventListener('change', renderBags);
 $('#action').addEventListener('change', renderBags);
 document.querySelectorAll('input[name="status-mode"]').forEach((radio) => radio.addEventListener('change', renderBags));
-$('#key-search').addEventListener('input', () => renderMatrix('#key-items-board', keyItemData, $('#key-search').value.trim().toLowerCase(), 'owned'));
-$('#currency-search').addEventListener('input', () => renderMatrix('#currencies-board', currencyData, $('#currency-search').value.trim().toLowerCase(), 'amount'));
+$('#key-search').addEventListener('input', () => renderMatrix('#key-items-board', keyItemData, $('#key-search').value, 'owned'));
+$('#currency-search').addEventListener('input', () => renderMatrix('#currencies-board', currencyData, $('#currency-search').value, 'amount'));
 document.querySelectorAll('.tab').forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
-const loadAll = () => Promise.all([loadDashboard(), loadSummary(), loadItems(), loadStatus(), loadKeyItems(), loadCurrencies()]);
+const loadAll = async () => {
+  await Promise.all([loadDashboard(), loadSummary(), loadItems(), loadStatus(), loadKeyItems(), loadCurrencies()]);
+  inventoryRevision = await getInventoryRevision();
+};
 $('#refresh').addEventListener('click', loadAll);
 loadAll();
 setInterval(() => {
   loadDashboard().catch(() => {});
   loadKeyItems().catch(() => {});
   loadCurrencies().catch(() => {});
+  refreshInventoryIfChanged().catch(() => {});
 }, 3000);

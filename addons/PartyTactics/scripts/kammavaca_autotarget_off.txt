@@ -1,0 +1,8 @@
+echo Kammavaca safety: disabling native FFXI auto-target on all six clients. This does not engage or select anything.
+send Dolomedes input /autotarget off
+send Tackleberry input /autotarget off
+send Kickpuncher input /autotarget off
+send Barneystinson input /autotarget off
+send Smalls input /autotarget off
+send Achoo input /autotarget off
+echo Auto-target is Off for Kammavaca. After the encounter run //exec kammavaca_autotarget_on.txt.

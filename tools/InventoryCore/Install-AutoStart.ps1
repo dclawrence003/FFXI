@@ -3,14 +3,17 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Launcher = Join-Path $PSScriptRoot 'Start-InventoryCore.ps1'
-if (-not (Test-Path -LiteralPath $Launcher)) {
-    throw "InventoryCore launcher not found: $Launcher"
+$HiddenLauncher = Join-Path $PSScriptRoot 'Start-InventoryCore-Hidden.vbs'
+if (-not (Test-Path -LiteralPath $HiddenLauncher)) {
+    throw "InventoryCore hidden launcher not found: $HiddenLauncher"
 }
 
-$PowerShellExe = (Get-Command powershell.exe -ErrorAction Stop).Source
-$Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Launcher`" -NoBrowser -Foreground -SkipRefresh"
-$Action = New-ScheduledTaskAction -Execute $PowerShellExe -Argument $Arguments -WorkingDirectory $PSScriptRoot
+$WScriptExe = Join-Path $env:WINDIR 'System32\wscript.exe'
+if (-not (Test-Path -LiteralPath $WScriptExe)) {
+    throw "Windows Script Host was not found: $WScriptExe"
+}
+$Arguments = "//B //Nologo `"$HiddenLauncher`""
+$Action = New-ScheduledTaskAction -Execute $WScriptExe -Argument $Arguments -WorkingDirectory $PSScriptRoot
 $LogonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 # A manually terminated task is not always covered by Task Scheduler's
 # process-failure restart policy. Reassert the task every five minutes; with
@@ -36,7 +39,8 @@ Register-ScheduledTask `
     -Trigger @($LogonTrigger, $WatchdogTrigger) `
     -Settings $Settings `
     -Description 'Keeps the local FFXI InventoryCore and LootAdvisor recommendation service available.' `
-    -Force | Out-Null
+    -Force `
+    -ErrorAction Stop | Out-Null
 
 Start-ScheduledTask -TaskName $TaskName
 Write-Output "Installed and started scheduled task: $TaskName"

@@ -28,6 +28,39 @@ This hard latch is the final defense against an early, lower-tier aftermath.
 
 ## Current status
 
+Version 0.3.7 canonicalizes player/job/weapon setting keys to lowercase so
+Windower's XML case-folding cannot turn a saved weapon-skill choice into a
+different profile on reload. `//aws2 sessionws <name>` pins only the automatic
+weapon skill for the current session across main-weapon changes. It never
+blocks manual weapon skills; `//aws2 use <name>` replaces the pin with a
+per-weapon choice, and `//aws2 off` clears it. PartyTactics uses this for
+Dolomedes' Qutrub Last Stand.
+
+Version 0.3.5 observes outgoing engage and engaged-target-change packets. When
+an exact target handoff is in flight, only AutoWS2's automatic weapon-skill
+lane waits until `<bt>` exposes the same server entity ID. This prevents TP
+from being spent on the stale prior battle target during an add transition;
+manual target changes and manual weapon skills are never intercepted.
+
+Version 0.3.4 uses the acknowledged battle target (`<bt>`) for both target
+validation and weapon-skill submission. Cursor-only selections made for an
+exact Flash, Gaze, or debuff cannot redirect a weapon skill away from the
+PartyCombat lane.
+
+Version 0.3.3 makes target exclusion an explicit fight policy. AutoWS2 defaults
+to `none`; `//aws2 exclude elemental` refuses monster targets whose name
+contains the whole word `Elemental`, case-insensitively, including
+`Demon's Elemental`. The check precedes both ordinary and aftermath weapon
+skills and does not change TP thresholds, aftermath logic, equipment, or
+character weapon profiles. `//aws2 exclude none` restores normal targeting.
+
+The setting is intentionally session-only and is not written into a weapon or
+character profile. A fight orchestrator must set it on activation, including
+resetting it to `none` for fights that do not request an exclusion. This keeps
+one encounter's safety policy from leaking into another. When enabled, it
+complements PartyCombat's profile-controlled exclusion and EasyFarm's
+`\bElemental\b` ignore rule.
+
 Prototype. Start with `shadow` mode. Shadow mode reports decisions but does not
 reserve TP or choose the aftermath weapon skill. It still performs the normal
 configured weapon skill, so do not run original AutoWS or GearSwap AutoWS at
@@ -181,6 +214,8 @@ REAPPLY
 //aws2 use <normal weapon skill>
 //aws2 tp <1000-3000>
 //aws2 hp <minimum> <maximum>
+//aws2 exclude elemental
+//aws2 exclude none
 
 //aws2 aftermath on
 //aws2 aftermath off
@@ -203,6 +238,9 @@ REAPPLY
 
 `//aws2 reserve reset` is an explicit manual escape hatch. Turning the addon
 off also releases the latch.
+
+`//aws2 exclude elemental|none` changes only the current addon session. It
+defaults to `none` after every load and never saves to the per-character XML.
 
 HP bounds are exclusive. The default `5 < target HP% < 100` avoids firing
 immediately on engagement at 100% and avoids spending 3000 TP to maintain AM3

@@ -2,6 +2,9 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+$configurationRoot = if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'local\config.json')) {
+    Join-Path $PSScriptRoot 'local'
+} else { $PSScriptRoot }
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -28,14 +31,14 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'FFXI-Manager.ps1') `
     -Destination $installRoot -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Set-Preset.ps1') `
     -Destination $installRoot -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'presets\Cockpit.json') `
+Copy-Item -LiteralPath (Join-Path $configurationRoot 'presets\Cockpit.json') `
     -Destination (Join-Path $installRoot 'presets') -Force
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'presets\FullMain.json') `
+Copy-Item -LiteralPath (Join-Path $configurationRoot 'presets\FullMain.json') `
     -Destination (Join-Path $installRoot 'presets') -Force
 
 $installedConfig = Join-Path $installRoot 'config.json'
 if (-not (Test-Path -LiteralPath $installedConfig)) {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'config.json') `
+    Copy-Item -LiteralPath (Join-Path $configurationRoot 'config.json') `
         -Destination $installedConfig
 }
 

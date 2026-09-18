@@ -1,0 +1,2 @@
+echo The old planted-puller repair name now launches the stationary-party repair.
+exec reload_limbus_stationary_safe.txt

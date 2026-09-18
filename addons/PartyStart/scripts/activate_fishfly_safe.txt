@@ -1,0 +1,89 @@
+echo Activating Fishfly magic-burn support. PartyCombat is not used.
+pstart use blu fishfly
+wait 12
+
+send Dolomedes aws2 off
+send Dolomedes hb db off
+send Dolomedes hb as off
+send Dolomedes hb as attack off
+send Dolomedes hb off
+
+send Tackleberry aws2 off
+send Tackleberry hb disable cure
+send Tackleberry hb disable na
+send Tackleberry hb db off
+send Tackleberry hb as off
+send Tackleberry hb as attack off
+send Tackleberry hb off
+send Tackleberry gs c set AutoBuffMode Auto
+send Tackleberry gs c unset AutoTankMode
+send Tackleberry gs c unset AutoTankFull
+send Tackleberry gs c set HybridMode Tank
+send Tackleberry gs c unset AutoWSMode
+send Tackleberry gs c pstartpld fishfly Dolomedes
+
+send Kickpuncher aws2 off
+send Kickpuncher hb db off
+send Kickpuncher hb as off
+send Kickpuncher hb as attack off
+send Kickpuncher hb off
+send Kickpuncher gs c set AutoBuffMode Off
+send Kickpuncher gs c unset AutoPrestoMode
+send Kickpuncher gs c set AutoSambaMode Off
+send Kickpuncher gs c set DanceStance None
+send Kickpuncher gs c unset AutoWSMode
+send Kickpuncher gs c pstartdnc fishfly Dolomedes
+
+send Barneystinson aws2 off
+send Barneystinson hb db off
+send Barneystinson hb as off
+send Barneystinson hb as attack off
+send Barneystinson hb off
+send Barneystinson gs c pstartbrd fishfly Dolomedes
+
+send Smalls aws2 off
+send Smalls gs c set AutoBuffMode Off
+send Smalls hb deactivateindoors off
+send Smalls hb disable cure
+send Smalls hb enable na
+send Smalls hb disable buff
+send Smalls hb db off
+send Smalls hb as off
+send Smalls hb as attack off
+send Smalls hb unignore_debuff always STR Down
+send Smalls hb unignore_debuff always DEX Down
+send Smalls hb unignore_debuff always VIT Down
+send Smalls hb unignore_debuff always AGI Down
+send Smalls hb unignore_debuff always MND Down
+send Smalls hb unignore_debuff always CHR Down
+send Smalls hb ignore_debuff always STR Down
+send Smalls hb ignore_debuff always DEX Down
+send Smalls hb ignore_debuff always VIT Down
+send Smalls hb ignore_debuff always AGI Down
+send Smalls hb ignore_debuff always MND Down
+send Smalls hb ignore_debuff always CHR Down
+send Smalls hb reset debuffs
+send Smalls hb on
+send Smalls gs c pstartrdm fishfly Dolomedes Dolomedes,Tackleberry,Smalls,Achoo,Barneystinson Dolomedes,Tackleberry,Smalls,Achoo,Barneystinson Tackleberry Dolomedes,Tackleberry,Smalls,Achoo,Barneystinson,Kickpuncher
+
+send Achoo aws2 off
+send Achoo hb db off
+send Achoo hb as off
+send Achoo hb as attack off
+send Achoo hb off
+send Achoo gs c pstartgeo fishfly Dolomedes
+
+wait 3
+send Smalls gs c pstartrdm tick
+send Tackleberry gs c pstartpld tick
+send Kickpuncher gs c pstartdnc tick
+send Barneystinson gs c pstartbrd tick
+send Achoo gs c pstartgeo tick
+wait 5
+pstart status
+send Smalls gs c pstartrdm status
+send Tackleberry gs c pstartpld status
+send Kickpuncher gs c pstartdnc status
+send Barneystinson gs c pstartbrd status
+send Achoo gs c pstartgeo status
+echo Fishfly support active. Wait for double INT Etudes, Scherzo, Baraera, Barsilencera, Haste/Refresh, Indi-Acumen, and entrusted Indi-Languor before Tackleberry pops. Geo-Malaise lands automatically after spawn. Dolo remains manual.

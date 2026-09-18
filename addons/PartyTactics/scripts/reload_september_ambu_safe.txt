@@ -1,0 +1,46 @@
+echo September Ambuscade profiles / PartyTactics v0.11.1 reload beginning. Run only while all six characters are out of combat. The active tactic will be stopped; no profile is selected and combat remains unarmed.
+send Dolomedes pt off
+wait 3
+echo Confirming the stable GearSwap hosts are dormant. The two new pinned fight adapters load only after their owning profile commits.
+send Dolomedes gs c ptgs status
+wait 1
+send Tackleberry gs c ptgs status
+wait 1
+send Kickpuncher gs c ptgs status
+wait 1
+send Barneystinson gs c ptgs status
+wait 1
+send Smalls gs c ptgs status
+wait 1
+send Achoo gs c ptgs status
+wait 2
+echo Reloading PartyTactics v0.11.1 on all six clients one at a time.
+send Dolomedes lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 2
+send Tackleberry lua unload PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 2
+send Kickpuncher lua unload PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 2
+send Barneystinson lua unload PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 2
+send Smalls lua unload PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 2
+send Achoo lua unload PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 3
+send Dolomedes pt version
+send Dolomedes pt status
+send Dolomedes pt list
+send Dolomedes pt errors
+echo Reload complete with no profile selected and combat unarmed. Change to the required subjobs, then run v1-qutrub, v1-qutrub-nocait, or v2-hydra; each direct alias selects and arms automatically. For no-Cait: pull Bigwig roughly 10-15 yalms toward the party-start side with Dolo and the armed runtime binds it as soon as it appears. CTRL-P or //pt arm only reasserts or rebinds after an operator stop or missed target. On adds, the Bigwig holder joins the shared focus; PartyTactics stages only the two off-focus pickups. ACK and //pt check are optional diagnostics and never gate.

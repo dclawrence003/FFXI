@@ -103,7 +103,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("if pstart_rdm_emergency_heal() then return true end", self.rdm)
         self.assertIn("hb deactivateindoors off", self.addon)
         self.assertIn("hb disable cure", self.addon)
-        self.assertIn("hb enable na; hb disable buff", self.addon)
+        self.assertIn("..status_removal..'hb disable buff", self.addon)
         self.assertIn(
             "apply_pld(session.profile, profile, session.leader)", self.addon
         )
@@ -113,6 +113,121 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("or pstart_rdm_union_names(", self.rdm)
         self.assertIn("{'Protect V', 'Protect IV'", self.rdm)
         self.assertIn("{'Shell V', 'Shell IV'", self.rdm)
+
+    def test_party_protect_propagates_the_profile_mp_floor(self):
+        cast_buff = self.rdm.split(
+            "local function pstart_rdm_cast_buff(", 1
+        )[1].split("local function pstart_rdm_cast_reactive_repair", 1)[0]
+        protect = self.rdm.split(
+            "local function pstart_rdm_cast_party_protect(", 1
+        )[1].split("local function pstart_rdm_cast_party_buffs", 1)[0]
+        party_buffs = self.rdm.split(
+            "local function pstart_rdm_cast_party_buffs()", 1
+        )[1].split("local function pstart_rdm_cast_self_buffs", 1)[0]
+
+        self.assertIn("name, choices, buff, duration, mp_floor", cast_buff)
+        self.assertIn("pstart_rdm_can_spend(spell, mp_floor)", cast_buff)
+        self.assertIn("defense, mp_floor", protect)
+        self.assertIn("'Protect', 1800, mp_floor", protect)
+        self.assertEqual(
+            2,
+            party_buffs.count(
+                "pstart_rdm_cast_party_protect(defense, routine_floor)"
+            ),
+        )
+
+    def test_locus_result_confirmation_is_isolated_from_legacy_profiles(self):
+        legacy = self.rdm.split("    locusbats = {", 1)[1].split(
+            "    apexcrabs = {", 1
+        )[0]
+        isolated = self.rdm.split(
+            "    ['locusbats-protect'] = {", 1
+        )[1].split("\n    },\n}", 1)[0]
+
+        self.assertNotIn("confirm_result", legacy)
+        self.assertEqual(2, isolated.count("confirm_result=true"))
+        self.assertRegex(
+            isolated,
+            r"Distract III.*?duration=150,\s*confirm_result=true",
+        )
+        self.assertRegex(
+            isolated,
+            r"Dia III.*?duration=150,\s*confirm_result=true",
+        )
+
+    def test_pld_action_lease_gates_both_ticks_and_resets_cleanly(self):
+        claim = self.pld.split(
+            "local function pstart_pld_claim_action(pending)", 1
+        )[1].split("local function pstart_pld_action_lease_active", 1)[0]
+        timeout = self.pld.split(
+            "local function pstart_pld_action_lease_active()", 1
+        )[1].split("local function pstart_pld_use_tank_ability", 1)[0]
+        action = self.pld.split("local function pstart_pld_action()", 1)[1].split(
+            "local function pstart_pld_status()", 1
+        )[0]
+        status = self.pld.split("local function pstart_pld_status()", 1)[1].split(
+            "local pstart_pld_original_self_command", 1
+        )[0]
+        command = self.pld.split("function user_job_self_command", 1)[1].split(
+            "local pstart_pld_original_user_job_tick", 1
+        )[0]
+        off = command.split("elseif requested == 'off' then", 1)[1].split(
+            "elseif PSTART_PLD_PROFILES[requested]", 1
+        )[0]
+        activate = command.split("elseif PSTART_PLD_PROFILES[requested]", 1)[1]
+        native_tick = self.pld.split(
+            "local pstart_pld_original_user_job_tick", 1
+        )[1].split("local pstart_pld_original_job_aftercast", 1)[0]
+
+        self.assertIn("PSTART_PLD_ACTION_LEASE_TIMEOUT = 5", self.pld)
+        self.assertIn("PSTART_PLD_ACTION_LEASE_BACKOFF = 1.5", self.pld)
+        self.assertIn("pending.issued_at = now", claim)
+        self.assertIn(
+            "pending.expires_at = now + PSTART_PLD_ACTION_LEASE_TIMEOUT", claim
+        )
+        self.assertNotRegex(self.pld, r"pstart_pld\.pending\s*=\s*\{")
+        self.assertGreaterEqual(self.pld.count("pstart_pld_claim_action{"), 5)
+
+        self.assertIn("pstart_pld.pending = nil", timeout)
+        self.assertIn(
+            "pstart_pld.retry_at = now + PSTART_PLD_ACTION_LEASE_BACKOFF",
+            timeout,
+        )
+        self.assertIn("pstart_pld.dispatch_timeouts", timeout)
+        self.assertLess(
+            action.index("pstart_pld_action_lease_active()"),
+            action.index("if midaction()"),
+        )
+        self.assertIn("if pstart_pld.active", native_tick)
+        self.assertIn("os.clock() < (pstart_pld.retry_at or 0)", native_tick)
+        self.assertLess(
+            native_tick.index("if pstart_pld.active"),
+            native_tick.index("pstart_pld_original_user_job_tick"),
+        )
+
+        self.assertIn("lease timeouts %d", status)
+        for reset in (off, activate):
+            self.assertIn("pstart_pld.pending = nil", reset)
+            self.assertIn("pstart_pld.dispatch_timeouts = 0", reset)
+
+    def test_partycombat_policy_includes_explicit_target_exclusions(self):
+        policy = self.addon.split(
+            "local function apply_combat_policy", 1
+        )[1].split("local function apply_profile", 1)[0]
+        nine_fields = "pc policy " + " ".join(["%s"] * 9)
+        old_eight_fields = "pc policy " + " ".join(["%s"] * 8)
+        limbus = self.addon.split("    limbus = {", 1)[1].split(
+            "    physical = {", 1
+        )[0]
+
+        self.assertIn("local exclusion_csv = profile.target_exclusions", policy)
+        self.assertIn("and table.concat(profile.target_exclusions, ',') or '-'", policy)
+        self.assertIn("issue(('" + nine_fields + "')", policy)
+        self.assertNotIn("issue(('" + old_eight_fields + "')", policy)
+        self.assertIn(
+            "priority_target, priority_attacker_csv, exclusion_csv", policy
+        )
+        self.assertIn("target_exclusions = {'elemental'}", limbus)
 
     def test_august_ambuscade_profiles_are_encounter_scoped(self):
         for profile in ("ambuscade-v1", "ambuscade-v2"):
@@ -148,7 +263,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         )[0]
         self.assertIn("Sustained Apex Bats: Dho Gates", addon)
         self.assertIn("sustained = true", addon)
-        self.assertIn("stationary = true", addon)
+        self.assertIn("\n        stationary = true", addon)
         self.assertIn("Mage's Ballad III", addon)
         self.assertIn("entrust='Refresh'", addon)
         self.assertIn("party_shell = false", rdm)
@@ -169,7 +284,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         )[0]
         self.assertIn("Sustained Locus Dire Bats", addon)
         self.assertIn("sustained = true", addon)
-        self.assertIn("stationary = true", addon)
+        self.assertIn("\n        stationary = true", addon)
         self.assertIn("cor = {'corsair', 'samurai'}", addon)
         self.assertIn("indi='Fury', geo='Frailty', entrust='Refresh'", addon)
         self.assertIn("1264 accuracy target", addon)
@@ -204,9 +319,11 @@ class PartyStartRolePolicy(unittest.TestCase):
             "    physical = {", 1
         )[0]
         self.assertIn("Sustained Apex Crabs: Dho Gates", addon)
-        self.assertIn("stationary = true", addon)
-        self.assertEqual(4, self.addon.count("stationary = true"))
-        self.assertIn("pc policy %s %s %s %s %s %s %s %s", self.addon)
+        self.assertIn("\n        stationary = true", addon)
+        self.assertGreaterEqual(
+            self.addon.count("\n        stationary = true"), 5
+        )
+        self.assertIn("pc policy %s %s %s %s %s %s %s %s %s", self.addon)
         self.assertIn("profile.stationary and 'stationary' or 'mobile'", self.addon)
         self.assertIn("targeter_csv, movement_mode", self.addon)
         self.assertIn("party_shell = true", rdm)
@@ -251,7 +368,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         self.assertIn("PSTART_BRD_URCHIN_SLEEP_WINDOW = 15", self.brd)
         self.assertIn("kind = 'urchin_sleep'", self.brd)
 
-    def test_limbus_profile_is_mobile_and_dolo_driven(self):
+    def test_limbus_profile_is_stationary_and_puller_driven(self):
         addon = self.addon.split("    limbus = {", 1)[1].split(
             "    physical = {", 1
         )[0]
@@ -261,10 +378,11 @@ class PartyStartRolePolicy(unittest.TestCase):
         brd = self.brd.split("    limbus = {", 1)[1].split(
             "    physical = {", 1
         )[0]
-        self.assertIn("target_source = 'command_leader'", addon)
+        self.assertNotIn("target_source = 'command_leader'", addon)
+        self.assertIn("Use the composition puller", addon)
         self.assertIn("physical_offense = true", addon)
         self.assertIn("pld_controller = true", addon)
-        self.assertNotIn("stationary = true", addon)
+        self.assertIn("\n        stationary = true", addon)
         self.assertIn("profile.target_source == 'command_leader'", self.addon)
         self.assertIn("elseif command == 'sleep' then", self.addon)
         self.assertIn("elseif kind == 'sleep' then", self.addon)
@@ -291,7 +409,7 @@ class PartyStartRolePolicy(unittest.TestCase):
         )[0]
         for profile in (master, bats, locus_bats, crabs):
             self.assertIn("sustained = true", profile)
-            self.assertIn("stationary = true", profile)
+            self.assertIn("\n        stationary = true", profile)
 
 
 if __name__ == "__main__":

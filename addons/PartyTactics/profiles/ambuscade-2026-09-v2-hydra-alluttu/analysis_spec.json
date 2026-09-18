@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "ambuscade-2026-09-v2-hydra-alluttu",
+    "version": "1.0.0"
+  },
+  "encounter": {
+    "volume": 2,
+    "boss_names": ["Alluttu"],
+    "add_names": []
+  },
+  "difficulty": {
+    "operator_declared": true,
+    "allowed": ["VE", "E", "N", "D", "VD"]
+  },
+  "signals": {
+    "monster_ability_ids": [1828, 1829, 1830, 1831, 1832, 1834, 1835, 1836],
+    "weapon_skill_ids": [25, 42, 221],
+    "spell_ids": [88, 112, 167, 397, 476, 818],
+    "job_ability_ids": [35, 46, 48, 202, 207, 255, 332]
+  },
+  "metrics": [
+    "time_to_claim_seconds",
+    "setup_duration_seconds",
+    "time_to_first_light_seconds",
+    "attacker_food_reapplications",
+    "light_chain_attempts",
+    "light_chain_completions",
+    "thunder_casts_after_light",
+    "polar_bulwark_count",
+    "polar_bulwark_stun_attempts",
+    "polar_magic_fallback_damage",
+    "late_fallback_actions_cancelled",
+    "pyric_bulwark_count",
+    "nerve_gas_count",
+    "buff_refresh_attempts",
+    "party_death_stops",
+    "minimum_party_hpp",
+    "fight_duration_seconds"
+  ],
+  "outcomes": ["clear", "wipe", "timeout", "abort"],
+  "uncertainties": [
+    "Published sources conflict on whether head severing is probabilistic on skillchain completion or driven by accumulated damage thresholds.",
+    "The exact Very Difficult sever threshold and head-regrowth timer require a declared-difficulty live trace.",
+    "Action packets do not expose a direct head-count field, so the controller deliberately does not infer one."
+  ]
+}

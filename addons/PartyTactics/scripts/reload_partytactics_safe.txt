@@ -1,0 +1,126 @@
+echo Full PartyTactics v0.10.5 integration reload beginning. Run only while all six characters are out of combat. The active tactic will be stopped and nothing will be rearmed.
+send Dolomedes pt off
+wait 3
+echo Reloading PartyCombat v0.6.9 inert on all six clients. Explicit unload/load pairs repair a missing instance.
+send Dolomedes lua unload PartyCombat
+wait 1
+send Dolomedes lua load PartyCombat
+wait 2
+send Tackleberry lua unload PartyCombat
+wait 1
+send Tackleberry lua load PartyCombat
+wait 2
+send Kickpuncher lua unload PartyCombat
+wait 1
+send Kickpuncher lua load PartyCombat
+wait 2
+send Barneystinson lua unload PartyCombat
+wait 1
+send Barneystinson lua load PartyCombat
+wait 2
+send Smalls lua unload PartyCombat
+wait 1
+send Smalls lua load PartyCombat
+wait 2
+send Achoo lua unload PartyCombat
+wait 1
+send Achoo lua load PartyCombat
+wait 3
+echo Reloading AutoWS2 v0.3.3 OFF on all six clients.
+send Dolomedes lua unload AutoWS2
+wait 1
+send Dolomedes lua load AutoWS2
+wait 2
+send Tackleberry lua unload AutoWS2
+wait 1
+send Tackleberry lua load AutoWS2
+wait 2
+send Kickpuncher lua unload AutoWS2
+wait 1
+send Kickpuncher lua load AutoWS2
+wait 2
+send Barneystinson lua unload AutoWS2
+wait 1
+send Barneystinson lua load AutoWS2
+wait 2
+send Smalls lua unload AutoWS2
+wait 1
+send Smalls lua load AutoWS2
+wait 2
+send Achoo lua unload AutoWS2
+wait 1
+send Achoo lua load AutoWS2
+wait 3
+echo Repairing HealBot on all six clients and Roller2 on Dolomedes before any profile applies service commands.
+send Dolomedes lua unload HealBot
+wait 1
+send Dolomedes lua load HealBot
+wait 2
+send Tackleberry lua unload HealBot
+wait 1
+send Tackleberry lua load HealBot
+wait 2
+send Kickpuncher lua unload HealBot
+wait 1
+send Kickpuncher lua load HealBot
+wait 2
+send Barneystinson lua unload HealBot
+wait 1
+send Barneystinson lua load HealBot
+wait 2
+send Smalls lua unload HealBot
+wait 1
+send Smalls lua load HealBot
+wait 2
+send Achoo lua unload HealBot
+wait 1
+send Achoo lua load HealBot
+wait 2
+send Dolomedes lua unload Roller2
+wait 1
+send Dolomedes lua load Roller2
+wait 3
+
+echo Reloading all six GearSwap clients one at a time; Dolomedes loads the shared augmented-weapon comparison fix.
+send Dolomedes gs reload
+wait 10
+send Tackleberry gs reload
+wait 10
+send Kickpuncher gs reload
+wait 10
+send Barneystinson gs reload
+wait 10
+send Smalls gs reload
+wait 10
+send Achoo gs reload
+wait 10
+echo Reloading PartyTactics v0.10.5 on all six clients.
+send Dolomedes lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 2
+send Tackleberry lua unload PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 2
+send Kickpuncher lua unload PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 2
+send Barneystinson lua unload PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 2
+send Smalls lua unload PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 2
+send Achoo lua unload PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 3
+send Dolomedes pc status
+send Dolomedes aws2 status
+send Dolomedes pt version
+send Dolomedes pt status
+echo Full reload complete and inert. No profile was selected or armed; preview, activation, the 6/6 current-epoch ACK barrier, and combat arming remain explicit.

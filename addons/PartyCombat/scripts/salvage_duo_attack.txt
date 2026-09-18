@@ -1,0 +1,3 @@
+send Kickpuncher input /assist Dolomedes
+wait 1
+send Kickpuncher input /attack <t>

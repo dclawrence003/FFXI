@@ -13,7 +13,8 @@ const {
   computeRotation,
   dashboard,
   keyItemView,
-  currencyView
+  currencyView,
+  equipmentView
 } = require('../src/telemetry');
 const config = require('./config.fixture.json');
 
@@ -26,6 +27,9 @@ test('telemetry atomically replaces character key items and currency pages', () 
   ingestTelemetry(db, {
     character: 'Tackleberry',
     gil: 1234567,
+    equipment: {
+      main: { id: 21604, name: 'Naegling', bag: 8, index: 17 }
+    },
     key_items: [{ id: 10, name: 'Apollyon verification key' }],
     currencies: {
       1: { 'Nyzul Isle Investigation Tokens': 42000 },
@@ -36,6 +40,13 @@ test('telemetry atomically replaces character key items and currency pages', () 
   assert.equal(dashboard(db, config).characters.find((row) => row.character === 'Tackleberry').gil, 1234567);
   assert.deepEqual(keyItemView(db, config).rows.map((row) => row.name), ['Apollyon verification key']);
   assert.deepEqual(currencyView(db, config).rows.map((row) => row.amount), [42000, 12000, 9000]);
+  assert.deepEqual(equipmentView(db, config).rows.map((row) => ({
+    character: row.character, slot: row.slot, id: row.id, name: row.name,
+    bag: row.bag, index: row.bag_index
+  })), [{
+    character: 'Tackleberry', slot: 'main', id: 21604, name: 'Naegling',
+    bag: 8, index: 17
+  }]);
 
   ingestTelemetry(db, {
     character: 'Tackleberry',
@@ -45,6 +56,7 @@ test('telemetry atomically replaces character key items and currency pages', () 
   assert.equal(keyItemView(db, config).rows.length, 0);
   assert.equal(currencyView(db, config).rows.find((row) => row.page === 1).amount, 43000);
   assert.equal(currencyView(db, config).rows.filter((row) => row.page === 2).length, 2);
+  assert.equal(equipmentView(db, config).rows[0].name, 'Naegling');
   db.close();
 });
 
@@ -97,4 +109,34 @@ test('roaming unit rewards are rejected while explicit manual repairs remain val
   assert.equal(events[0].chest, 'East');
   assert.equal(events[0].target_id, 910003);
   db.close();
+});
+
+test('capped bonus receipt preserves its actual amount and marks the bonus', () => {
+  const db = memoryDb();
+  const payload = {
+    character: 'Dolomedes', area: 'Temenos', chest: 'North', target_id: 16929362,
+    units: 4170, signature: 'Dolomedes:Temenos:16929362:1:4170:acquisition'
+  };
+  recordLimbusChest(db, payload, config);
+  recordLimbusChest(db, payload, config);
+  const rotation = dashboard(db, config).characters
+    .find((row) => row.character === 'Dolomedes').areas.Temenos;
+  assert.equal(rotation.recent.length, 1);
+  assert.equal(rotation.recent[0].units, 4170);
+  assert.equal(rotation.last_bonus.chest, 'North');
+  for (const units of [0, 84, 2170, 2999, 5001, 3000.5, null, 'bad']) {
+    assert.throws(() => recordLimbusChest(db, { ...payload, units }, config), /Invalid/);
+  }
+  assert.throws(() => recordLimbusChest(db, { ...payload, target_id: 16929269 }, config),
+    /Unrecognized/);
+  db.close();
+});
+
+test('three thousand received does not prove a bonus when storage caps hide it', () => {
+  const rotation = computeRotation([
+    { chest: 'North', units: 3000, opened_at: '2026-08-31T01:32:42Z' }
+  ], ['North', 'West', 'East', 'Central']);
+  assert.equal(rotation.learned, 1);
+  assert.equal(rotation.last_bonus, null);
+  assert.equal(rotation.recent[0].units, 3000);
 });

@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "profile": {
+    "id": "ambuscade-2026-09-v1-qutrub-bigwig",
+    "version": "1.1.0"
+  },
+  "encounter": {
+    "volume": 1,
+    "boss_names": ["Bozzetto Bigwig"],
+    "add_names": ["Bozzetto Astrologer", "Bozzetto Tormentor", "Bozzetto Tormenter"]
+  },
+  "difficulty": {
+    "operator_declared": true,
+    "allowed": ["VE", "E", "N", "D", "VD"]
+  },
+  "signals": {
+    "monster_ability_ids": [1778, 1779, 1780, 1781, 1782, 1784, 2364, 2890],
+    "weapon_skill_ids": [25, 42, 221],
+    "spell_ids": [2, 4, 33, 59, 112, 250, 260, 307, 338, 339, 340, 393, 476, 779, 818],
+    "job_ability_ids": [48, 92, 255, 278, 332, 522]
+  },
+  "metrics": [
+    "time_to_first_party_claim_ms",
+    "time_to_first_add_wave_ms",
+    "add_target_switch_latency_ms",
+    "astrologer_silence_attempts",
+    "astrologer_silence_success_rate",
+    "ice_spikes_dispel_latency_ms",
+    "mewing_lullaby_interval_ms",
+    "mewing_lullaby_actor_sequence",
+    "mewing_lullaby_full_pack_success_rate",
+    "mewing_retreat_latency_ms",
+    "mewing_retreat_success_rate",
+    "geo_frailty_uptime_ms",
+    "triple_reversal_count",
+    "en_death_ko_count",
+    "perfect_dodge_hold_ms",
+    "shadowless_ws_suppressed_count",
+    "fragmentation_success_rate",
+    "light_success_rate",
+    "boss_damage_while_adds_alive",
+    "lowhp_phase_activation_boss_hpp",
+    "lowhp_phase_duration_ms",
+    "lowhp_attacker_min_hpp",
+    "lowhp_attacker_max_hpp",
+    "lowhp_band_acquisition_ms",
+    "lowhp_attacker_band_time_ms",
+    "lowhp_offense_hold_ms",
+    "lowhp_support_distance_violation_count",
+    "lowhp_support_distance_unknown_count",
+    "lowhp_cure_reach_violation_count",
+    "lowhp_cure_ii_attempts",
+    "lowhp_cure_ii_success_rate",
+    "support_cure_iv_attempts",
+    "support_cure_iv_success_rate",
+    "lowhp_topup_suppressed_count",
+    "bigwig_healing_after_lowhp_activation",
+    "clear_time_ms"
+  ],
+  "outcomes": ["clear", "wipe", "timeout", "abort"],
+  "uncertainties": [
+    "Installed Windower resources do not identify Turn the Tables, Spin the Tables, or Triple Reversal by numeric monster-ability ID.",
+    "Live packet capture must confirm whether Mewing Lullaby reports job-ability ID 522, monster-ability ID 2449, or both, and must prove that both BRD/SMN and RDM/SMN lanes return a result for every live associated add.",
+    "Boss Silence below 30 percent is reported to require immunobreak; this profile deliberately makes only finite non-SP attempts.",
+    "Post-fight evidence is required to tune the entity-settle window and determine whether VD accuracy needs Entrust Precision instead of Wilt.",
+    "The initial 13-25 percent attacker band is deliberately above the documented instant-death boundary but must be calibrated from VD drain, maximum-HP, and Cure II outcome evidence.",
+    "Live entity coordinates must remain available and accurate enough to prove all supports beyond 16 yalms while Smalls remains within 20 yalms of every attacker; missing coordinates fail closed.",
+    "GearSwap filters can suppress newly selected legacy heals but cannot retract an unrelated restorative action whose server result was already in flight when low-HP control latched.",
+    "The passive reducer must distinguish controller-owned Cure II and Cure IV outcomes from suppressed legacy top-up attempts without feeding telemetry back into live combat policy.",
+    "The first live run must verify uninterrupted Geo-Frailty uptime while the independent Barney/Smalls Cait Sith lanes alternate; no luopan cycling is permitted.",
+    "Retreat result packets may identify the master or avatar; capture must verify the retail form while the bounded cleanup remains non-blocking."
+  ]
+}

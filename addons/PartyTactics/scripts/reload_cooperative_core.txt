@@ -1,0 +1,36 @@
+echo Reloading PartyCombat 0.6.14 and PartyTactics 0.11.1 on the six clients. No profile will be selected or armed.
+send Dolomedes pt off
+wait 1
+send Dolomedes lua unload PartyCombat
+send Tackleberry lua unload PartyCombat
+send Kickpuncher lua unload PartyCombat
+send Barneystinson lua unload PartyCombat
+send Smalls lua unload PartyCombat
+send Achoo lua unload PartyCombat
+wait 1
+send Dolomedes lua load PartyCombat
+send Tackleberry lua load PartyCombat
+send Kickpuncher lua load PartyCombat
+send Barneystinson lua load PartyCombat
+send Smalls lua load PartyCombat
+send Achoo lua load PartyCombat
+wait 2
+send Dolomedes lua unload PartyTactics
+send Tackleberry lua unload PartyTactics
+send Kickpuncher lua unload PartyTactics
+send Barneystinson lua unload PartyTactics
+send Smalls lua unload PartyTactics
+send Achoo lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+send Tackleberry lua load PartyTactics
+send Kickpuncher lua load PartyTactics
+send Barneystinson lua load PartyTactics
+send Smalls lua load PartyTactics
+send Achoo lua load PartyTactics
+wait 2
+unbind ^p
+unbind !p
+bind ^p pt force
+bind !p pt disarm
+echo Reload complete. CTRL-P starts or forces the loaded profile immediately. ALT-P stops automation. //pt check is optional diagnostics only.

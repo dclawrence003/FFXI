@@ -1,0 +1,11 @@
+// Stops timing and writes one report per loaded addon and character.
+send @all lua c React perf stop
+wait 1
+send @all lua c PartyTactics perf stop
+wait 1
+send @all lua c HealBot perf stop
+wait 1
+send @all lua c BattleMod perf stop
+wait 1
+send @all lua c GearSwap perf stop
+echo Hot-path profilers stopped; CSV reports were written under each addon's data/performance folder.

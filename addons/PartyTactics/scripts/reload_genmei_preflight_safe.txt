@@ -1,0 +1,137 @@
+echo Genmei v2.7 best-effort safe reload beginning. Run only while all six characters are out of combat. The active tactic will be stopped and nothing will be selected or armed. PartyStart is not loaded or used.
+send Dolomedes pt off
+wait 3
+echo Reloading PartyCombat inert on all six clients. Explicit unload/load pairs also repair a missing instance.
+send Dolomedes lua unload PartyCombat
+wait 1
+send Dolomedes lua load PartyCombat
+wait 2
+send Tackleberry lua unload PartyCombat
+wait 1
+send Tackleberry lua load PartyCombat
+wait 2
+send Kickpuncher lua unload PartyCombat
+wait 1
+send Kickpuncher lua load PartyCombat
+wait 2
+send Barneystinson lua unload PartyCombat
+wait 1
+send Barneystinson lua load PartyCombat
+wait 2
+send Smalls lua unload PartyCombat
+wait 1
+send Smalls lua load PartyCombat
+wait 2
+send Achoo lua unload PartyCombat
+wait 1
+send Achoo lua load PartyCombat
+wait 3
+echo Repairing AutoWS2 and HealBot on all six clients. Genmei keeps AutoWS2 off for Dolo, Tackle, and Kick; its isolated runtime submits their exact Genbu weapon skills and Dolo's ranged lane.
+send Dolomedes lua unload AutoWS2
+wait 1
+send Dolomedes lua load AutoWS2
+wait 2
+send Dolomedes lua unload HealBot
+wait 1
+send Dolomedes lua load HealBot
+wait 2
+send Tackleberry lua unload AutoWS2
+wait 1
+send Tackleberry lua load AutoWS2
+wait 2
+send Tackleberry lua unload HealBot
+wait 1
+send Tackleberry lua load HealBot
+wait 2
+send Kickpuncher lua unload AutoWS2
+wait 1
+send Kickpuncher lua load AutoWS2
+wait 2
+send Kickpuncher lua unload HealBot
+wait 1
+send Kickpuncher lua load HealBot
+wait 2
+send Barneystinson lua unload AutoWS2
+wait 1
+send Barneystinson lua load AutoWS2
+wait 2
+send Barneystinson lua unload HealBot
+wait 1
+send Barneystinson lua load HealBot
+wait 2
+send Smalls lua unload AutoWS2
+wait 1
+send Smalls lua load AutoWS2
+wait 2
+send Smalls lua unload HealBot
+wait 1
+send Smalls lua load HealBot
+wait 2
+send Achoo lua unload AutoWS2
+wait 1
+send Achoo lua load AutoWS2
+wait 2
+send Achoo lua unload HealBot
+wait 1
+send Achoo lua load HealBot
+wait 2
+echo Repairing Roller2 on Dolomedes; the profile will apply the exact Warlock and Samurai roll policy only after activation.
+send Dolomedes lua unload Roller2
+wait 1
+send Dolomedes lua load Roller2
+wait 3
+echo Reloading the full GearSwap addon on all six clients so stable host 1.1.0 replaces the prior host exactly once. GearSwap remains the sole equipment and instrument owner.
+send Dolomedes lua reload GearSwap
+wait 10
+send Tackleberry lua reload GearSwap
+wait 10
+send Kickpuncher lua reload GearSwap
+wait 10
+send Barneystinson lua reload GearSwap
+wait 10
+send Smalls lua reload GearSwap
+wait 10
+send Achoo lua reload GearSwap
+wait 10
+echo Verifying the six dormant PartyTactics GearSwap hosts. Each must report inactive; the pinned adapter activates only after the profile commits.
+send Dolomedes gs c ptgs status
+wait 1
+send Tackleberry gs c ptgs status
+wait 1
+send Kickpuncher gs c ptgs status
+wait 1
+send Barneystinson gs c ptgs status
+wait 1
+send Smalls gs c ptgs status
+wait 1
+send Achoo gs c ptgs status
+wait 2
+echo Reloading PartyTactics and isolated Genmei v2.7 runtime on all six clients.
+send Dolomedes lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 2
+send Tackleberry lua unload PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 2
+send Kickpuncher lua unload PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 2
+send Barneystinson lua unload PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 2
+send Smalls lua unload PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 2
+send Achoo lua unload PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 3
+send Dolomedes pc status
+send Dolomedes pt version
+send Dolomedes pt status
+echo Reload complete and inert. Use //pt genmei, position the party, target Genbu, then press CTRL-P or run //pt arm. It starts immediately with no ACK, check, controller, buff, or setup prerequisite. ALT-P or //pt disarm stops it. Manual targeting, attacks, ranged attacks, weapon skills, spells, abilities, items, and emergency recovery remain available throughout.

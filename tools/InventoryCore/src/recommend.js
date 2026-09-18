@@ -1,6 +1,7 @@
 'use strict';
 
 const roleRank = { primary: 100, secondary: 75, future: 45 };
+const bcnmSealIds = new Set([1126, 1127, 2955, 2956, 2957]);
 
 function evaluate(item, wiki, owners, config, ah = null) {
   const isGear = item.category === 'Armor' || item.category === 'Weapon';
@@ -19,6 +20,15 @@ function evaluate(item, wiki, owners, config, ah = null) {
   }
 
   const teamCount = owners.reduce((sum, owner) => sum + owner.count, 0);
+  if (bcnmSealIds.has(Number(item.id))) {
+    return {
+      action: 'KEEP',
+      confidence: 'high',
+      reason: 'BCNM orb currency stored by Shami; retain',
+      bestCharacter: null,
+      bestJob: null
+    };
+  }
   const isProgressionReagent = wiki?.hasProgressionUse && !isGear && item.category !== 'Maze';
   if (isProgressionReagent) {
     const families = wiki.progressionFamilies?.join(', ') || 'equipment progression';

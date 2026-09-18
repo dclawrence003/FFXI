@@ -1,6 +1,6 @@
 _addon.name = 'LootAdvisor'
 _addon.author = 'Dolomedes + Codex'
-_addon.version = '0.2.2'
+_addon.version = '0.2.4'
 _addon.commands = {'la', 'lootadvisor'}
 
 require('tables')
@@ -23,11 +23,17 @@ local last_currency_request = 0
 local api_failure_count = 0
 local api_retry_at = 0
 local api_offline = false
+local telemetry_scheduled = false
+local telemetry_force_pending = false
 
 local API_INITIAL_BACKOFF = 60
 local API_MAX_BACKOFF = 300
+local API_FAILURES_BEFORE_OFFLINE = 2
+local API_TRANSIENT_RETRY = 5
+local TELEMETRY_INTERVAL = 300
 
 local colors = {KEEP=158, UPGRADE=159, AH=205, HOLD=200, REVIEW=207, VENDOR=057, DROP=167}
+local quiet_pool_items = S{1126, 1127, 2955, 2956, 2957}
 
 local function owner_text(value)
     if type(value) == 'string' then
@@ -91,9 +97,16 @@ end
 
 local function api_mark_failure()
     api_failure_count = api_failure_count + 1
+    if api_failure_count < API_FAILURES_BEFORE_OFFLINE then
+        -- A FindAll refresh, cold socket, or brief scheduler delay can exceed
+        -- the deliberately tiny game-thread timeout. Treat one miss as noise.
+        api_retry_at = os.time() + API_TRANSIENT_RETRY
+        return
+    end
     local backoff = math.min(
         API_MAX_BACKOFF,
-        API_INITIAL_BACKOFF * (2 ^ math.min(api_failure_count - 1, 3)))
+        API_INITIAL_BACKOFF *
+            (2 ^ math.min(api_failure_count - API_FAILURES_BEFORE_OFFLINE, 3)))
     api_retry_at = os.time() + backoff
     if not api_offline then
         api_offline = true
@@ -179,7 +192,9 @@ local function scan_pool(force)
             present[index] = slot.item_id
             local signature = tostring(index) .. ':' .. tostring(slot.item_id)
             if force or not seen[signature] then
-                show(slot.item_id, false)
+                if force or not quiet_pool_items:contains(slot.item_id) then
+                    show(slot.item_id, false)
+                end
                 seen[signature] = true
             end
         end
@@ -255,6 +270,33 @@ local function player_name()
     return player and player.name or nil
 end
 
+local function collect_equipped_slot(items, slot_name)
+    local equipment = items and items.equipment
+    if type(equipment) ~= 'table' then
+        return {id = 0, name = 'Unequipped'}
+    end
+
+    local index = tonumber(equipment[slot_name])
+    local bag = tonumber(equipment[slot_name .. '_bag'])
+    if not index or index <= 0 or bag == nil then
+        return {id = 0, name = 'Unequipped'}
+    end
+
+    local equipped = windower.ffxi.get_items(bag, index)
+    local item_id = equipped and tonumber(equipped.id) or nil
+    if not item_id or item_id <= 0 or item_id == 0xFFFF then
+        return {id = 0, name = 'Unequipped'}
+    end
+
+    local item = res.items[item_id]
+    return {
+        id = item_id,
+        name = item and item.en or ('Item ' .. tostring(item_id)),
+        bag = bag,
+        index = index,
+    }
+end
+
 local function collect_key_items()
     local output, owned = {}, windower.ffxi.get_key_items() or {}
     local seen_ids = {}
@@ -280,11 +322,24 @@ local function send_telemetry(force)
     local sent = post_json('/api/telemetry', {
         character = name,
         gil = items.gil or 0,
+        equipment = {main = collect_equipped_slot(items, 'main')},
         key_items = collect_key_items(),
         currencies = currencies,
     }, force)
     last_telemetry = os.time()
     return sent
+end
+
+local function schedule_telemetry(delay, force)
+    telemetry_force_pending = telemetry_force_pending or force == true
+    if telemetry_scheduled then return end
+    telemetry_scheduled = true
+    coroutine.schedule(function()
+        telemetry_scheduled = false
+        local pending_force = telemetry_force_pending
+        telemetry_force_pending = false
+        send_telemetry(pending_force)
+    end, delay or 0.25)
 end
 
 local function request_currencies()
@@ -305,8 +360,11 @@ end
 
 windower.register_event('load', function()
     load_cache()
-    send_telemetry(true)
+    local now = os.time()
+    last_telemetry = now
+    last_currency_request = now
     coroutine.schedule(request_currencies, 1)
+    schedule_telemetry(2, true)
 end)
 windower.register_event('prerender', function()
     local now = os.clock()
@@ -315,15 +373,22 @@ windower.register_event('prerender', function()
         scan_pool(false)
     end
     local wall_time = os.time()
-    if wall_time - last_telemetry >= 60 then
-        send_telemetry()
-    end
     if wall_time - last_currency_request >= 300 then
         request_currencies()
+        schedule_telemetry(2, false)
+    elseif wall_time - last_telemetry >= TELEMETRY_INTERVAL then
+        schedule_telemetry(0.25, false)
     end
 end)
 
 windower.register_event('incoming chunk', function(id, original, modified)
+    if id == 0x050 then
+        local ok, packet = pcall(packets.parse, 'incoming', modified or original)
+        if ok and packet and tonumber(packet['Equipment Slot']) == 0 then
+            schedule_telemetry(0.5, false)
+        end
+        return
+    end
     if id ~= 0x113 and id ~= 0x118 then return end
     local ok, packet = pcall(packets.parse, 'incoming', modified or original)
     if not ok or not packet then return end
@@ -332,12 +397,12 @@ windower.register_event('incoming chunk', function(id, original, modified)
     else
         currencies['2'] = filtered_currency_packet(packet)
     end
-    coroutine.schedule(send_telemetry, 0.1)
+    schedule_telemetry(0.5, false)
 end)
 
 local function refresh_character_telemetry()
     coroutine.schedule(request_currencies, 1)
-    coroutine.schedule(send_telemetry, 2)
+    schedule_telemetry(2, false)
 end
 
 windower.register_event('login', refresh_character_telemetry)

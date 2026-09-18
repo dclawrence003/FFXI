@@ -1,0 +1,25 @@
+echo Locus support update beginning. Run this out of combat; the active tactic will be stopped and nothing will be rearmed.
+send Dolomedes pt off
+wait 3
+echo Reloading Smalls so the isolated Protect-first RDM preset is available.
+send Smalls gs reload
+wait 8
+echo Reloading Achoo so the opt-in managed colure heartbeat is available.
+send Achoo gs reload
+wait 8
+echo Reloading PartyTactics v0.2.2 on all six clients.
+send Dolomedes lua r PartyTactics
+wait 2
+send Tackleberry lua r PartyTactics
+wait 2
+send Kickpuncher lua r PartyTactics
+wait 2
+send Barneystinson lua r PartyTactics
+wait 2
+send Smalls lua r PartyTactics
+wait 2
+send Achoo lua r PartyTactics
+wait 3
+send Dolomedes pt version
+send Dolomedes pt status
+echo Reload complete. Select Locus manually; after 6/6 commits, arm combat manually when ready to fight.

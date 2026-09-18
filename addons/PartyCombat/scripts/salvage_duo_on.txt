@@ -1,0 +1,8 @@
+echo Enabling direct Dolo/Kick controls. No combat addon policy is used.
+unbind ^p
+unbind !p
+bind ^p exec salvage_duo_attack.txt
+bind !p exec salvage_duo_off.txt
+send Dolomedes pc invalidate partytactics
+send Kickpuncher pc invalidate partytactics
+echo CTRL-P: Kick assists Dolo and attacks. ALT-P: Kick stops.
