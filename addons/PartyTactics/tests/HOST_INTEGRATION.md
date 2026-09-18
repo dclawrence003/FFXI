@@ -16,7 +16,7 @@ full-stack test. Production source is unchanged.
 
 `test_locus_host_puller_integration.lua` extends the existing opener fixture
 to route activation, commands and events through the actual stable GearSwap
-host, versioned Locus adapter and LocusPuller addon.
+host, versioned Locus adapter, LocusPuller addon and SignetKeeper command handler.
 
 The normal case verifies readiness, Flash/first-melee reservation timing,
 timeout release, explicit stop and rejection of a late acknowledgement after
@@ -26,7 +26,9 @@ with its specific failure message.  Fengari can report Lua errors with exit
 code zero, so the runner checks both output and exit status.
 
 This is one-client component integration with simulated Windower boundaries.
-SignetKeeper acknowledgement is still synthetic.  The PartyTactics coordinator,
+SignetKeeper now produces its actual local acknowledgement; a separate dropped-SK
+reply control proves the test detects its absence. The census, staff equipment,
+six-client Signet recovery and actual game timing are not run here. The PartyTactics coordinator,
 six-client activation, full job files and retail behavior are not covered.
 The injected fault is a test control, not proof of the historical startup cause.
 No production behavior was changed to make this test pass.

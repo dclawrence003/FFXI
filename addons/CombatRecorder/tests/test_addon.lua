@@ -1,4 +1,5 @@
 -- Passive integration harness: all game mutation APIs are absent and forbidden.
+local unpack = unpack or table.unpack
 local passed = 0
 local function test(name, fn)
     local ok, err = pcall(fn)
@@ -52,7 +53,9 @@ local function harness(already_dead, missing_directory)
             if path:find('recorder.lua', 1, true) then return function() return {new = function() return fake_store end} end end
             return loadfile(path)
         end}, {__index = _G})
-    local chunk = assert(loadfile('addons/CombatRecorder/CombatRecorder.lua')); setfenv(chunk, env); chunk()
+    local path = 'addons/CombatRecorder/CombatRecorder.lua'
+    if setfenv then setfenv(assert(loadfile(path)), env)()
+    else assert(loadfile(path, 't', env))() end
     function h:fire(event, ...) assert(self.events[event], 'event missing ' .. event); assert(self.events[event](...) == nil) end
     function h:count(kind) local n = 0; for _, r in ipairs(self.records) do if r.kind == kind then n = n + 1 end end; return n end
     function h:last(kind) for i = #self.records, 1, -1 do if self.records[i].kind == kind then return self.records[i].data end end end
