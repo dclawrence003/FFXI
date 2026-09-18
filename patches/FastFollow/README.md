@@ -71,12 +71,25 @@ The current emergency mitigation is `//ffo stopall` before zonelines.
 Run:
 
 ```powershell
-python -m unittest patches/FastFollow/tests/test_safe_zone.py -v
+./tools/OfflineTests/Invoke-Checks.ps1 -Suite FastFollow
 ```
 
 The test parses the candidate as Lua, proves the `0x05E` branch contains no
 packet construction/injection/blocking, and checks the source-zone, age,
 duplicate, injected-packet, natural-request, and zone-change guards.
+
+The suite also executes the unchanged candidate in `tests/test_movement_runtime.lua`.
+It checks movement toward a leader, operator stop, denied or failing PartyOps
+pause callbacks, arrival, bounded zone nudges, duplicate/stale/wrong-zone signals,
+and cancellation on natural zone requests and zone changes. A separate fault
+run drops the movement stop at the simulated client boundary; the same operator
+stop assertion must fail. The runner requires exact success/failure markers.
+
+This is one real FastFollow candidate with simulated position, clock, IPC input,
+movement output and PartyOps callback responses. It does not execute the real
+PartyOps pause protocol or prove terrain navigation, collision, actual zoning,
+or deployment. No game packets or client commands are sent. Original test work
+was designed and directed by Don Lawrence, with code developed using OpenAI Codex.
 
 ## Upstream
 
