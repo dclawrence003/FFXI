@@ -18,8 +18,8 @@ configured suite; GitHub uses the same entry.
 | CombatRecorder | Storage failure/rotation and passive addon runtime | In-memory storage/client; does not replace PartyOps |
 | LimbusTracker | Acquisition, duplicate/balance ordering, persistence and sync | In-memory files, packets and HTTP |
 | THHUD | State/protocol cases and addon runtime | Mock display, resources and packets |
-| Roller2 | Decision module | Full addon, casts and PartyOps hook not exercised |
-| SalvageCells | Eleven source guards | No actual runtime fixture yet |
+| Roller2 | Decision module and actual delayed Double-Up/operator-stop handlers | Initial state supplied by fixture; resource-heavy load, roll loop and PartyOps hook not exercised |
+| SalvageCells | Eleven source guards plus actual mid-run hold, inventory confirmation and pause | Simulated inventory/client; full assignment and treasure-pool integration remain separate |
 | EventGuard | Actual menu observation, stale-zone refusal, exact cancellation | Packet encoding/injection simulated; local-status repair only checks confirmation guard |
 
 FastFollow executes the candidate movement boundary and a dropped-stop control.
