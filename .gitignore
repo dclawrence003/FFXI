@@ -28,6 +28,7 @@ Thumbs.db
 .idea/
 
 # Local assistant work and personal evidence
+/tools/WorkspaceSetup/reports/
 /tools/FFXI-Core-Manager/local/
 /.codex/
 /.codex-tmp/
