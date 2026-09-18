@@ -35,7 +35,7 @@ jobs:
           python-version: '3.11'
       - name: Install locked Lua test tools
         run: ./tools/OfflineTests/Initialize.ps1 -NodeExe (Get-Command node).Source
-      - name: Run ten offline suites
+      - name: Run offline suites
         run: ./tools/OfflineTests/Invoke-Checks.ps1 -NodeExe (Get-Command node).Source -PythonExe (Get-Command python).Source
       - name: Preserve test reports
         if: always()

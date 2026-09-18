@@ -3,7 +3,7 @@
 param(
     [string]$NodeExe,
     [string]$PythonExe = 'python',
-    [ValidateSet('All','PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow')]
+    [ValidateSet('All','PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')]
     [string]$Suite = 'All'
 )
 $ErrorActionPreference = 'Stop'
@@ -19,7 +19,7 @@ if (-not $NodeExe -and (Test-Path -LiteralPath $settingsPath)) {
 if (-not $NodeExe) { throw 'Supply -NodeExe pointing to Node 24.18.0, or configure local.settings.json.' }
 $tools = & (Join-Path $PSScriptRoot 'Resolve-TestTools.ps1') -NodeExe $NodeExe -PythonExe $PythonExe
 $suites = if ($Suite -eq 'All') {
-    @('PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow')
+    @('PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')
 } else { @($Suite) }
 $runId = (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
 $reportRoot = Join-Path $PSScriptRoot "reports/$runId"
@@ -28,7 +28,7 @@ $results = @()
 foreach ($name in $suites) {
     $runner = Join-Path $workspace "addons/$name/tests/run_tests.ps1"
     $extraArguments = @()
-    if ($name -in @('InventoryCore','CoreManager','ReleasePackage','FastFollow')) {
+    if ($name -in @('InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')) {
         $runner = Join-Path $PSScriptRoot 'Invoke-AuxiliaryChecks.ps1'
         $extraArguments = @('-Suite', $name)
     }

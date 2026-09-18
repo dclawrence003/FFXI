@@ -21,13 +21,13 @@ with the addon manifest.
 
 ## Run tests
 
-GitHub runs the same ten suites on pull requests and changes to main using a
+GitHub runs the same eleven suites on pull requests and changes to main using a
 Windows runner, Node 24.18.0, Python 3.11 and the locked Lua packages.  Actions
 are pinned to exact commits.  Reports are retained as workflow artifacts for
 14 days.  This checks source without a Windower install or private PartyOps
 repository; it does not deploy or verify loaded clients.
 
-Run all ten configured suites with one command:
+Run all eleven configured suites with one command:
 
 ```powershell
 ./tools/OfflineTests/Invoke-Checks.ps1 -NodeExe $node
@@ -36,7 +36,7 @@ Run all ten configured suites with one command:
 Use `-Suite LocusPuller` (or another configured addon name) for a focused run.
 Each run writes separate logs and a JSON result under ignored `reports/`.
 The suite includes six addon groups plus InventoryCore, CoreManager local
-configuration, ReleasePackage and the FastFollow candidate guards.  The
+configuration, ReleasePackage, FastFollow candidate guards and IncidentMemory. The
 roster-specific installed GearSwap tests remain separate and have documented
 failures in tools/PARTYOPS_ANALYSIS.md.
 Failures remain failures even if another suite passes.  Machine-specific

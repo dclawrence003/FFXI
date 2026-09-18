@@ -1,6 +1,6 @@
 #Requires -Version 7.0
 param([Parameter(Mandatory)][string]$NodeExe, [string]$PythonExe = 'python',
-    [Parameter(Mandatory)][ValidateSet('InventoryCore','CoreManager','ReleasePackage','FastFollow')][string]$Suite)
+    [Parameter(Mandatory)][ValidateSet('InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory')][string]$Suite)
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $tools = & "$PSScriptRoot/Resolve-TestTools.ps1" -NodeExe $NodeExe -PythonExe $PythonExe
@@ -12,6 +12,7 @@ try {
         'InventoryCore' { & $tools.Node --test 'tools/InventoryCore/test/*.test.js' }
         'CoreManager' { & (Join-Path $PSHOME 'pwsh.exe') -NoProfile -File 'tools/FFXI-Core-Manager/Test-LocalConfiguration.ps1' }
         'ReleasePackage' { & $tools.Python -B -m unittest discover -s tools/OfflineTests -p test_release_package.py }
+        'IncidentMemory' { & $tools.Python -B -m unittest discover -s tools/WorkspaceSetup -p test_incident_memory.py }
         'FastFollow' { & $tools.Python -B -m unittest discover -s patches/FastFollow/tests -p test_safe_zone.py }
     }
     if ($LASTEXITCODE -ne 0) { throw "$Suite checks failed." }

@@ -187,6 +187,18 @@ assert(diverted:count('stop')==0)
 
 -- Ordinary combat is full-party mobile burn with one semantic WS lane per
 -- member and no runtime disengage.
+-- Regression from the September 14 run: a qualifying Biune WS followed by
+-- repeated low-HP ticks must not restart the stop/finisher cycle.
+local biune=harness('Biune Fire Elemental'); biune:activate()
+biune:action(hit(biune,'Tackleberry',4,112),0.1)
+biune.mob.hpp=29
+biune.tp.Dolomedes=1000
+biune:action(hit(biune,'Dolomedes',3,42),0.2)
+local biune_stops=biune:count('stop')
+biune:tick(0.4); biune:tick(0.8); biune:tick(1.2); biune:tick(2.0)
+assert(biune:count('stop')==biune_stops,
+    'QUALIFIED_BIUNE_RESTOP: observed WS must not restart low-HP stops')
+
 for member in pairs(native.tp) do native.tp[member]=1000 end
 native:tick(0.4)
 for _,lane in ipairs{
