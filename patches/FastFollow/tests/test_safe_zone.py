@@ -14,6 +14,26 @@ SOURCE = SOURCE_PATH.read_text(encoding="utf-8")
 
 
 class SafeZoneCandidateTests(unittest.TestCase):
+    def test_actual_movement_and_failure_control(self):
+        node = os.environ.get('FFXI_TEST_NODE_EXE')
+        self.assertTrue(node, 'Run through the FastFollow offline suite')
+        workspace = ROOT.parents[1]
+        cli = workspace / 'tools/OfflineTests/node_modules/fengari-node-cli/src/lua-cli.js'
+        script = ROOT / 'tests/test_movement_runtime.lua'
+        marker = 'PASS - actual FastFollow movement, pause and zone cancellation boundaries'
+        good = subprocess.run([node, str(cli), str(script)], cwd=workspace,
+                              capture_output=True, text=True)
+        output = good.stdout + good.stderr
+        self.assertEqual(good.returncode, 0, output)
+        self.assertNotIn('stack traceback:', output)
+        self.assertIn(marker, output)
+        bad = subprocess.run([node, str(cli), str(script), '--drop-stop'], cwd=workspace,
+                             capture_output=True, text=True)
+        output = bad.stdout + bad.stderr
+        self.assertIn('INJECTED FAULT: movement boundary dropped stop', output)
+        self.assertIn('MOVEMENT_STOP_FAILURE: operator stop', output)
+        self.assertNotIn(marker, output)
+
     def test_candidate_is_valid_lua(self):
         node = os.environ.get('FFXI_TEST_NODE_EXE')
         self.assertTrue(node, 'Run through tools/OfflineTests/Invoke-Checks.ps1 -Suite FastFollow')
