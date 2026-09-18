@@ -113,6 +113,23 @@ try {
         throw 'Consumer fault control did not detect a real combat stop.'
     }
     Write-Output 'Consumer fault control detected the injected stop in actual PartyCombat.'
+    $persistentOutput = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' --persistent-sortie 2>&1
+    $persistentText = $persistentOutput -join "`n"
+    $persistentOutput | ForEach-Object { Write-Output $_ }
+    if ($LASTEXITCODE -ne 0 -or $persistentText -match 'stack traceback:' -or
+        $persistentText -notmatch 'TRACE actual persistent adapter action outputs=[1-9]' -or
+        $persistentText -notmatch 'TRACE retired persistent adapters emitted no replacement actions' -or
+        $persistentText -notmatch 'PASS - real coordinator/consumer stale Sortie stop isolation and explicit stop') {
+        throw 'Persistent Sortie actual host/adapter/consumer integration failed.'
+    }
+    $persistentFault = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' --persistent-sortie --inject-stale-stop 2>&1
+    $persistentFaultText = $persistentFault -join "`n"
+    if ($persistentFaultText -notmatch 'INJECTED FAULT: leaked old-owner OFF reaches real PartyCombat' -or
+        $persistentFaultText -notmatch 'STALE_SORTIE_DISRUPTED_REPLACEMENT:' -or
+        $persistentFaultText -match 'PASS - real coordinator/consumer') {
+        throw 'Persistent Sortie fault control did not detect a real combat stop.'
+    }
+    Write-Output 'Persistent Sortie fault control detected the injected stop in actual PartyCombat.'
     $helperFault = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' --drop-helper-ack 2>&1
     $helperFaultText = $helperFault -join "`n"
     if ($helperFaultText -notmatch 'INJECTED FAULT: dropped actual helper reply' -or
