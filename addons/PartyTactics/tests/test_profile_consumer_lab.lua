@@ -7,7 +7,8 @@ local unpack_values=table.unpack or unpack
 if not math.atan2 then math.atan2=function(y,x) return math.atan(y,x) end end
 function string.startswith(value,prefix) return value:sub(1,#prefix)==prefix end
 local queue={}
-local inject_fault=arg and arg[1]=='--inject-stale-stop'
+local persistent=arg and arg[1]=='--persistent-sortie'
+local inject_fault=arg and (arg[1]=='--inject-stale-stop' or arg[2]=='--inject-stale-stop')
 local function words(text)
     local result={}; for word in text:gmatch('%S+') do result[#result+1]=word end
     return result
@@ -78,16 +79,17 @@ local function attach(c)
     end
 end
 for _,c in ipairs(lab.clients) do attach(c) end
-local readiness={host=0,helper=0}
+local readiness={host=0,helper=0,controller=0}
 local drop_helper=arg and arg[1]=='--drop-helper-ack'
 assert(loadfile('addons/PartyTactics/tests/readiness_clients.lua'))()(lab,function(c,s)
-    local kind=s:find('__legacy_helper_ready',1,true) and 'helper' or 'host'
+    local kind=s:find('__legacy_helper_ready',1,true) and 'helper'
+        or s:find('__controller_ready',1,true) and 'controller' or 'host'
     readiness[kind]=readiness[kind]+1
     if drop_helper and kind=='helper' and c.player.name=='Achoo' then
         print('INJECTED FAULT: dropped actual helper reply')
         return false
     end
-end)
+end,persistent)
 local function drain()
     local pending=queue; queue={}
     for _,entry in ipairs(pending) do
@@ -98,6 +100,7 @@ end
 local function tick(seconds)
     lab.tick(seconds); drain()
     for _,c in ipairs(lab.clients) do c.pc.callbacks.prerender() end
+    if persistent then for _,c in ipairs(lab.clients) do c.host_tick() end end
 end
 local dolo=lab.named('Dolomedes')
 local function assert_policy(expected)
@@ -108,9 +111,15 @@ local function assert_policy(expected)
     end
 end
 for _,c in ipairs(lab.clients) do c.zone=275 end
-lab.fire(dolo,'addon command','sortie-boss-skomora-v1')
+lab.fire(dolo,'addon command',persistent and 'sortie' or 'sortie-boss-skomora-v1')
 for i=1,8 do tick(0.5) end
-assert_policy('pt-sortie-skomora')
+assert_policy(persistent and 'pt-sortie-main' or 'pt-sortie-skomora')
+if persistent then
+    assert(readiness.controller>=6,'Actual persistent controllers did not answer probes')
+    for _,c in ipairs(lab.clients) do
+        assert(c.real_host.active_metadata().id=='sortie-main-v1','Persistent adapter not actually active')
+    end
+end
 local old_target={id=50000,index=500,name='Skomora',spawn_type=16,
     valid_target=true,hpp=100,claim_id=0,distance=4,x=2,y=0,z=0}
 for _,c in ipairs(lab.clients) do c.mobs[500]=old_target; c.current_target=old_target end
@@ -127,6 +136,16 @@ for _,c in ipairs(lab.clients) do
     assert(c.player.status==1,'Sortie did not engage real consumer '..c.player.name)
 end
 print('TRACE real PartyCombat initial Sortie engagement=6')
+if persistent then
+    local inputs=0
+    for _,c in ipairs(lab.clients) do
+        assert(c.real_host.active_metadata() and c.real_host.active_metadata().id=='sortie-main-v1',
+            'Actual Sortie adapter failed for '..c.player.name..': '..table.concat(c.host_chats,'; '))
+        inputs=inputs+#c.adapter_inputs
+    end
+    assert(inputs>0,'Actual persistent adapter produced no combat action output')
+    print('TRACE actual persistent adapter action outputs='..inputs)
+end
 lab.hold(function(message)
     return message:find('PARTYTACTICS1|stop|',1,true)==1
 end)
@@ -137,6 +156,12 @@ for i=1,4 do tick(0.5) end
 lab.fire(dolo,'addon command','locus')
 for i=1,10 do tick(0.5) end
 assert_policy('pt-locus-bats')
+if persistent then
+    for _,c in ipairs(lab.clients) do
+        assert(c.real_host.active_metadata()==nil,'Old Sortie adapter survived replacement profile')
+        c.retired_adapter_inputs=#c.adapter_inputs
+    end
+end
 local first_chat=#dolo.chats+1
 lab.fire(dolo,'addon command','status')
 local fully_ready=false
@@ -171,6 +196,13 @@ for _,entry in ipairs(engaged) do
         'STALE_SORTIE_DISRUPTED_REPLACEMENT: '..entry.client.player.name)
 end
 assert_policy('pt-locus-bats')
+if persistent then
+    for _,c in ipairs(lab.clients) do
+        assert(#c.adapter_inputs==c.retired_adapter_inputs,
+            'Retired Sortie adapter emitted actions during replacement combat')
+    end
+    print('TRACE retired persistent adapters emitted no replacement actions')
+end
 lab.fire(dolo,'addon command','off')
 for i=1,4 do tick(0.5) end
 for _,entry in ipairs(engaged) do

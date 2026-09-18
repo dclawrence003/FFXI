@@ -34,6 +34,9 @@ Run all configured suites with one command:
 ```
 
 Use `-Suite LocusPuller` (or another configured addon name) for a focused run.
+Add `-RecordIncident <incident-id>` to save the verified report automatically
+in the operator's existing private incident memory. Both passes and failures
+are recorded as offline evidence; no incident is automatically marked resolved.
 Each run writes separate logs and a JSON result under ignored `reports/`.
 Reports include the Git commit and SHA-256 hashes of non-ignored source files
 under addons, patches, tools and .github. A before/after comparison rejects

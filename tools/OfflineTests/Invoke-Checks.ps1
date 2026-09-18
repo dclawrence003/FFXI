@@ -4,7 +4,8 @@ param(
     [string]$NodeExe,
     [string]$PythonExe = 'python',
     [ValidateSet('All','PartyTactics','ConquestCash','ExpeditionGuide','JubileeKeeper','LocusPuller','SignetKeeper','InventoryCore','CoreManager','ReleasePackage','FastFollow','IncidentMemory','Harness','AutoWS2','PartyCombat','PartyStart','CombatRecorder','LimbusTracker','THHUD','Roller2','SalvageCells','EventGuard')]
-    [string]$Suite = 'All'
+    [string]$Suite = 'All',
+    [string]$RecordIncident
 )
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -61,6 +62,7 @@ $sourceAfter = Join-Path $reportRoot 'source-after.json'
 if ($LASTEXITCODE -ne 0) { throw 'Final source snapshot failed.' }
 $sourceUnchanged = (Get-FileHash -LiteralPath $sourceSnapshot).Hash -eq (Get-FileHash -LiteralPath $sourceAfter).Hash
 [ordered]@{
+    format = 'ffxi-offline-check-result-v1'
     recorded_at = (Get-Date).ToString('o')
     workspace = $workspace
     node = (& $tools.Node --version)
@@ -74,5 +76,10 @@ $sourceUnchanged = (Get-FileHash -LiteralPath $sourceSnapshot).Hash -eq (Get-Fil
     suites = $results
 } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $reportRoot 'result.json') -Encoding utf8
 Write-Output "Report: $reportRoot"
+if ($RecordIncident) {
+    & $tools.Python -B (Join-Path $workspace 'tools/WorkspaceSetup/incident_memory.py') attach-offline `
+        (Join-Path $reportRoot 'result.json') --incident $RecordIncident --title $RecordIncident
+    if ($LASTEXITCODE -ne 0) { throw 'Offline result could not be recorded in incident memory.' }
+}
 if (-not $sourceUnchanged) { throw 'Source changed during the test run. Do not treat these results as one tested version.' }
 if (@($results | Where-Object { $_.exit_code -ne 0 }).Count) { throw 'One or more suites failed. See the named suite logs.' }

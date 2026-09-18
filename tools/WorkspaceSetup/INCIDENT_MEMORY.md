@@ -16,12 +16,24 @@ Python 3.11 or later; no additional packages. Set FFXI_KNOWLEDGE_ROOT or pass
 python tools/WorkspaceSetup/incident_memory.py search sortie
 python tools/WorkspaceSetup/incident_memory.py record C:/private/event.json
 python tools/WorkspaceSetup/incident_memory.py attach-diagnostic C:/private/report.json --incident sortie-stop --title 'Sortie repeated disengagement'
+python tools/WorkspaceSetup/incident_memory.py attach-offline tools/OfflineTests/reports/<run>/result.json --incident sortie-stop --title 'Sortie offline checks'
 ```
 
 The diagnostic must come from PartyOps' existing historical diagnostic command.
 This attachment records counts, scope and a file hash. Counts never establish
 continuous coverage or encounter success. The command does not export journals
 or solve the current historical export size/continuity limits.
+
+For a test run with automatic checkpoint recording, use
+`./tools/OfflineTests/Invoke-Checks.ps1 -Suite PartyTactics -RecordIncident sortie-stop`.
+The optional flag writes to the private vault through this existing tool after
+the report is saved, including failed suites. No flag means no vault write,
+which keeps standalone GitHub checks independent of private data. The attachment
+requires the current report format, matching log/snapshot hashes and truthful
+source stability. It rejects empty collections and evidence outside the report
+folder. Retrying the same report is idempotent. It never declares an incident
+resolved or promotes a test to live evidence. A crash before a complete report
+still needs a separate failure record.
 
 An event looks like this:
 

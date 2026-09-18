@@ -198,6 +198,51 @@ def diagnostic_event(filename, incident, title):
     return attach_file(event, filename, 'partyops')
 
 
+def offline_event(filename, incident, title):
+    path = Path(filename).resolve()
+    report = read_json(path)
+    require(report.get('format') == 'ffxi-offline-check-result-v1', 'Unsupported offline report.')
+    require(report.get('live_commands') is False and report.get('installed_file_checks') is False,
+            'Only source-only offline reports can be attached here.')
+    suites = report.get('suites')
+    require(isinstance(suites, list) and 0 < len(suites) <= 27, 'Invalid suite collection.')
+    require(len({s['suite'] for s in suites}) == len(suites), 'Duplicate suite names.')
+    def verify_local(value, expected=None):
+        candidate = Path(value).resolve()
+        require(candidate.parent == path.parent, 'Evidence must stay in the report directory.')
+        require(candidate.is_file() and candidate.stat().st_size <= 32 * 1024 * 1024,
+                'Missing or oversized report evidence.')
+        actual = digest(candidate.read_bytes())
+        require(expected is None or actual == expected, 'Report evidence hash mismatch.')
+        return candidate, actual
+    snapshot, before_hash = verify_local(report['source_snapshot'], report['source_snapshot_sha256'])
+    _, after_hash = verify_local(path.parent / 'source-after.json')
+    unchanged = before_hash == after_hash
+    require(report.get('source_unchanged_during_run') is unchanged, 'Source stability claim mismatch.')
+    source = read_json(snapshot)
+    require(source.get('format') == 'ffxi-offline-source-snapshot-v1', 'Unsupported source snapshot.')
+    require(re.fullmatch(r'[a-f0-9]{40}', source.get('commit', '')), 'Invalid source commit.')
+    failures = []
+    evidence = []
+    for suite in suites:
+        require(type(suite.get('exit_code')) is int, 'Suite exit code is missing.')
+        log, sha = verify_local(suite['log'], suite['log_sha256'])
+        evidence.append({'type': 'test', 'locator': str(log), 'sha256': sha})
+        if suite['exit_code'] != 0:
+            failures.append(suite['suite'])
+    passed = unchanged and not failures
+    event = {'version': 1, 'incident_id': incident,
+             'event_id': 'offline-' + digest(path.read_bytes())[:16], 'title': title,
+             'occurred_at': report['recorded_at'], 'kind': 'test_passed' if passed else 'test_failed',
+             'evidence_level': 'simulated',
+             'summary': f"Offline run: {len(suites)} suites; failed: {', '.join(failures) or 'none'}; source unchanged: {unchanged}.",
+             'scope': f"Commit {source['commit']} plus hashed working files. Only configured cases, including their documented mocks. No deployment, loaded-client, historical-cause or gameplay-success claim.",
+             'tags': ['offline', 'automated-checkpoint'], 'evidence': evidence}
+    attach_file(event, path, 'test')
+    attach_file(event, snapshot)
+    return validate(event)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--knowledge-root')
@@ -212,6 +257,10 @@ def main():
     diag.add_argument('diagnostic_json')
     diag.add_argument('--incident', required=True)
     diag.add_argument('--title', required=True)
+    offline = commands.add_parser('attach-offline')
+    offline.add_argument('result_json')
+    offline.add_argument('--incident', required=True)
+    offline.add_argument('--title', required=True)
     args = parser.parse_args()
     root = knowledge_root(args.knowledge_root)
     if args.command == 'record':
@@ -221,6 +270,8 @@ def main():
         print(record(root, event))
     elif args.command == 'attach-diagnostic':
         print(record(root, diagnostic_event(args.diagnostic_json, args.incident, args.title)))
+    elif args.command == 'attach-offline':
+        print(record(root, offline_event(args.result_json, args.incident, args.title)))
     elif args.command == 'search':
         query = args.query.casefold()
         matches = [e for e in load_events(root) if query in json.dumps(e, ensure_ascii=False).casefold()]
