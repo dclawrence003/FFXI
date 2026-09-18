@@ -75,6 +75,21 @@ try {
     Invoke-LuaTest 'addons/PartyTactics/tests/test_supplemental_aliases.lua' 'Supplemental alias Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_action_api.lua' 'Typed action API Lua tests'
     Invoke-LuaTest 'addons/PartyTactics/tests/test_six_client_activation.lua' 'Six-client Lua tests'
+    $hostOutput = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_coordinator_host.lua' 2>&1
+    $hostText = $hostOutput -join "`n"
+    $hostOutput | ForEach-Object { Write-Output $_ }
+    if ($LASTEXITCODE -ne 0 -or $hostText -match 'stack traceback:' -or
+        $hostText -notmatch 'PASS - real coordinator host readiness and stopped late replies') {
+        throw 'Actual coordinator/host readiness failed.'
+    }
+    $hostFault = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_coordinator_host.lua' --drop-host-ack 2>&1
+    $hostFaultText = $hostFault -join "`n"
+    if ($hostFaultText -notmatch 'INJECTED FAULT: dropped actual host reply' -or
+        $hostFaultText -notmatch 'HOST_READINESS_FAILURE: actual host replies missing' -or
+        $hostFaultText -match 'PASS - real coordinator host readiness') {
+        throw 'Host fault control did not detect the dropped readiness reply.'
+    }
+    Write-Output 'Actual host dropped-reply control detected missing readiness.'
     $consumerOutput = & $NodeExe $fengariCli 'addons/PartyTactics/tests/test_profile_consumer_lab.lua' 2>&1
     $consumerText = $consumerOutput -join "`n"
     $consumerOutput | ForEach-Object { Write-Output $_ }
