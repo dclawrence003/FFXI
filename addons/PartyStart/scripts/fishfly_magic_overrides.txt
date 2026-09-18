@@ -1,0 +1,9 @@
+echo Applying Fishfly magic-burn overrides without touching PLD/RDM healing.
+send Barneystinson gs c songs fishfly
+send Achoo gs c autoindi Acumen
+send Achoo gs c autogeo Malaise
+send Achoo gs c autoentrust INT
+send Achoo gs c autoentrustee Dolomedes
+send Achoo gs c unset CombatEntrustOnly
+send Achoo gs c set AutoBuffMode Auto
+echo Magic overrides active: Sage Etude/Scherzo/March, Indi-Acumen, Geo-Malaise, Entrust Indi-INT.

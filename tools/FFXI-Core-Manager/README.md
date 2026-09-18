@@ -19,19 +19,19 @@ WinControl in the Windower launcher so the generated autoload script loads it
 once. CoreManager deliberately does not issue a second `load WinControl`
 command, avoiding a harmless but noisy “Plugin already loaded” warning.
 
-## Prototype warning
+## Local configuration
 
-The committed configuration and presets are the tested settings for one
-computer:
+Committed configuration and presets start unconfigured: no characters, CPU
+assignments, window placement, taskbar changes or monitor recovery.  Copy
+config.json and the presets folder into an ignored local/ folder, then enter
+your character and hardware settings there.  The manager and installer prefer
+local/config.json when present.  Keep both preset files alongside it.
 
-- Intel Core i7-11700K, 8 physical cores / 16 logical processors
-- One 5120x2160 ultrawide and two portrait side monitors
-- Six named characters
-
-Do not install the supplied configuration unchanged on another machine. CPU
-numbers and monitor coordinates are hardware-specific. The manager's character
-map can contain any number of characters, but a friendlier configuration
-generator has not been built yet.
+The installer preserves an existing installed config.json.  Selecting a
+preset uses a local preset when available and writes the installed config, or
+local/config.json when the manager is not installed.  CPU numbers and monitor
+coordinates are specific to your computer.  A configuration generator is not
+yet provided.
 
 ## Features
 
@@ -47,6 +47,9 @@ generator has not been built yet.
   layouts after the monitor is stable.
 - Coordinates the native Timers plugin's single global settings file so each
   character can load a different vertical timer position without changing X.
+- Recovers Timers placement after staggered character logins, zoning, and an
+  actual WinControl layout reapplication without unloading every client at
+  once.
 - Reloads `config.json` automatically after it changes.
 
 ## Configuration
@@ -125,21 +128,37 @@ to `Windower\scripts\init.txt`.
 //core layout
 //core aspect
 //core timers
+//core timers me
+//core timers status
 ```
 
 - `status` shows the companion's latest result for the current character.
 - `apply` requests an affinity reapply.
 - `layout` requests and consumes the saved window rectangle.
 - `aspect` recalculates aspect ratio from the saved dimensions.
-- `timers` sequentially unloads Timers, writes each configured character's Y,
-  and loads that client before advancing. This avoids shared-file races and is
-  forwarded to Dolomedes when invoked from another client.
+- `timers` queues all configured characters, briefly reloads Timers on one
+  client at a time, and writes that character's Y before advancing. This
+  avoids shared-file races and is forwarded to Dolomedes when invoked from
+  another client.
+- `timers me` recovers only the current client's Timers position.
+- `timers status` shows the current client's expected position and recent
+  recovery state.
 
-CoreManager also applies the Timers sequence automatically after login. The
-current personal layout uses Y 300 for Dolomedes, Y 149 for Tackleberry,
+Each client requests its own Timers recovery after login, zoning, and a saved
+window-layout reapplication. Dolomedes serializes those requests because the
+native plugin has only one shared `timers.xml`. Dolomedes also queues a full
+catch-up pass after his own login or zone change, covering both login orders:
+Dolomedes first or Dolomedes last. Automatic requests are deduplicated and do
+not print routine chat messages.
+
+The current personal layout uses Y 300 for Dolomedes, Y 149 for Tackleberry,
 Kickpuncher, and Barneystinson, and Y 125 for Smalls and Achoo. The native
 Timers plugin does not retain per-character sections in `timers.xml`, which is
-why a coordinated load is required.
+why a coordinator is required.
+
+Only `lua load CoreManager` belongs in the shared `init.txt`. Do not add
+`core timers` there: every client executes the shared file, while CoreManager's
+login recovery already handles startup in a controlled queue.
 
 The Windows companion applies affinity even when the Windower addon is not
 loaded.
@@ -163,6 +182,8 @@ After installation:
 - Per-character status: `%LOCALAPPDATA%\FFXIManager\status`
 - Per-character layout handoff: `%LOCALAPPDATA%\FFXIManager\layouts`
 - Addon requests: `%LOCALAPPDATA%\FFXIManager\requests`
+- Per-character Timers recovery diagnostics:
+  `%LOCALAPPDATA%\FFXIManager\timers-<character>.log`
 
 These runtime files are not part of the repository.
 

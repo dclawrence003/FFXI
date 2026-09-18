@@ -1,0 +1,28 @@
+--- a/lottery.lua
++++ b/lottery.lua
+@@
+ _addon.language = 'english'
+ _addon.version = '1.0.0.0'
+ 
++-- SalvageCells decides which character still needs each imbued cell. Lottery's
++-- normal IPC behavior would otherwise make every other client pass the same
++-- pool slot as soon as one character lots it, including clients that need it.
++local salvage_cell_ids = {
++    [5365]=true, [5366]=true, [5367]=true, [5368]=true, [5369]=true,
++    [5370]=true, [5371]=true, [5372]=true, [5373]=true, [5374]=true,
++    [5375]=true, [5376]=true, [5377]=true, [5378]=true, [5379]=true,
++    [5380]=true, [5381]=true, [5382]=true, [5383]=true, [5384]=true,
++}
++
+ windower.register_event('outgoing chunk', function(id, data, modified, injected, blocked)
+     if not blocked and id == 0x41 then
+-        windower.send_ipc_message('pass ' .. tostring(data:sub(5, 5):byte()))
++        local index = data:sub(5, 5):byte()
++        local treasure = windower.ffxi.get_items('treasure') or {}
++        local item = treasure[index]
++        if item and salvage_cell_ids[item.item_id] then
++            return
++        end
++        windower.send_ipc_message('pass ' .. tostring(index))
+     end
+ end)

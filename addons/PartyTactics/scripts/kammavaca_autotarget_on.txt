@@ -1,0 +1,8 @@
+echo Kammavaca cleanup: restoring native FFXI auto-target on all six clients.
+send Dolomedes input /autotarget on
+send Tackleberry input /autotarget on
+send Kickpuncher input /autotarget on
+send Barneystinson input /autotarget on
+send Smalls input /autotarget on
+send Achoo input /autotarget on
+echo Auto-target is On again.

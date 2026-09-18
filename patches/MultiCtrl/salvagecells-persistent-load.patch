@@ -1,0 +1,21 @@
+--- a/multictrl.lua
++++ b/multictrl.lua
+@@
+-local salvage_area = S{73,74,75,76}
+-
+-windower.register_event('zone change', function(new_id, old_id)
+-    zone_info = windower.ffxi.get_info()
+-    coroutine.sleep(10)
+-    if salvage_area:contains(zone_info.zone) then
+-        windower.add_to_chat(262,'[MC] Entering Salvage zones.')
+-        windower.send_command('lua load salvagecells')
+-    end
+-
+-    if salvage_area:contains(old_id) and not salvage_area:contains(new_id) then
+-        windower.add_to_chat(262,'[MC] Exiting Salvage zones.')
+-        windower.send_command('lua unload salvagecells')
+-    end
+-end)
++-- SalvageCells is loaded persistently by init.txt. Loading it ten seconds after
++-- zoning made it miss the zone-entry event, and unloading it discarded the
++-- shared distribution state. Do not manage its lifecycle from MultiCtrl.

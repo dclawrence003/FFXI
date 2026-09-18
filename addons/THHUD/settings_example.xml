@@ -1,0 +1,25 @@
+<?xml version="1.1" ?>
+<settings>
+    <global>
+        <calculation>
+            <manual_equipment_bonus>0</manual_equipment_bonus>
+            <treasure_hound>false</treasure_hound>
+        </calculation>
+        <ipc_max_age>8</ipc_max_age>
+        <opacity>235</opacity>
+        <peers>
+            <Achoo>true</Achoo>
+            <Barneystinson>true</Barneystinson>
+            <Dolomedes>true</Dolomedes>
+            <Kickpuncher>true</Kickpuncher>
+            <Smalls>true</Smalls>
+            <Tackleberry>true</Tackleberry>
+        </peers>
+        <pos>
+            <x>30</x>
+            <y>260</y>
+        </pos>
+        <scale>1</scale>
+        <visible>true</visible>
+    </global>
+</settings>

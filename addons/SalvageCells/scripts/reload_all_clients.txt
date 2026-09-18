@@ -1,0 +1,5 @@
+send @all lua reload lottery
+wait 1
+send @all lua reload treasury
+wait 1
+send @all lua reload salvagecells

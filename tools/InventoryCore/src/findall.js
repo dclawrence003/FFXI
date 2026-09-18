@@ -47,4 +47,36 @@ function readAll(directory, characterNames) {
   return { rows, sources };
 }
 
-module.exports = { parseFindAll, readAll };
+function syncInventory(db, snapshot, syncedAt = new Date().toISOString()) {
+  if (!snapshot || !Array.isArray(snapshot.rows) || !Array.isArray(snapshot.sources)) {
+    throw new TypeError('A complete FindAll snapshot is required.');
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec('DELETE FROM inventory;');
+    const insertInventory = db.prepare(
+      'INSERT INTO inventory(character,bag,item_id,count) VALUES (?,?,?,?)'
+    );
+    for (const row of snapshot.rows) {
+      insertInventory.run(row.character, row.bag, row.itemId, row.count);
+    }
+
+    db.prepare("DELETE FROM source_status WHERE source LIKE 'FindAll:%' OR source='Inventory snapshot'").run();
+    const insertStatus = db.prepare(`INSERT INTO source_status(source,ok,updated_at,details)
+      VALUES (?,?,?,?) ON CONFLICT(source) DO UPDATE SET
+      ok=excluded.ok,updated_at=excluded.updated_at,details=excluded.details`);
+    for (const source of snapshot.sources) {
+      insertStatus.run(`FindAll:${source.character}`, source.ok ? 1 : 0, source.updatedAt, source.file);
+    }
+    insertStatus.run('Inventory snapshot', 1, syncedAt, `${snapshot.rows.length} bag entries`);
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* transaction was already closed */ }
+    throw error;
+  }
+
+  return { rows: snapshot.rows.length, syncedAt };
+}
+
+module.exports = { parseFindAll, readAll, syncInventory };

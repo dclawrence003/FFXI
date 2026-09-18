@@ -93,7 +93,7 @@ legend { margin-bottom: 3px; }
 .matrix-board { min-height: 100px; }
 .matrix-card { border: 1px solid var(--line); background: rgba(14,20,25,.96); border-radius: 6px; overflow: hidden; }
 .matrix-head, .matrix-row { display: grid; grid-template-columns: minmax(260px, 1fr) repeat(6, minmax(70px, .32fr)); gap: 1px; align-items: center; }
-.matrix-head { position: sticky; top: 53px; z-index: 5; background: #172028; color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.matrix-head { background: #172028; color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
 .matrix-head span, .matrix-row > span { padding: 4px 7px; }
 .matrix-row { border-top: 1px solid #1b242c; min-height: 25px; font-size: 10px; }
 .matrix-row:hover { background: #182128; }

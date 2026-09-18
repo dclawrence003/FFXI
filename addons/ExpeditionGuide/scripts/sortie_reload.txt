@@ -1,0 +1,32 @@
+echo Reloading only the two Sortie owners. Run this once while all six characters are out of combat.
+send Dolomedes lua unload ExpeditionGuide
+send Tackleberry lua unload ExpeditionGuide
+send Kickpuncher lua unload ExpeditionGuide
+send Barneystinson lua unload ExpeditionGuide
+send Smalls lua unload ExpeditionGuide
+send Achoo lua unload ExpeditionGuide
+wait 1
+send Dolomedes lua unload PartyTactics
+send Tackleberry lua unload PartyTactics
+send Kickpuncher lua unload PartyTactics
+send Barneystinson lua unload PartyTactics
+send Smalls lua unload PartyTactics
+send Achoo lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+send Tackleberry lua load PartyTactics
+send Kickpuncher lua load PartyTactics
+send Barneystinson lua load PartyTactics
+send Smalls lua load PartyTactics
+send Achoo lua load PartyTactics
+wait 3
+send Dolomedes lua load ExpeditionGuide
+send Tackleberry lua load ExpeditionGuide
+send Kickpuncher lua load ExpeditionGuide
+send Barneystinson lua load ExpeditionGuide
+send Smalls lua load ExpeditionGuide
+send Achoo lua load ExpeditionGuide
+wait 4
+send Dolomedes pt version
+send Dolomedes exg status
+echo Sortie reload complete. The main route starts itself; one persistent profile owns every exact target recipe.

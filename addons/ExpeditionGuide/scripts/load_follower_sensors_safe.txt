@@ -1,0 +1,23 @@
+echo ExpeditionGuide follower sensor load beginning. This script is operator-invoked and does not alter startup files, key binds, combat, or equipment.
+send Tackleberry lua unload ExpeditionGuide
+wait 1
+send Tackleberry lua load ExpeditionGuide
+wait 2
+send Kickpuncher lua unload ExpeditionGuide
+wait 1
+send Kickpuncher lua load ExpeditionGuide
+wait 2
+send Barneystinson lua unload ExpeditionGuide
+wait 1
+send Barneystinson lua load ExpeditionGuide
+wait 2
+send Smalls lua unload ExpeditionGuide
+wait 1
+send Smalls lua load ExpeditionGuide
+wait 2
+send Achoo lua unload ExpeditionGuide
+wait 1
+send Achoo lua load ExpeditionGuide
+wait 3
+send Dolomedes exg status
+echo Follower sensor load complete. Confirm Dolomedes reports sensors 6/6. No route was started or resumed.

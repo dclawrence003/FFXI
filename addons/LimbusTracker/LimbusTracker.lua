@@ -3,7 +3,7 @@ LimbusTracker
 
 Standalone Limbus chest rotation tracker for Windower 4.
 
-Copyright (c) 2026 OpenAI
+Copyright (c) 2026 Don Lawrence
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -32,7 +32,7 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'LimbusTracker'
 _addon.author = 'OpenAI Codex at the direction of Dolomedes'
-_addon.version = '0.4.3'
+_addon.version = '0.5.1'
 _addon.commands = {'limbustracker', 'lt'}
 
 local config = require('config')
@@ -118,6 +118,7 @@ local final_chest_targets = {
 
 local duplicate_window = 300
 local pending_timeout = 120
+local observation_limit = 48
 local history_version = 2
 
 local expected_zone = {Temenos = 37, Apollyon = 38}
@@ -361,6 +362,33 @@ local function persist_runtime_state()
     return save_history()
 end
 
+-- Keep a small, local evidence trail, not a general chat log. Callers save it
+-- with the related state change; there is no network traffic or chat spam.
+local function note_detection(kind, fields)
+    if not state then return end
+    state.runtime = state.runtime or {}
+    local observations = state.runtime.observations
+    if type(observations) ~= 'table' then observations = {} end
+    local entry = fields or {}
+    entry.kind = kind
+    entry.observed_at = os.time()
+    entry.version = _addon.version
+    observations[#observations + 1] = entry
+    while #observations > observation_limit do table.remove(observations, 1) end
+    state.runtime.observations = observations
+end
+
+local function expire_pending_chest()
+    if pending_chest and os.time() - tonumber(pending_chest.last_seen
+        or pending_chest.started or 0) > pending_timeout
+    then
+        note_detection('expired', {area=pending_chest.area,
+            target_id=pending_chest.target_id, reason='no-acquisition-message'})
+        pending_chest = nil
+        persist_runtime_state()
+    end
+end
+
 local function initialize_character()
     local name = player_name()
     if not name then return false end
@@ -478,7 +506,7 @@ local function compute_rotation(area_state, area)
         if event.chest and not last_seen[event.chest] then
             last_seen[event.chest] = index
         end
-        if not last_bonus and tonumber(event.units) == 5000 then
+        if not last_bonus and (tonumber(event.units) or 0) > 3000 then
             last_bonus = event
         end
         if #recent < 5 then recent[#recent + 1] = event end
@@ -512,7 +540,8 @@ local function recent_text(rotation)
     if #rotation.recent == 0 then return '--' end
     local output = {}
     for _, event in ipairs(rotation.recent) do
-        local units = tonumber(event.units) == 5000 and '5*' or '3'
+        local amount = tonumber(event.units) or 0
+        local units = tostring(amount / 1000) .. (amount > 3000 and '*' or '')
         output[#output + 1] = ('%s:%s'):format(event.chest or '?', units)
     end
     return table.concat(output, ' > ')
@@ -605,7 +634,7 @@ local function parse_relevant_packet(direction, original, modified, predicate)
     return nil
 end
 
-local function record_chest(area, target_id, chest, units, signature)
+local function record_chest(area, target_id, chest, units, signature, confirmation)
     if not initialize_character() then return false end
     chest = validated_chest(area, target_id, chest)
     if not chest then return false end
@@ -625,6 +654,7 @@ local function record_chest(area, target_id, chest, units, signature)
         units = units,
         opened_at = now,
         signature = signature,
+        confirmation = confirmation,
         synced = false,
     }
     state.events[area][#state.events[area] + 1] = event
@@ -638,6 +668,17 @@ end
 
 local function begin_chest(target_id, source, packet_zone)
     target_id = tonumber(target_id)
+    if not target_id or target_id <= 0 then return end
+    -- All NPC interactions reach this point, not only final coffers. Moving
+    -- to another object abandons the old reward correlation immediately, so
+    -- a Code/??? payout cannot be credited to an unclaimed final chest.
+    if pending_chest and target_id ~= pending_chest.target_id then
+        note_detection('cancelled', {area=pending_chest.area,
+            target_id=pending_chest.target_id, next_target_id=target_id,
+            reason='different-object'})
+        pending_chest = nil
+        persist_runtime_state()
+    end
     local area, chest = area_for_target(target_id)
     if not chest then return end
     packet_zone = tonumber(packet_zone)
@@ -654,9 +695,8 @@ local function begin_chest(target_id, source, packet_zone)
         and now - tonumber(pending_chest.last_seen
             or pending_chest.started or 0) <= pending_timeout
     then
-        -- The same opening produces action, menu, and dialog packets. Preserve
-        -- the earliest currency baseline while extending the observation
-        -- window; replacing it can turn a valid gain into a zero delta.
+        -- Several packet stages describe one interaction. Preserve its start
+        -- time and observed starting balance for diagnostics, not confirmation.
         pending_chest.last_seen = now
         pending_chest.sources = pending_chest.sources or {}
         pending_chest.sources[source] = true
@@ -675,39 +715,63 @@ local function begin_chest(target_id, source, packet_zone)
         }
     end
 
+    note_detection('coffer', {area=area, target_id=target_id, source=source,
+        balance_at_click=pending_chest.units_before})
     persist_runtime_state()
-    coroutine.schedule(request_currency_two, 0.25)
     coroutine.schedule(request_currency_two, 1)
-    coroutine.schedule(request_currency_two, 3)
-    coroutine.schedule(request_currency_two, 6)
     return true
 end
 
-local function finish_chest_if_ready(packet)
-    if not pending_chest or os.time() - tonumber(pending_chest.last_seen
-        or pending_chest.started or 0) > pending_timeout
-    then
-        pending_chest = nil
-        persist_runtime_state()
-        return false
+local function parse_unit_acquisition(original)
+    if type(original) ~= 'string' then return nil end
+    -- FFXI color controls and the final chat marker are two bytes. Read ORIGINAL text,
+    -- even when another addon recolors or hides the displayed copy.
+    local plain = original:gsub('[\30\31\127].', ''):gsub('%z', '')
+    -- Acquired/Remaining/Total are one FFXI message separated by 0x07. Match
+    -- the acquisition LINE, not the entire multi-line message. Strip colors
+    -- first because a color's argument byte can itself equal 0x07.
+    for line in plain:gmatch('[^\7\r\n]+') do
+        local area, amount = line:match('^%s*Acquired%s+(%a+)%s+Units:%s*(%d[%d,]*)%s*%.?%s*$')
+        if expected_zone[area] then
+            return area, tonumber((amount:gsub(',', '')))
+        end
     end
-    local field = pending_chest.area .. ' Units'
-    local before = pending_chest.units_before or previous_units[field]
-    local after = tonumber(packet[field])
-    local gained = before and after and (after - before) or nil
-    if gained == 3000 or gained == 5000 then
-        local name = player_name() or 'Unknown'
-        local signature = table.concat({
-            name, pending_chest.area, pending_chest.target_id,
-            before, after, pending_chest.started,
-        }, ':')
-        local recorded = record_chest(pending_chest.area, pending_chest.target_id,
-            pending_chest.chest, gained, signature)
-        pending_chest = nil
-        persist_runtime_state()
-        return recorded
+    return nil
+end
+
+local function observe_acquisition(area, units)
+    if not initialize_character() then return end
+    expire_pending_chest()
+    local live_area = current_area()
+    if live_area and live_area ~= area then return end
+    if not live_area and not pending_chest then return end
+
+    local observation = pending_chest
+    local reason = 'no-final-coffer'
+    -- Small kill/Code gains are not coffer receipts. A capped bonus may award
+    -- between 3,000 and 5,000; retain the actual amount rather than rounding.
+    if not units or units < 3000 or units > 5000 then
+        reason = 'not-coffer-reward-size'
+    elseif observation and observation.area == area then
+        reason = 'confirmed'
+    elseif observation then
+        reason = 'different-area'
     end
-    return false
+    if observation or (units and units >= 1000) then
+        note_detection('acquisition', {area=area, units=units, reason=reason,
+            target_id=observation and observation.target_id or nil})
+        persist_runtime_state()
+    end
+    if reason ~= 'confirmed' then return end
+
+    local signature = table.concat({player_name() or 'Unknown', area,
+        observation.target_id, observation.started, units, 'acquisition'}, ':')
+    pending_chest = nil
+    state.runtime.pending_chest = nil
+    record_chest(area, observation.target_id, observation.chest, units,
+        signature, 'acquisition-message')
+    persist_runtime_state()
+    coroutine.schedule(request_currency_two, 1)
 end
 
 local function normalize_area(value)
@@ -756,8 +820,8 @@ local function print_status()
     initialize_character()
     local temenos = state and #state.events.Temenos or 0
     local apollyon = state and #state.events.Apollyon or 0
-    chat(207, ('mode=%s | view=%s | character=%s'):format(
-        settings.mode, settings.view, player_name() or 'unknown'))
+    chat(207, ('v%s | mode=%s | view=%s | character=%s'):format(
+        _addon.version, settings.mode, settings.view, player_name() or 'unknown'))
     chat(207, ('saved openings: Temenos=%d, Apollyon=%d | InventoryCore sync=%s')
         :format(temenos, apollyon,
             settings.sync_inventorycore and 'on' or 'off'))
@@ -790,35 +854,52 @@ windower.register_event('login', function()
 end)
 
 windower.register_event('zone change', function()
-    if pending_chest and os.time() - tonumber(pending_chest.last_seen
-        or pending_chest.started or 0) > pending_timeout
-    then
-        pending_chest = nil
-        persist_runtime_state()
-    end
+    expire_pending_chest()
     coroutine.schedule(function()
         request_currency_two()
         render()
     end, 1)
 end)
 
+windower.register_event('incoming text', function(original, displayed, mode)
+    local area, units = parse_unit_acquisition(original)
+    if pending_chest and type(original) == 'string'
+        and original:lower():find('units', 1, true)
+    then
+        -- Preserve exact control bytes for both matched and rejected unit
+        -- messages. Never capture general chat or an unbounded text stream.
+        local raw_hex = original:sub(1, 512):gsub('.', function(byte)
+            return ('%02X'):format(byte:byte())
+        end)
+        note_detection('unit-text', {area=pending_chest.area,
+            target_id=pending_chest.target_id, mode=mode,
+            parsed_area=area, parsed_units=units, raw_hex=raw_hex})
+        persist_runtime_state()
+    end
+    if area then observe_acquisition(area, units) end
+    -- Observe only: never replace, suppress, or re-inject the game's text.
+end)
+
 windower.register_event('outgoing chunk', function(id, original, modified)
     if id == 0x01A then
         local packet = parse_relevant_packet('outgoing', original, modified,
             function(candidate)
-                local _, chest = area_for_target(candidate.Target)
-                return chest ~= nil and candidate.Category == 0
+                local target = tonumber(candidate.Target)
+                return target and target > 0 and candidate.Category ~= nil
             end)
-        if packet then
+        -- Category 0 is NPC interaction. Attacks/spells must neither abandon
+        -- a pending coffer nor make a modified copy override the real action.
+        if packet and packet.Category == 0 then
             begin_chest(packet.Target, 'action', packet.Zone)
         end
     elseif id == 0x05B then
         -- Some interaction paths expose the final coffer reliably only as the
-        -- dialog choice. This is still restricted to the eight known targets.
+        -- dialog choice. Other NPCs cancel old observations; only the eight
+        -- known final targets can start a new one.
         local packet = parse_relevant_packet('outgoing', original, modified,
             function(candidate)
-                local _, chest = area_for_target(candidate.Target)
-                return chest ~= nil
+                local target = tonumber(candidate.Target)
+                return target and target > 0
             end)
         if packet then
             local source = packet['Automated Message'] == true
@@ -834,8 +915,8 @@ windower.register_event('incoming chunk', function(id, original, modified)
         -- mirrored interaction bypasses the normal outgoing action event.
         local packet = parse_relevant_packet('incoming', original, modified,
             function(candidate)
-                local _, chest = area_for_target(candidate.NPC)
-                return chest ~= nil
+                local target = tonumber(candidate.NPC)
+                return target and target > 0
             end)
         if packet then
             begin_chest(packet.NPC, 'menu', packet.Zone)
@@ -850,13 +931,19 @@ windower.register_event('incoming chunk', function(id, original, modified)
         end)
     if not packet then return end
 
-    finish_chest_if_ready(packet)
+    expire_pending_chest()
     local changed = false
     for area in pairs(sectors) do
         local field = area .. ' Units'
         local before = tonumber(previous_units[field])
         local after = tonumber(packet[field])
-        if after ~= before then changed = true end
+        if after ~= before then
+            changed = true
+            if pending_chest and pending_chest.area == area then
+                note_detection('balance', {area=area, before=before, after=after,
+                    target_id=pending_chest.target_id})
+            end
+        end
         previous_units[field] = after
     end
     if changed then persist_runtime_state() end
@@ -866,6 +953,7 @@ windower.register_event('prerender', function()
     local now = os.time()
     if now - last_render >= 1 then
         last_render = now
+        expire_pending_chest()
         render()
     end
     if now - last_currency_request >= 300 then request_currency_two() end
@@ -881,7 +969,8 @@ windower.register_event('addon command', function(command, ...)
         if initialize_character() then
             local migrated = false
             state, migrated = load_history_file(history_path, player_name())
-            if migrated then save_history() end
+            local runtime_changed = restore_runtime_state()
+            if migrated or runtime_changed then persist_runtime_state() end
         end
         render()
         chat(158, 'History reloaded from disk.')

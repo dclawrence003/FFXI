@@ -19,11 +19,19 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertIn("Dolomedes = {", self.settings)
         self.assertIn("Dolomedes = {", self.addon)
 
-    def test_leader_or_puller_can_control_combat(self):
+    def test_every_configured_profile_participant_can_control_combat(self):
         self.assertIn("local function is_controller()", self.addon)
-        self.assertIn("return is_leader() or is_puller()", self.addon)
+        self.assertIn("if is_leader() or is_puller() then return true end", self.addon)
+        self.assertIn(
+            "for attacker_name, policy in pairs(settings.attackers or {})",
+            self.addon,
+        )
+        self.assertIn(
+            "for targeter_name, enabled in pairs(settings.targeters or {})",
+            self.addon,
+        )
         self.assertIn("if not is_controller() then", self.addon)
-        self.assertIn("Only the configured leader or puller", self.addon)
+        self.assertIn("Only a configured profile participant", self.addon)
 
     def test_controller_self_authorizes_without_ipc_loopback(self):
         self.assertIn("if is_targeter() and not authorized then", self.addon)
@@ -37,7 +45,6 @@ class PartyCombatPolicy(unittest.TestCase):
         self.assertNotIn("follow_anchor", lowered)
         self.assertNotIn("zone_follow_restore", lowered)
         self.assertNotIn("restore_fastfollow", lowered)
-        self.assertIn("_addon.version = '0.6.1'", self.addon)
         self.assertIn("FastFollow is untouched", self.addon)
 
     def test_combat_requires_a_fresh_support_policy(self):
@@ -82,27 +89,33 @@ class PartyCombatPolicy(unittest.TestCase):
 
     def test_stationary_policy_disables_approach_but_keeps_engagement(self):
         self.assertIn("stationary = false", self.settings)
-        self.assertIn("settings.stationary and 'stationary' or 'mobile'", self.addon)
-        self.assertIn("if settings.stationary then", self.addon)
+        self.assertIn("local function movement_mode_name()", self.addon)
+        self.assertIn("if settings.stationary and not directed then", self.addon)
         movement = self.addon.split("windower.register_event('prerender'", 1)[1]
         movement = movement.split("windower.register_event('addon command'", 1)[0]
         self.assertIn("inject_combat_target(target)", movement)
         self.assertIn("face_target(self, target)", movement)
         self.assertLess(
             movement.index("face_target(self, target)"),
-            movement.index("if settings.stationary then"),
+            movement.index("if settings.stationary and not directed then"),
         )
         self.assertLess(
-            movement.index("if settings.stationary then"),
+            movement.index("if settings.stationary and not directed then"),
             movement.index("windower.ffxi.run(dx / length, dy / length)"),
         )
         self.assertIn("local function stop_local(reason, revoke)", self.addon)
         self.assertNotIn("hold_position", self.addon)
 
-    def test_stationary_puller_flash_can_establish_the_target(self):
+    def test_puller_flash_can_establish_the_target_in_either_mode(self):
         self.assertIn("local PULL_FLASH_SPELL_ID = 112", self.addon)
         self.assertIn("action.param == PULL_FLASH_SPELL_ID", self.addon)
-        self.assertIn("settings.stationary == true and puller_authority", self.addon)
+        self.assertIn("local target = damage_target(action, puller_authority)", self.addon)
+
+    def test_target_exclusion_belongs_to_the_runtime_policy(self):
+        self.assertIn("target_exclusions = {}", self.settings)
+        self.assertIn("target_exclusion_csv = args[9]", self.addon)
+        self.assertIn("same_target_exclusion_policy", self.addon)
+        self.assertIn("Target exclusions: ", self.addon)
 
 
 if __name__ == "__main__":

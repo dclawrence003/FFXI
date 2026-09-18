@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = (Join-Path $PSScriptRoot 'config.json'),
+    [string]$ConfigPath = $(if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'local\config.json')) { Join-Path $PSScriptRoot 'local\config.json' } else { Join-Path $PSScriptRoot 'config.json' }),
     [switch]$Once,
     [switch]$DryRun
 )

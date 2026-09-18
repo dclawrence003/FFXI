@@ -1,0 +1,203 @@
+-- Dedicated next-run route for the party that already owns Key B and the
+-- other ground-floor travel unlocks. It goes directly to Device D and guides
+-- a complete regular-Demisang sweep. Navigation is display-only and every
+-- step has an operator override.
+
+local function point(name, x, y, z, cue, confidence, radius)
+    return {
+        name=name, x=x, y=y, z=z,
+        radius=radius or 11, z_tolerance=14,
+        cue=cue,
+        coordinate_semantics='captured_operator_path',
+        confidence=confidence or 'high_live_capture',
+    }
+end
+
+return {
+    schema=1,
+    id='sortie-sheet-d-demisang-live',
+    aliases={'dclear','sheetdlive'},
+    version='1.0.0',
+    title='Sortie: direct Sheet D Demisang clear',
+    content='sortie',
+    allowed_zones={
+        [133]=true, [189]=true, [275]=true,
+        [267]=true, [281]=true,
+    },
+    guide_only=false,
+
+    landmarks={
+        d_device_nw=point('D room 1: Device D northwest room',
+            -660, 20, -154,
+            'Clear the small room northwest of Device D.',
+            'provisional_map_trace', 14),
+        d_device_north=point('D room 2: Device D north plaza',
+            -580, 100, -162,
+            'Clear the full north plaza and check both sides.',
+            'provisional_map_trace', 14),
+        d_device_return=point('Device D south exit', -580, -45, -154,
+            'Return past Device D and stop at its south exit toward Gate D2.'),
+
+        d_d2_west=point('D room 3: west of Gate D2', -680, -88, -166,
+            'Clear the entire west plaza before returning east.'),
+        d_d2_return=point('D2 east-side return', -575, -72, -160,
+            'Pass back through D2, then continue southeast.'),
+        d_d2_south=point('D room 4: southeast of Gate D2', -540, -110, -162,
+            'Clear the small southeast room beyond D2.'),
+
+        d_ring_east=point('D room 5: east side of square loop', -540, -214, -162,
+            'Clear the east side and its branch.'),
+        d_ring_north=point('D room 6: north side of square loop', -600, -260, -168,
+            'Clear the north side and the connected room.'),
+        d_ring_west=point('D room 7: west side of square loop', -660, -276, -170,
+            'Clear the west side of the loop.'),
+        d_ring_southwest=point('D room 8: southwest side of square loop',
+            -660, -347, -174,
+            'Clear the southwest corner and its links.'),
+        d_ring_southeast=point('D room 9: southeast side of square loop',
+            -590, -340, -178,
+            'Clear the southeast corner before leaving the loop.'),
+
+        d_southwest_gate=point('D room 10: Gate D1 side', -680, -380, -172,
+            'Clear around Gate D1, then continue west.'),
+        d_southwest_center=point('D room 11: southwest center', -760, -380, -176,
+            'Clear the center of the southwest plaza.'),
+        d_southwest_west=point('D room 12: far-west branch', -840, -380, -180,
+            'Clear the far-west branch, then turn north.',
+            'provisional_map_trace', 14),
+        d_southwest_north=point('D room 13: west-north branch', -840, -280, -180,
+            'Clear the north branch, then work back east.',
+            'provisional_map_trace', 14),
+        d_southwest_exit=point('D room 14: south passage return', -580, -420, -190,
+            'Clear the return passage and continue east.'),
+
+        d_lower_boss=point('D room 15: lower boss-side plaza', -500, -420, -192,
+            'Clear the lower plaza; Deleterious is optional.'),
+        d_east_boss=point('D room 16: east boss-side branch', -460, -380, -182,
+            'Clear the east branch, then return north.'),
+        d_upper_boss=point('D room 17: upper boss-side plaza', -500, -340, -178,
+            'Clear the full upper plaza and both sides.'),
+        d_south_hall=point('D room 18: northbound hallway', -500, -280, -170,
+            'Clear every regular Demisang while returning north.'),
+        d_entry_party=point('D room 19: H-9 entrance six', -500, -180, -162,
+            'Clear all six jobs in the entrance room.'),
+        d_return_north=point('Return route: north hall', -540, -110, -158,
+            'After the room audit, head north toward Device D.'),
+    },
+
+    run_transactions={
+        {
+            id='d_full_demisang_clear', rewind='load_d_profile',
+            goal={kind='all_temp_item', item='sheet_d'},
+        },
+    },
+
+    steps={
+        {
+            id='preentry', area='OUTSIDE',
+            completion={kind='all_key_item',item='shiny_plate',auto=true},
+            instruction='Get a Shiny Ra\'Kaznarian plate on all six, then gather at the Kamihr transposer.',
+            warning='This run is for Sheet D only. Key B is already complete and is not repeated.',
+        },
+        {
+            id='enter', area='ENTRY',
+            completion={kind='all_in_pack',auto=true},
+            instruction='Dolo enters manually. Bring all six through and let them finish loading.',
+            warning='ExpeditionGuide never enters or moves a character. Sensor warnings are advisory; you remain in control.',
+        },
+        {
+            id='travel_audit', area='START', waypoint='device_start',
+            completion={kind='all_temp_items',auto=true,
+                items={'key_d','plate_d'}},
+            instruction='At the starting Device, briefly confirm all six report Key D and Plate D for direct D travel.',
+            warning='If the report is stale but Device D is available, use //exg next. The check never prevents travel.',
+        },
+        {
+            id='warp_device_d', area='TO DEVICE D',
+            path={'device_start','device_d'},
+            completion={kind='landmark',landmark='device_d',auto=true},
+            instruction='Use the starting Device to teleport each character directly to Diaphanous Device D, then gather the party on its platform.',
+            warning='Operate the Device manually. The arrow catches up automatically after the teleport.',
+        },
+        {
+            id='load_d_profile', area='DEVICE D', waypoint='device_d',
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='Run //exg profile once. It loads the tuned Demisang setup inert. Position the party, pick a regular Demisang on Dolo, then Ctrl-P or //pt force. Use //exg next when ready to sweep.',
+            warning='No ACK or diagnostic gates combat. Alt-P stops immediately; manual movement, targeting, actions, and improvisation always work.',
+            detail={
+                'Tackle is the primary Majesty healer/tank; Kick provides emergency Waltz backup.',
+                'Smalls now prioritizes Refresh, Haste, debuffs, status removal, and damage instead of duplicating routine cures.',
+            },
+        },
+        {
+            id='d_device_rooms', area='D ROOMS 1-2',
+            path={'d_device_nw','d_device_north','d_device_return'},
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='Clear the small northwest room and the full north plaza around Device D. Return to Device D only after checking both sides, then //exg next.',
+            warning='These two centers need one more live calibration. Follow the real corridor and use //exg wp whenever an arrow point disagrees.',
+        },
+        {
+            id='d_d2_rooms', area='D ROOMS 3-4',
+            path={'gate_d2','d_d2_west','d_d2_return','d_d2_south'},
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='At Gate D2, clear the entire west plaza, return through D2, then clear the southeast room. Visually check both rooms before //exg next.',
+            warning='Walking across a waypoint never claims a kill or clear; it only advances the arrow.',
+        },
+        {
+            id='d_square_loop', area='D ROOMS 5-9',
+            path={'d_ring_east','d_ring_north','d_ring_west',
+                'd_ring_southwest','d_ring_southeast'},
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='Sweep the square corridor clockwise: east branch, north room, west side, southwest corner, then southeast corner. Finish all links before //exg next.',
+            warning='Retarget, reposition, stop, or fight manually whenever the pull demands it. The workflow never locks your controls.',
+        },
+        {
+            id='d_southwest_rooms', area='D ROOMS 10-14',
+            path={'d_southwest_gate','d_southwest_center',
+                'd_southwest_west','d_southwest_north','d_southwest_exit'},
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='Clear the Gate D1 side, center plaza, far-west branch, north branch, and south return passage. Check each room before //exg next.',
+            warning='The far-west points are provisional. Use //exg wp freely and keep the visual room sweep authoritative.',
+        },
+        {
+            id='d_boss_side_rooms', area='D ROOMS 15-18',
+            path={'d_lower_boss','d_east_boss','d_upper_boss','d_south_hall'},
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='Clear the lower boss-side plaza, east branch, upper plaza, and the northbound hallway. Then //exg next.',
+            warning='Kill every regular Demisang. Demisang Deleterious is not required and may be ignored.',
+        },
+        {
+            id='d_entry_party', area='D ROOM 19', waypoint='d_entry_party',
+            profile='sortie_objective_d_demisang_clear_v1',
+            completion={kind='manual'},
+            instruction='Clear the final H-9 six-job party. If convenient, kill WAR > MNK > WHM > BLM > RDM > THF for the two blue-casket bonuses. Then perform a full visual audit and //exg next.',
+            warning='The six-job order is bonus-only. Sheet D has no global kill order; survival and recovery take priority.',
+        },
+        {
+            id='return_to_bitzer', area='TO BITZER D',
+            path={'d_return_north','gate_d2','device_d','bitzer_d'},
+            completion={kind='landmark',landmark='bitzer_d',auto=true},
+            instruction='After confirming every regular-Demisang room is empty, return north through D2 to Device D, then approach Bitzer D.',
+            warning='If you remember a skipped room, use //exg back or ignore the guide and return to it manually.',
+        },
+        {
+            id='sheet_d', area='BITZER D', waypoint='bitzer_d',
+            objective='sheet_d',reward={scope='ground_floor',label='Sheet D chest'},
+            completion={kind='all_temp_item',item='sheet_d',auto=true},
+            instruction='Dolo touches Bitzer D and opens the Sheet D chest. Wait briefly for all-six Sheet D evidence.',
+            warning='No chest means a regular Demisang remains. Resume the sweep, improvise another objective, or exit—nothing is blocked.',
+        },
+        {
+            id='complete', area='FINISH',
+            completion={kind='all_temp_item',item='sheet_d',auto=true},
+            instruction='Sheet D is confirmed on all six. Spend any remaining time however you choose, then exit normally.',
+            warning='The route is complete and imposes no restriction on the run.',
+        },
+    },
+}

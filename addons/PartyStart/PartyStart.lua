@@ -11,7 +11,7 @@ bundle either addon.
 
 _addon.name = 'PartyStart'
 _addon.author = 'OpenAI Codex'
-_addon.version = '1.5.0'
+_addon.version = '1.7.1'
 _addon.commands = {'partystart', 'pstart', 'partyup'}
 
 require('tables')
@@ -132,11 +132,13 @@ local profiles = {
         },
     },
     limbus = {
-        label = 'Limbus 119: Mobile Speed Floors',
-        -- Limbus is manually driven from Dolo.  The progression composition
-        -- keeps Tackleberry as its unattended-XP puller, so override only the
-        -- active target source for this tactical profile.
-        target_source = 'command_leader',
+        label = 'Limbus 119: Stationary Flash-Pull Floors',
+        -- Use the composition puller (Tackleberry in the progression lineups)
+        -- as the target source. The whole party remains planted and Flash
+        -- brings enemies into the camp. Dolomedes remains command leader, so
+        -- either character may arm or force PartyCombat.
+        stationary = true,
+        target_exclusions = {'elemental'},
         physical_offense = true,
         pld_controller = true,
         cor = {'chaos', 'samurai'},
@@ -155,7 +157,7 @@ local profiles = {
             {'Dia III', 'Dia II', 'Dia'},
         },
         advisories = {
-            'Limbus: Dolomedes is the mobile target source; all six attackers follow that synchronized target and use their configured AutoWS2 offense.',
+            'Limbus: the entire party is planted. Tackleberry is the Flash puller and target source; PartyCombat targets, faces, and engages but never moves any attacker. Dolomedes remains command leader, and either may arm or force PartyCombat.',
             'Limbus: use //pstart sleep (Alt-L in the supplied init binding) for one queued Horde Lullaby centered on the active target; the current target stays awake under melee while linked enemies are slept.',
             'Limbus: sleep is deliberate, not periodic. Fire it on a linked pack or once the floor item is secured, then move to the exit without waiting for unnecessary kills.',
         },
@@ -208,22 +210,26 @@ local profiles = {
         -- The popper receives independent hate from every fly. Tackleberry
         -- therefore activates the junction and remains disengaged: autoattacks
         -- must not push one fly ahead of Dolo's synchronized BLU AoE burn.
-        -- Dolo remains the manual command leader but is deliberately not an
-        -- authorized PartyCombat attacker/targeter. Achoo alone is authorized
-        -- because offensive GEO bubbles and Entrust are gated on combat.
+        -- Dolo remains the manual command leader. No character is authorized
+        -- for PartyCombat: Achoo's GEO controller observes Dolo's selected
+        -- target without engaging, moving, or requiring PartyCombat.
         stationary = true,
         target_source = 'command_leader',
-        attackers = {'Achoo'},
+        attackers = {},
         force_autows2_off = true,
         reraise = true,
         pld_controller = true,
-        brd = {'Sage Etude', "Sentinel's Scherzo", 'Victory March'},
-        geo = {indi='Acumen', geo='Malaise', entrust='INT', lean=true,
+        brd = {'Sage Etude', 'Learned Etude', "Sentinel's Scherzo"},
+        geo = {indi='Acumen', geo='Malaise', entrust='Languor', lean=true,
             zerg=false, entrust_jobs={'BLU'}},
         rdm = {
-            haste_scope='attackers', refresh_scope='mp',
+            haste_scope='magic_core', refresh_scope='magic_core',
             phalanx_scope='tank', defense_scope='party',
-            gearswap_healing=true, status_removal=false,
+            gearswap_healing=true, status_removal=true,
+            na_ignore={
+                'STR Down', 'DEX Down', 'VIT Down', 'AGI Down',
+                'MND Down', 'CHR Down',
+            },
         },
         brd_debuffs = {},
         rdm_debuffs = {},
@@ -244,9 +250,9 @@ local profiles = {
         advisories = {
             'Fishfly: use the progression-blu composition. Tackleberry must activate the Ethereal Junction so all independent opening hate begins on the PLD.',
             'Fishfly: the flies are immune to Sleep, Bind, Gravity, and Petrification. No single-target debuff, Step, melee, or automatic weapon-skill rotation is armed.',
-            'Fishfly: Barney maintains Sage Etude, Scherzo, March, Baraera, and Barsilencera. Smalls maintains Shell/Phalanx/Haste/Refresh and prioritizes cures; HealBot Erase work is suppressed during the burn.',
-            'Fishfly: Achoo must stand beside Dolo, engage Dolo\'s selected fly, and establish Indi-Acumen, Geo-Malaise, and entrusted Indi-INT. AutoZerg/Bolster is deliberately Off.',
-            'Fishfly: after support is established, Dolo manually targets, engages, and uses his own BLU AoE rotation. PartyCombat observes his damage target but never authorizes or steers Dolo.',
+            'Fishfly: Barney maintains double INT Etudes, Scherzo, Baraera, and Barsilencera. Smalls prioritizes Dolo-first Haste II/Refresh III, one AoE Shellra, Phalanx II on Tackleberry, and backup cures.',
+            'Fishfly: Achoo must stand beside Dolo. His controller observes the spawned pack without engaging and establishes Indi-Acumen, Geo-Malaise, and entrusted Indi-Languor so every stacked fly receives magic-defense and magic-evasion reduction. AutoZerg/Bolster is deliberately Off.',
+            'Fishfly: after support is established, Dolo manually engages and uses his own BLU AoE rotation. PartyCombat is neither required nor authorized.',
             'Fishfly: magic damage triggers Debilitating Drone and the first early death makes every survivor weapon-skill. Keep HP balanced and finish the pack as close together as possible.',
         },
     },
@@ -389,6 +395,25 @@ local profile_aliases = {
     vermillionfishfly = 'fishfly',
     vfishfly = 'fishfly',
     fishflies = 'fishfly',
+}
+
+-- Shorthand profile commands must not inherit the composition used by the
+-- previous encounter. In particular, Fishfly intentionally selects BLU Dolo;
+-- a later //pstart locusbats must return to the normal COR-led progression
+-- roster instead of validating Locus Bats against progression-blu.
+local profile_default_compositions = {
+    master = 'progression',
+    apexbats = 'progression',
+    locusbats = 'progression',
+    apexcrabs = 'progression',
+    limbus = 'progression',
+    physical = 'progression',
+    accuracy = 'progression',
+    magic = 'progression',
+    safe = 'progression',
+    ['ambuscade-v1'] = 'progression',
+    ['ambuscade-v2'] = 'progression',
+    fishfly = 'progression-blu',
 }
 
 local composition_warning = nil
@@ -1203,15 +1228,24 @@ local function apply_rdm(
 
     for _,name in ipairs(sorted_roster(roster)) do
         local job = roster[name].main_job
-        local haste_wanted = encounter_policy.haste_scope == 'attackers'
-            and list_contains_name(attackers, name)
-            or encounter_policy.haste_scope ~= 'attackers'
-                and haste_jobs:contains(job)
+        local magic_core = name:lower() == leader:lower()
+            or job == 'RDM' or job == 'PLD' or job == 'RUN'
+            or job == 'GEO' or job == 'BRD'
+        local haste_wanted
+        if encounter_policy.haste_scope == 'attackers' then
+            haste_wanted = list_contains_name(attackers, name)
+        elseif encounter_policy.haste_scope == 'magic_core' then
+            haste_wanted = magic_core
+        else
+            haste_wanted = haste_jobs:contains(job)
+        end
         if haste and haste_wanted then
             haste_targets[#haste_targets + 1] = name
             issue(('hb cancelbuff %s %s'):format(name, haste))
         end
-        if refresh and mp_jobs:contains(job) then
+        if refresh and (mp_jobs:contains(job)
+            or encounter_policy.refresh_scope == 'magic_core' and magic_core)
+        then
             -- Always clear any HealBot registration inherited from an older
             -- PartyStart profile, even when GearSwap will not maintain this
             -- target in the sustained profile.
@@ -1219,8 +1253,13 @@ local function apply_rdm(
             local sustained_refresh = sustained
                 and (name:lower() == player.name:lower()
                     or job == 'PLD' or job == 'RUN')
-            local refresh_wanted = encounter_policy.refresh_scope == 'mp'
-                or not sustained or sustained_refresh
+            local refresh_wanted
+            if encounter_policy.refresh_scope == 'magic_core' then
+                refresh_wanted = magic_core
+            else
+                refresh_wanted = encounter_policy.refresh_scope == 'mp'
+                    or not sustained or sustained_refresh
+            end
             if refresh_wanted then
                 local destination = (job == 'PLD' or job == 'RUN')
                     and refresh_tanks or refresh_others
@@ -1245,12 +1284,23 @@ local function apply_rdm(
         end
     end
 
-    if sustained then
+    if sustained or profile_name == 'fishfly' then
         -- The MP reserve can intentionally pause the tail of this list. Keep
         -- the tank/healer and primary physical contributors at the front so
         -- low-priority support melee never delays the core party.
         local function haste_rank(name)
             local job = roster[name].main_job
+            if profile_name == 'fishfly' then
+                if name:lower() == leader:lower() then return 1 end
+                if job == 'RDM' then return 2 end
+                if job == 'PLD' or job == 'RUN' then return 3 end
+                if job == 'GEO' then return 4 end
+                if job == 'BRD' then return 5 end
+                if job == 'DNC' then return 6 end
+                return 6
+            end
+            -- Preserve the established ordering for every existing sustained
+            -- profile; Fishfly's burst-specific ordering must not alter them.
             if job == 'PLD' or job == 'RUN' then return 1 end
             if name:lower() == leader:lower() then return 2 end
             if job == 'DNC' then return 3 end
@@ -1323,6 +1373,21 @@ local function apply_rdm(
     issue(('gs c pstartrdm %s %s %s %s %s %s'):format(
         profile_name, target_source, csv(haste_targets), csv(refresh_targets),
         csv(phalanx_targets), csv(defense_targets)))
+    -- HealBot is used only as a packet-backed -na sensor on RDM. Restore the
+    -- complete default status map before applying a profile-specific filter,
+    -- so Fishfly's intentionally ignored physical stat downs cannot leak into
+    -- another encounter.
+    local fishfly_stat_downs = {
+        'STR Down', 'DEX Down', 'VIT Down', 'AGI Down',
+        'MND Down', 'CHR Down',
+    }
+    for _, debuff in ipairs(fishfly_stat_downs) do
+        issue('hb unignore_debuff always '..debuff)
+    end
+    for _, debuff in ipairs(encounter_policy.na_ignore or {}) do
+        issue('hb ignore_debuff always '..debuff)
+    end
+    issue('hb reset debuffs')
     local status_removal = encounter_policy.status_removal == false
         and 'hb disable na; ' or 'hb enable na; '
     if sustained or encounter_policy.gearswap_healing then
@@ -1365,11 +1430,13 @@ local function apply_brd(player, profile_name, target_source)
     issue(('gs c pstartbrd %s %s'):format(profile_name, target_source))
 end
 
-local function apply_geo(player, profile_name, profile, roster)
+local function apply_geo(player, profile_name, profile, roster, leader)
     local geo = profile.geo
     local entrustee = first_jobs(roster, geo.entrust_jobs)
         or player.name
-    if profile.reraise and (profile.sustained or geo.lean) then
+    if profile_name == 'fishfly' then
+        issue(('gs c pstartgeo fishfly %s'):format(leader))
+    elseif profile.reraise and (profile.sustained or geo.lean) then
         issue('gs c pstartgeo leanrr')
     elseif profile.sustained or geo.lean then
         issue('gs c pstartgeo lean')
@@ -1475,10 +1542,13 @@ local function apply_combat_policy(session, composition, profile)
         and profile.priority_target:gsub(' ', '_') or '-'
     local priority_attacker_csv = #priority_attackers > 0
         and table.concat(priority_attackers, ',') or '-'
-    issue(('pc policy %s %s %s %s %s %s %s %s')
+    local exclusion_csv = profile.target_exclusions
+        and #profile.target_exclusions > 0
+        and table.concat(profile.target_exclusions, ',') or '-'
+    issue(('pc policy %s %s %s %s %s %s %s %s %s')
         :format(policy_name, composition.command_leader,
             puller, attacker_csv, targeter_csv, movement_mode,
-            priority_target, priority_attacker_csv))
+            priority_target, priority_attacker_csv, exclusion_csv))
     session.target_source = puller
     session.attackers = attackers
     session.targeters = targeters
@@ -1498,6 +1568,8 @@ local function apply_profile(session)
     end
 
     apply_combat_policy(session, composition, profile)
+    issue(profile.target_exclusions and #profile.target_exclusions > 0
+        and 'aws2 exclude elemental' or 'aws2 exclude none')
 
     -- Clear HealBot movement/assist automation when selecting a support
     -- profile. FastFollow is user-owned and must remain unchanged.
@@ -1511,7 +1583,8 @@ local function apply_profile(session)
     elseif player.main_job == 'BRD' then
         apply_brd(player, session.profile, session.target_source)
     elseif player.main_job == 'GEO' then
-        apply_geo(player, session.profile, profile, session.roster)
+        apply_geo(player, session.profile, profile, session.roster,
+            session.leader)
     elseif player.main_job == 'PLD' then
         apply_pld(session.profile, profile, session.leader)
     elseif player.main_job == 'DNC' then
@@ -1546,6 +1619,7 @@ local function apply_profile(session)
     next_state_sync = 0
     reset_encounter_guards(current_profile)
     acknowledge_profile(session)
+
     chat(158, ('%s/%s ready as %s/%s; AutoWS2 %s; PartyCombat policy %s.')
         :format(session.composition, session.profile,
             player.main_job, player.sub_job,
@@ -1657,6 +1731,7 @@ local function stop_local(options)
         -- this flag so a same-profile unattended rearm remains idempotent.
         issue('pc invalidate partystart')
     end
+    issue('aws2 exclude none')
     stop_owned_autows2()
     issue('hb follow off; hb db off; hb as off; hb as attack off; hb off')
     if player.main_job == 'COR' then issue('r2 off') end
@@ -1930,7 +2005,11 @@ windower.register_event('prerender', function()
     -- Sel-Include suppresses its normal GearSwap tick while Sneak or Invisible
     -- is active. Drive PartyStart's support controllers explicitly so a
     -- stealthed follower does not perform only the first action and then stall.
-    if current_profile and now >= next_maintenance then
+    -- Keep driving an explicitly activated GearSwap controller even if this
+    -- local PartyStart client missed (or lost during a reload) the profile
+    -- broadcast. Inactive controllers return immediately, so this is also a
+    -- safe recovery heartbeat after zoning and isolated client reloads.
+    if now >= next_maintenance then
         next_maintenance = now + MAINTENANCE_INTERVAL
         local player = windower.ffxi.get_player()
         if player then
@@ -1944,6 +2023,8 @@ windower.register_event('prerender', function()
                 issue('gs c pstartpld tick')
             elseif player.main_job == 'DNC' then
                 issue('gs c pstartdnc tick')
+            elseif player.main_job == 'GEO' then
+                issue('gs c pstartgeo tick')
             end
         end
     end
@@ -2002,7 +2083,8 @@ windower.register_event('addon command', function(command, ...)
         -- Friendly shorthand: //pstart progression v1
         begin(direct_composition, normalize_profile(args[1]), false)
     elseif direct_profile and profiles[direct_profile] then
-        begin(last_composition, direct_profile, false)
+        begin(profile_default_compositions[direct_profile] or last_composition,
+            direct_profile, false)
     elseif command == 'on' or command == 'start' then
         begin(last_composition, last_profile, false)
     elseif command == 'use' then

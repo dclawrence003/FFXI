@@ -4,6 +4,7 @@ return {
     leader = 'Dolomedes',
     puller = 'Tackleberry',
     stationary = false,
+    target_exclusions = {},
     attackers = {
         Dolomedes = {
             auto_distance = 10,

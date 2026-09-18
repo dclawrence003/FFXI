@@ -1,0 +1,2 @@
+echo reload_sortie_bosses_safe.txt is now an alias for the evolving Sortie main run.
+exec sortie_reload.txt

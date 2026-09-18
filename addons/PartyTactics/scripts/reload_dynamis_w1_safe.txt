@@ -1,0 +1,23 @@
+echo Staggered PartyTactics Dynamis-D W1 reload beginning. Run only while out of combat.
+send Tackleberry gs reload
+wait 10
+send Kickpuncher gs reload
+wait 10
+send Barneystinson gs reload
+wait 10
+send Smalls gs reload
+wait 10
+send Dolomedes lua r PartyTactics
+wait 3
+send Tackleberry lua r PartyTactics
+wait 3
+send Kickpuncher lua r PartyTactics
+wait 3
+send Barneystinson lua r PartyTactics
+wait 3
+send Smalls lua r PartyTactics
+wait 3
+send Achoo lua r PartyTactics
+wait 3
+send Dolomedes pt list
+echo Dynamis-D W1 reload complete. Preview ddw1route or ddw1boss; nothing was armed or activated.

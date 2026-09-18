@@ -96,7 +96,8 @@ The launcher:
 2. Writes SQLite under `%LOCALAPPDATA%\FFXIInventory`.
 3. Generates LootAdvisor's compact `data\recommendations.lua`.
 4. Starts the localhost dashboard at <http://127.0.0.1:8787>.
-5. Watches FindAll character files and refreshes after changes.
+5. Watches FindAll character files and refreshes after changes in a separate
+   worker process, keeping the localhost API responsive.
 
 ### Start automatically with Windows
 
@@ -107,12 +108,15 @@ powershell -ExecutionPolicy Bypass -File .\Install-AutoStart.ps1
 ```
 
 The task starts InventoryCore at logon, keeps the server attached to the task so
-Windows can restart it after a failure, and does not open the dashboard. A
-five-minute watchdog trigger also recovers a task that was manually terminated
-or otherwise escaped the normal process-failure restart policy. While the
-foreground server is healthy, `MultipleInstances=IgnoreNew` makes those
-watchdog triggers no-ops. The service serves the existing database immediately;
-FindAll's file watcher performs the next refresh after inventory changes. The
+Windows can restart it after a failure, and does not open the dashboard. It uses
+a console-free Windows Script Host launcher whose PowerShell child is also
+explicitly hidden, so neither startup nor watchdog checks flash a window over
+the game. A five-minute watchdog trigger also recovers a task that was manually
+terminated or otherwise escaped the normal process-failure restart policy.
+While the foreground server is healthy,
+`MultipleInstances=IgnoreNew` makes those watchdog triggers no-ops. The service
+serves the existing database immediately; FindAll's file watcher performs the
+next refresh after inventory changes. The
 launcher checks the normal Node.js install locations and Codex's bundled Node
 runtime in addition to `PATH`.
 
@@ -128,7 +132,7 @@ npm start
 
 | Action | Meaning |
 | --- | --- |
-| `KEEP` | Wearable equipment aligned with a current or planned roster job |
+| `KEEP` | Roster equipment, quest/upgrade items, and protected currencies such as BCNM seals |
 | `UPGRADE` | Protected AF/relic/empyrean/Limbus or REMA progression reagent |
 | `AH` | Marketable item with sufficient Valefor price/activity evidence |
 | `VENDOR` | Safe material whose NPC resale beats weak or stale AH evidence |
@@ -161,33 +165,56 @@ The browser has three views:
   Windower client.
 - **Currencies** is a searchable roster matrix for every numeric field in the
   game's Currencies and Currencies 2 packets, including Nyzul tokens and
-  Temenos/Apollyon units.
+  Temenos/Apollyon units. All currency names share one alphabetical list;
+  C1/C2/C3 badges identify their packet pages without controlling sort order.
+  Numbered names such as Rems Tale Chapters sort in natural numeric order.
 
-LootAdvisor is the Windower-to-InventoryCore collector for gil, key items, and
-currencies. Load it on every tracked character. It posts only to the localhost
-service, sends a full character snapshot once per minute, refreshes currency
-packets every five minutes, and refreshes after login or zoning.
+Search on all three views ignores capitalization and surrounding whitespace;
+`Temenos`, `APOLLYON`, and `units` match the corresponding currency names.
+The current search stays applied during background data refreshes. UI
+punctuation uses HTML entities or JavaScript Unicode escapes to avoid garbled
+separators, missing-price dashes, and source-status icons. Reload the browser
+page after interface updates; **Reload view** refreshes data only.
+
+LootAdvisor is the Windower-to-InventoryCore collector for gil, key items,
+currencies, and the currently equipped main weapon. Load it on every tracked character. It posts only to the localhost
+service, sends a coalesced full character snapshot every five minutes,
+refreshes currency packets every five minutes, and refreshes after login or
+zoning. A main-weapon change also schedules a coalesced snapshot.
 `//la telemetry` forces an immediate snapshot and currency request.
 
-LootAdvisor 0.2.2 caps localhost calls at 100 milliseconds and uses a shared
-60-to-300-second circuit breaker for both telemetry and uncached loot lookups.
-If InventoryCore is stopped, cached recommendations continue without repeated
-game-thread stalls or warning spam. `//la telemetry` bypasses the backoff for an
-immediate recovery test, and the addon reports when the connection is restored.
+LootAdvisor 0.2.4 caps localhost calls at 100 milliseconds, treats one timeout
+as transient, and uses a shared 60-to-300-second circuit breaker after
+consecutive failures. FindAll/wiki/market refreshes run in a child process so
+they cannot stall the API server's event loop. If InventoryCore is stopped,
+cached recommendations continue without repeated game-thread stalls or warning
+spam. `//la telemetry` bypasses the backoff for an immediate recovery test, and
+the addon reports when the connection is restored.
+
+Beastmen's Seal, Kindred's Seal, Kindred's Crest, H. Kindred Crest, and
+S. Kindred Crest are always `KEEP` as Shami-stored BCNM orb currency.
+LootAdvisor suppresses their routine automatic treasure-pool messages while
+leaving explicit `//la pool` and `//la item` inspection available.
 
 The standalone LimbusTracker addon recognizes the eight authoritative
-final-floor rotation chest targets, confirms the resulting 3,000- or
-5,000-unit increase, and persists its own per-character history. It ignores
+final-floor rotation chest targets, confirms the local character's original
+acquisition message, and persists its own per-character history. Currency
+balance differences are not used to infer chest openings. It ignores
 other Limbus unit rewards such as the roaming 3,000-unit `???`. Its optional
 localhost sync supplies those events to this dashboard. InventoryCore validates
 the final target-to-sector mapping again before accepting them and retains the
 mirrored history continuously rather than resetting it weekly.
 
-Each area displays the five most recent chest openings, marks the last 5,000
-bonus in gold, and lists **Next** as the least recently opened of the four
+Each area displays the five most recent chest openings, marks the last bonus
+in gold, and lists **Next** as the least recently opened of the four
 sectors. Until all four sectors have been observed, it displays learning
 progress instead. "Next" is a rotation recommendation, not a prediction of the
 next bonus: the game may select the same bonus chest again.
+
+The dashboard retains actual coffer awards between 3,000 and 5,000. More than
+3,000 is a confirmed bonus, including a partially capped bonus. Exactly 3,000
+does not reveal whether a nominal 5,000 reward was clipped by a storage cap;
+it is recorded without inventing a bonus marker.
 
 Key items and currencies require LootAdvisor to be loaded on each tracked
 character and InventoryCore to be running locally.

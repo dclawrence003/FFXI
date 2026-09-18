@@ -1,0 +1,4 @@
+node_modules/
+.npm-cache/
+reports/
+local.settings.json

@@ -1,0 +1,32 @@
+echo Staggered stationary Limbus reload beginning. GearSwap and BRD files are untouched.
+send Dolomedes pc stop
+wait 1
+send Dolomedes lua r PartyCombat
+wait 2
+send Tackleberry lua r PartyCombat
+wait 2
+send Kickpuncher lua r PartyCombat
+wait 2
+send Barneystinson lua r PartyCombat
+wait 2
+send Smalls lua r PartyCombat
+wait 2
+send Achoo lua r PartyCombat
+wait 2
+send Dolomedes lua r PartyStart
+wait 2
+send Tackleberry lua r PartyStart
+wait 2
+send Kickpuncher lua r PartyStart
+wait 2
+send Barneystinson lua r PartyStart
+wait 2
+send Smalls lua r PartyStart
+wait 2
+send Achoo lua r PartyStart
+wait 3
+send Dolomedes pstart use progression limbus
+wait 12
+send Dolomedes pc status
+send Tackleberry pc status
+echo Reload complete. Both status lines must show v0.6.5 and movement stationary. Then arm from Tackleberry with //pc on; all attackers turn and face but none translate.

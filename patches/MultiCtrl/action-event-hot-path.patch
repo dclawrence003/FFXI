@@ -1,0 +1,42 @@
+diff --git a/multictrl.lua b/multictrl.lua
+index bac6694..a2d47d1 100644
+--- a/multictrl.lua
++++ b/multictrl.lua
+@@ -4143,14 +4143,7 @@ windower.register_event("lose buff", function(buff_id)
+ end)
+ 
+ windower.register_event('incoming chunk', function(id, data)
+-    if id == 0x028 then	-- Casting
+-        local action_message = packets.parse('incoming', data)
+-		if action_message["Category"] == 4 then
+-			isCasting = false
+-		elseif action_message["Category"] == 8 then
+-			isCasting = true
+-		end
+-	elseif id == 0x0DF then -- Char update
++    if id == 0x0DF then -- Char update
+         local packet = packets.parse('incoming', data)
+ 		if packet then
+ 			local playerId = packet['ID']
+@@ -4185,10 +4178,20 @@ end)
+ 
+ windower.register_event('action', function(action)
+ 	local player = windower.ffxi.get_player()
+-	if not d2_active or not d2_current_target or not player or action.actor_id ~= player.id then
++	if not player or action.actor_id ~= player.id then
+ 		return
+ 	end
+ 
++	-- Windower has already decoded this packet for the action event. Reuse that
++	-- result instead of parsing every nearby actor's 0x028 packet a second time.
++	if action.category == 4 then
++		isCasting = false
++	elseif action.category == 8 then
++		isCasting = true
++	end
++
++	if not d2_active or not d2_current_target then return end
++
+ 	if action.category == 8 then
+ 		d2_cast_started = true
+ 		d2_cast_finished = false

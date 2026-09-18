@@ -1,0 +1,893 @@
+diff --git a/Bars.lua b/Bars.lua
+--- a/Bars.lua
++++ b/Bars.lua
+@@ -8937,25 +8937,129 @@ register_event('prerender', function()
+ 
+ end)
+ 
+-register_event('action', function (act)
+-	local msg = act.targets[1].actions[1].message
+-	local aoe_main_target_messages = {
+-		2,7,14,67,75,83,85,102,103,110,116,127,131,134,141,148,150,156,185,186,187,188,189,194,197,
+-		224,225,226,227,228,230,231,236,237,238,242,243,252,268,271,274,275,306,317,318,319,320,321,322,323,324,
+-		341,342,362,373,375,379,408,412,413,435,441,570,645,658
++-- Action messages that identify the primary target of an area attack.  This is
++-- immutable data, so keep one lookup table instead of rebuilding a list for
++-- every action packet.
++local aoe_main_target_messages = S{
++	2,7,14,67,75,83,85,102,103,110,116,127,131,134,141,148,150,156,185,186,187,188,189,194,197,
++	224,225,226,227,228,230,231,236,237,238,242,243,252,268,271,274,275,306,317,318,319,320,321,322,323,324,
++	341,342,362,373,375,379,408,412,413,435,441,570,645,658
++}
++
++local function actorLookingAt(a, b)
++	if not a or not b then return false end
++	local h = a.facing % math.pi
++	local h2 = (math.atan2(a.x-b.x,a.y-b.y) + math.pi/2) % math.pi
++	return math.abs(h-h2) < 0.05
++end
++
++local function calculateInfo(act)
++	local target_count = act.target_count
++	local landed = 0
++	local amount_total = 0
++	local cure_total = false
++	local last_buff_id = false
++	local damage = false
++	if show_result_totals and target_count > 1 then
++		for i = 1, target_count do
++			local msg = act.targets[i].actions[1].message
++			--Buffs/Debuffs
++			if msg == 186 or msg == 194 or msg == 205 or msg == 230 or msg == 266 or msg == 280 or msg == 319 or msg == 127 or msg == 141 or msg == 203 or msg == 236 or msg == 242 or msg == 270 or msg == 271 or msg == 272 or msg == 277 or msg == 279 or msg == 645 or msg == 237 or msg == 243 or msg == 267 or msg == 268 or msg == 269 or msg == 278 or msg == 320 or msg == 375 or msg == 412 then
++				landed = landed + 1
++				last_buff_id = act.targets[i].actions[1].param
++			--Cures/absorbs
++			elseif msg == 7 or msg == 24 or msg == 102 or msg == 103 or msg == 238 or msg == 263 or msg == 306 or msg == 318 or msg == 367 then
++				landed = landed + 1
++				amount_total = amount_total + act.targets[i].actions[1].param
++				cure_total = cure_total and cure_total + act.targets[i].actions[1].param or act.targets[i].actions[1].param
++			--Everything else that is NOT: Evaded/No Effect/Resisted/Immunobreak/Anticipated/Blinked/Dodged/Missed
++			elseif not (msg == 282
++			or msg == 75 or msg == 156 or msg == 189 or msg == 248 or msg == 283 or msg == 323 or msg == 355 or msg == 408 or msg == 422 or msg == 423 or msg == 425 or msg == 659 or msg == 114
++			or msg == 85 or msg == 284 or msg == 655 or msg == 656
++			or msg == 653 or msg == 654
++			or msg == 30
++			or msg == 31
++			or msg == 32
++			or msg == 15 or msg == 63 or msg == 158 or msg == 188 or msg == 245 or msg == 324 or msg == 658) then
++				landed = landed + 1
++				amount_total = amount_total + act.targets[i].actions[1].param
++				if msg == 196 or msg == 264 or msg == 265 then
++					damage = true
++				end
++			end
++		end
++	end
++	return {
++		landed = landed,
++		cure_total = cure_total,
++		amount_total = amount_total,
++		last_buff_id = last_buff_id,
++		damage = damage,
+ 	}
++end
++
++local roll_values = {
++	[98] = {lucky = '5', unlucky = '9'},	-- Fighter's Roll
++	[99] = {lucky = '3', unlucky = '7'},	-- Monk's Roll
++	[100] = {lucky = '3', unlucky = '7'},	-- Healer's Roll
++	[101] = {lucky = '5', unlucky = '9'},	-- Wizard's Roll
++	[102] = {lucky = '4', unlucky = '8'},	-- Warlock's Roll
++	[103] = {lucky = '5', unlucky = '9'},	-- Rogue's Roll
++	[104] = {lucky = '3', unlucky = '7'},	-- Gallant's Roll
++	[105] = {lucky = '4', unlucky = '8'},	-- Chaos Roll
++	[106] = {lucky = '4', unlucky = '8'},	-- Beast Roll
++	[107] = {lucky = '2', unlucky = '6'},	-- Choral Roll
++	[108] = {lucky = '4', unlucky = '8'},	-- Hunter's Roll
++	[109] = {lucky = '2', unlucky = '6'},	-- Samurai Roll
++	[110] = {lucky = '4', unlucky = '8'},	-- Ninja Roll
++	[111] = {lucky = '4', unlucky = '8'},	-- Drachen Roll
++	[112] = {lucky = '5', unlucky = '9'},	-- Evoker's Roll
++	[113] = {lucky = '2', unlucky = '6'},	-- Magus's Roll
++	[114] = {lucky = '5', unlucky = '9'},	-- Corsair's Roll
++	[115] = {lucky = '3', unlucky = '7'},	-- Puppet Roll
++	[116] = {lucky = '3', unlucky = '7'},	-- Dancer's Roll
++	[117] = {lucky = '2', unlucky = '6'},	-- Scholar's Roll
++	[118] = {lucky = '3', unlucky = '9'},	-- Bolter's Roll
++	[119] = {lucky = '2', unlucky = '7'},	-- Caster's Roll
++	[120] = {lucky = '3', unlucky = '9'},	-- Courser's Roll
++	[121] = {lucky = '4', unlucky = '9'},	-- Blitzer's Roll
++	[122] = {lucky = '5', unlucky = '8'},	-- Tactician's Roll
++	[302] = {lucky = '3', unlucky = '10'},	-- Allies' Roll
++	[303] = {lucky = '5', unlucky = '7'},	-- Miser's Roll
++	[304] = {lucky = '2', unlucky = '10'},	-- Companion's Roll
++	[305] = {lucky = '4', unlucky = '8'},	-- Avenger's Roll
++	[390] = {lucky = '3', unlucky = '7'},	-- Naturalit's Roll
++	[391] = {lucky = '4', unlucky = '8'},	-- Runeist's Roll
++}
++
++local skillchain_names_short = {
++	'Lght', 'Drkn', 'Grvt', 'Frgm', 'Dstn', 'Fusn', 'Cmpr', 'Lqfn',
++	'Indr', 'Rvrb', 'Trns', 'Scsn', 'Detn', 'Impc', 'Rdnc', 'Umbr',
++}
++local skillchain_names_long = {
++	'Light', 'Darkness', 'Gravitation', 'Fragmentation', 'Distortion', 'Fusion', 'Compression', 'Liquifaction',
++	'Induration', 'Reverberation', 'Transfixion', 'Scission', 'Detonation', 'Impaction', 'Radiance', 'Umbra',
++}
++local absorb_skillchain_messages = S{385,386,387,388,389,390,391,392,393,394,395,396,397,398}
++
++register_event('action', function (act)
++	local first_target = act and act.targets and act.targets[1]
++	local first_action = first_target and first_target.actions and first_target.actions[1]
++	if not first_action then return end
++
++	local msg = first_action.message
+ 	local player = get_player()
+-	local get_player = get_mob_by_id(player.id)
++	if not player then return end
++	local player_mob = get_mob_by_id(player.id)
+ 	local actor = get_mob_by_id(act.actor_id)
+-	local target_count = act.target_count
+-	local action_id = act.targets[1].actions[1].param
+-	local action_target_id = act.targets[1].id
++	local target_count = act.target_count or #act.targets
++	local action_target_id = first_target.id
+ 	monster_target_icon = settings.icons.monster_target
+ 	if target_count > 1 then
+ 		local main_target_found = false
+ 		for i = 1, target_count do
+ 			local message = act.targets[i].actions[1].message
+-			if checkForMessage(aoe_main_target_messages,message) then
++			if aoe_main_target_messages:contains(message) then
+ 				action_target_id = act.targets[i].id
+ 				main_target_found = true
+ 				break
+@@ -8965,15 +9069,8 @@ register_event('action', function (act)
+ 		--In that case, the 1st target in the table may not be the actual target, as the list seems to be sorted by id
+ 		--So, we fall back to checking who the target is looking at (credit: enemybar2)
+ 		if not main_target_found then
+-			local function looking_at(a, b)
+-				if not a or not b then return false end
+-				local h = a.facing % math.pi
+-				local h2 = (math.atan2(a.x-b.x,a.y-b.y) + math.pi/2) % math.pi
+-				return math.abs(h-h2) < 0.05
+-			end
+ 			for _,v in pairs(get_mob_array()) do
+-				local distance = math.floor(v.distance:sqrt())
+-				if v.valid_target and distance < 50 and not isMonster(v.id) and looking_at(actor,v) then
++				if v.valid_target and v.distance < 2500 and not isMonster(v.id) and actorLookingAt(actor,v) then
+ 					action_target_id = v.id
+ 				end
+ 			end
+@@ -8982,6 +9079,35 @@ register_event('action', function (act)
+ 	end
+ 	if not action_target_id then return end
+ 	local action_target = get_mob_by_id(action_target_id)
++
++	--If a target is doing an action (except having an action interupted), remove Sleep/Petrify debuff
++	if act.param ~= 28787 and current_debuffs[act.actor_id] then
++		current_debuffs[act.actor_id][2] = nil
++		current_debuffs[act.actor_id][7] = nil
++		current_debuffs[act.actor_id][19] = nil
++	end
++
++	--Update monster targeting
++	if (isMonster(act.actor_id) and not isMonster(action_target_id)) then --monster targets a player
++		local timestamp = os.time() + monster_target_confidence_timer
++		updateTargeting(act.actor_id, action_target_id, timestamp, monster_target_icon)
++	elseif not isMonster(act.actor_id) and isMonster(action_target_id) then --player targets a monster...
++		local timestamp = os.time() + monster_target_confidence_timer
++		for i = 1, target_count do
++			if not current_aggro_list[act.targets[i].id] then --...that is not already targeting a player
++				updateTargeting(act.targets[i].id, act.actor_id, timestamp, monster_target_icon)
++			end
++		end
++	end
++
++	--Ignore regular melee and ranged attacks
++	if msg == 1 or msg == 15 or msg == 373 or msg == 352 or msg == 353 or msg == 354 or msg == 382 or not actor then
++		return
++	end
++
++	-- Formatting and resource lookups are only needed for actions Bars will
++	-- actually render.  Ordinary melee/ranged swings have already returned.
++	local action_id = first_action.param
+ 	local action_name = ''
+ 	local action_name_shdw = ''
+ 	local ct = targetColor(player, action_target)
+@@ -9003,7 +9129,7 @@ register_event('action', function (act)
+ 	local wep_skill = res.weapon_skills
+ 	local cast_time = 0
+ 	local nm_auto_tp = monster_abil[act.param] and monster_abil[act.param].en and (string.find(monster_abil[act.param].en,'Autoattack') or string.find(monster_abil[act.param].en,'Auto Attack') or string.find(monster_abil[act.param].en,'Ranged') or string.find(monster_abil[act.param].en,'Vulture') or string.find(monster_abil[act.param].en,'Sabotender')) and true or false
+-	local amount = addCommas(act.targets[1].actions[1].param)
++	local amount = addCommas(first_action.param)
+ 	local count = show_result_totals and target_count > 1 and target_count..num_hit_icon or ''
+ 
+ 	local rdc_r = formatRGB(color.result.damage.r)
+@@ -9013,76 +9139,6 @@ register_event('action', function (act)
+ 	local rhc_g = formatRGB(color.result.heal.g)
+ 	local rhc_b = formatRGB(color.result.heal.b)
+ 
+-	function calculateInfo(act)
+-		local landed = 0
+-		local amount_total = 0
+-		local cure_total = false
+-		local last_buff_id = false
+-		local damage = false
+-		if show_result_totals and target_count > 1 then
+-			for i = 1, target_count do
+-				local msg = act.targets[i].actions[1].message
+-				--Buffs/Debuffs
+-				if msg == 186 or msg == 194 or msg == 205 or msg == 230 or msg == 266 or msg == 280 or msg == 319 or msg == 127 or msg == 141 or msg == 203 or msg == 236 or msg == 242 or msg == 270 or msg == 271 or msg == 272 or msg == 277 or msg == 279 or msg == 645 or msg == 237 or msg == 243 or msg == 267 or msg == 268 or msg == 269 or msg == 278 or msg == 320 or msg == 375 or msg == 412 then
+-					landed = landed + 1
+-					last_buff_id = act.targets[i].actions[1].param
+-				--Cures/absorbs
+-				elseif msg == 7 or msg == 24 or msg == 102 or msg == 103 or msg == 238 or msg == 263 or msg == 306 or msg == 318 or msg == 367 then
+-					landed = landed + 1
+-					amount_total = amount_total + act.targets[i].actions[1].param
+-					cure_total = cure_total and cure_total + act.targets[i].actions[1].param or act.targets[i].actions[1].param
+-				--Everything else that is NOT: Evaded/No Effect/Resisted/Immunobreak/Anticipated/Blinked/Dodged/Missed
+-				elseif not (msg == 282 
+-				or msg == 75 or msg == 156 or msg == 189 or msg == 248 or msg == 283 or msg == 323 or msg == 355 or msg == 408 or msg == 422 or msg == 423 or msg == 425 or msg == 659 or msg == 114 
+-				or msg == 85 or msg == 284 or msg == 655 or msg == 656 
+-				or msg == 653 or msg == 654 
+-				or msg == 30 
+-				or msg == 31 
+-				or msg == 32
+-				or msg == 15 or msg == 63 or msg == 158 or msg == 188 or msg == 245 or msg == 324 or msg == 658) then
+-					landed = landed + 1
+-					amount_total = amount_total + act.targets[i].actions[1].param
+-					if msg == 196 or msg == 264 or msg == 265 then
+-						damage = true
+-					end
+-				end
+-			end
+-		end
+-		local info = {
+-			landed = landed,
+-			cure_total = cure_total,
+-			amount_total = amount_total,
+-			last_buff_id = last_buff_id,
+-			damage = damage,
+-		}
+-		return info
+-	end
+-
+-	--If a target is doing an action (except having an action interupted), remove Sleep/Petrify debuff
+-	if act.param ~= 28787 and current_debuffs[act.actor_id] then
+-		current_debuffs[act.actor_id][2] = nil
+-		current_debuffs[act.actor_id][7] = nil
+-		current_debuffs[act.actor_id][19] = nil
+-	end
+-
+-	--Update monster targeting
+-	if (isMonster(act.actor_id) and not isMonster(action_target_id)) then --monster targets a player
+-		local timestamp = os.time() + monster_target_confidence_timer
+-		updateTargeting(act.actor_id, action_target_id, timestamp, monster_target_icon)
+-	elseif not isMonster(act.actor_id) and isMonster(action_target_id) then --player targets a monster...
+-		local timestamp = os.time() + monster_target_confidence_timer
+-		for i = 1, target_count do
+-			if not current_aggro_list[act.targets[i].id] then --...that is not already targeting a player
+-				updateTargeting(act.targets[i].id, act.actor_id, timestamp, monster_target_icon)
+-			end
+-		end
+-	end
+-
+-	--Ignore regular melee and ranged attacks
+-	if msg == 1 or msg == 15 or msg == 373 or msg == 352 or msg == 353 or msg == 354 or msg == 382 or not actor then
+-		return
+-	end
+-
+ 	--Debug Stuff
+ 	if actor.name == player.name and act.category ~=1 then
+ 		-- print(actor.name.." - category: "..act.category.." a.param: "..act.param.." a.t.a.param: "..act.targets[1].actions[1].param.." message: "..msg.." target: "..get_mob_by_id(action_target_id).name.." add_eff_param: "..act.targets[1].actions[1].add_effect_param.." animation: "..act.targets[1].actions[1].animation.." reaction: "..act.targets[1].actions[1].reaction.." effect: "..act.targets[1].actions[1].effect)
+@@ -9520,39 +9576,7 @@ register_event('action', function (act)
+ 				if actor.name == player.name then
+ 					is_a_self_roll = true
+ 				end
+-				local rolls = {
+-					[98] = {lucky = '5', unlucky = '9'},	-- Fighter's Roll
+-					[99] = {lucky = '3', unlucky = '7'},	-- Monk's Roll
+-					[100] = {lucky = '3', unlucky = '7'},	-- Healer's Roll
+-					[101] = {lucky = '5', unlucky = '9'},	-- Wizard's Roll
+-					[102] = {lucky = '4', unlucky = '8'},	-- Warlock's Roll
+-					[103] = {lucky = '5', unlucky = '9'},	-- Rogue's Roll
+-					[104] = {lucky = '3', unlucky = '7'},	-- Gallant's Roll
+-					[105] = {lucky = '4', unlucky = '8'},	-- Chaos Roll
+-					[106] = {lucky = '4', unlucky = '8'},	-- Beast Roll
+-					[107] = {lucky = '2', unlucky = '6'},	-- Choral Roll
+-					[108] = {lucky = '4', unlucky = '8'},	-- Hunter's Roll
+-					[109] = {lucky = '2', unlucky = '6'},	-- Samurai Roll
+-					[110] = {lucky = '4', unlucky = '8'},	-- Ninja Roll
+-					[111] = {lucky = '4', unlucky = '8'},	-- Drachen Roll
+-					[112] = {lucky = '5', unlucky = '9'},	-- Evoker's Roll
+-					[113] = {lucky = '2', unlucky = '6'},	-- Magus's Roll
+-					[114] = {lucky = '5', unlucky = '9'},	-- Corsair's Roll
+-					[115] = {lucky = '3', unlucky = '7'},	-- Puppet Roll
+-					[116] = {lucky = '3', unlucky = '7'},	-- Dancer's Roll
+-					[117] = {lucky = '2', unlucky = '6'},	-- Scholar's Roll
+-					[118] = {lucky = '3', unlucky = '9'},	-- Bolter's Roll
+-					[119] = {lucky = '2', unlucky = '7'},	-- Caster's Roll
+-					[120] = {lucky = '3', unlucky = '9'},	-- Courser's Roll
+-					[121] = {lucky = '4', unlucky = '9'},	-- Blitzer's Roll
+-					[122] = {lucky = '5', unlucky = '8'},	-- Tactician's Roll
+-					[302] = {lucky = '3', unlucky = '10'},	-- Allies' Roll
+-					[303] = {lucky = '5', unlucky = '7'},	-- Miser's Roll
+-					[304] = {lucky = '2', unlucky = '10'},	-- Companion's Roll
+-					[305] = {lucky = '4', unlucky = '8'},	-- Avenger's Roll
+-					[390] = {lucky = '3', unlucky = '7'},	-- Naturalit's Roll
+-					[391] = {lucky = '4', unlucky = '8'},	-- Runeist's Roll
+-				}
++				local rolls = roll_values
+ 				local r_id = act.param --roll id
+ 				local r_tot = act.targets[1].actions[1].param--roll total
+ 				local c = text_color
+@@ -9859,23 +9883,17 @@ register_event('action', function (act)
+ 	--Finish weapon skill(3), spell(4), item(5), or Pet TP move(13, 11)
+ 	elseif act.category == 3 or act.category == 5 or act.category == 13
+ 	or (act.category == 4 and not ((msg == 0 or msg == 29 or msg == 84 or msg == 106) and act.param == 0))
+-	or (act.category == 11 and actor and get_player and actor.index == get_player.pet_index)
++	or (act.category == 11 and actor and player_mob and actor.index == player_mob.pet_index)
+ 	then
+ 
+ 		local trackingIndex = assignIndex()
+ 		local target_action_status = '\\cs(050,255,050)'..completed_icon..'\\cr'
+ 		local target_action_status_shdw = '\\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..completed_icon..'\\cr'
+-		local sc = {}
+-		if short_skillchain_names then
+-			sc = {} sc[1] = 'Lght' sc[2] = 'Drkn' sc[3] = 'Grvt' sc[4] = 'Frgm' sc[5] = 'Dstn' sc[6] = 'Fusn' sc[7] = 'Cmpr' sc[8] = 'Lqfn' sc[9] = 'Indr' sc[10] = 'Rvrb' sc[11] = 'Trns' sc[12] = 'Scsn' sc[13] = 'Detn' sc[14] = 'Impc' sc[15] = 'Rdnc' sc[16] = 'Umbr'
+-		else
+-			sc = {} sc[1] = 'Light' sc[2] = 'Darkness' sc[3] = 'Gravitation' sc[4] = 'Fragmentation' sc[5] = 'Distortion' sc[6] = 'Fusion' sc[7] = 'Compression' sc[8] = 'Liquifaction' sc[9] = 'Induration' sc[10] = 'Reverberation' sc[11] = 'Transfixion' sc[12] = 'Scission' sc[13] = 'Detonation' sc[14] = 'Impaction' sc[15] = 'Radiance' sc[16] = 'Umbra'
+-		end
++		local sc = short_skillchain_names and skillchain_names_short or skillchain_names_long
+ 		local sc_amount = addCommas(act.targets[1].actions[1].add_effect_param)
+ 		local sc_name = sc[act.targets[1].actions[1].add_effect_animation]
+-		local abs_msgs = {385,386,387,388,389,390,391,392,393,394,395,396,397,398}
+ 		local ae_msg = act.targets[1].actions[1].add_effect_message
+-		local sc_c = checkForMessage(abs_msgs,ae_msg) and color.result.heal or color.result.damage
++		local sc_c = absorb_skillchain_messages:contains(ae_msg) and color.result.heal or color.result.damage
+ 		local sc_c_r = formatRGB(sc_c.r)
+ 		local sc_c_g = formatRGB(sc_c.g)
+ 		local sc_c_b = formatRGB(sc_c.b)
+@@ -10284,7 +10302,7 @@ register_event('action', function (act)
+ 			end
+ 
+ 		--Pets
+-		elseif act.category == 13 or (act.category == 11 and actor and get_player and actor.index == get_player.pet_index) then
++		elseif act.category == 13 or (act.category == 11 and actor and player_mob and actor.index == player_mob.pet_index) then
+ 			local action_id = act.param
+ 			action_name = job_abil[action_id] and ' '..truncateAction(job_abil[action_id].name) or (monster_abil[action_id] and ' '..truncateAction(monster_abil[action_id].name) or ' [REDACTED]')
+ 			action_name_shdw = job_abil[action_id] and ' '..truncateAction(job_abil[action_id].name) or (monster_abil[action_id] and ' '..truncateAction(monster_abil[action_id].name) or ' [REDACTED]')
+@@ -10292,7 +10310,7 @@ register_event('action', function (act)
+ 			if act.targets[1].actions[1].has_add_effect then
+ 				target_action_result = ' (\\cs('..rdc_r..','..rdc_g..','..rdc_b..')'..amount..'\\cr + \\cs('..sc_c_r..','..sc_c_g..','..sc_c_b..')'..sc_amount..'\\cr '..sc_name..')'
+ 				target_action_result_shdw = ' (\\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..amount..'\\cr + \\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..sc_amount..'\\cr '..sc_name..')'
+-				if actor and get_player and actor.index == get_player.pet_index and settings.sections.chat.tabs.dmg then
++				if actor and player_mob and actor.index == player_mob.pet_index and settings.sections.chat.tabs.dmg then
+ 					local target = action_target and truncateName(action_target.name) or 'Unknown'
+ 					local message = action_name..": "..amount.." + ("..sc_amount.." "..sc_name..")"
+ 					addMessageToChatTab('DMG', target, message)
+@@ -10312,7 +10330,7 @@ register_event('action', function (act)
+ 				count = count == '' and '' or ' '..count
+ 				target_action_result = ' (Magic Burst! \\cs('..rdc_r..','..rdc_g..','..rdc_b..')'..amount..'\\cr'..count..'\\cs('..rdc_r..','..rdc_g..','..rdc_b..')'..amount_total..'\\cr)'
+ 				target_action_result_shdw = ' (Magic Burst! \\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..amount..'\\cr'..count..'\\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..amount_total..'\\cr)'
+-				if actor and get_player and actor.index == get_player.pet_index and settings.sections.chat.tabs.dmg then
++				if actor and player_mob and actor.index == player_mob.pet_index and settings.sections.chat.tabs.dmg then
+ 					local target = action_target and truncateName(action_target.name) or 'Unknown'
+ 					local message = action_name..": "..amount..count..amount_total.." Magic Burst"
+ 					addMessageToChatTab('DMG', target, message)
+@@ -10325,7 +10343,7 @@ register_event('action', function (act)
+ 				count = show_result_totals and target_count > 1 and ' '..landed..(landed < target_count and '/'..target_count or '')..num_hit_icon or ''
+ 				target_action_result = ' (\\cs('..rdc_r..','..rdc_g..','..rdc_b..')'..amount..'\\cr'..count..'\\cs('..rdc_r..','..rdc_g..','..rdc_b..')'..amount_total..'\\cr)'
+ 				target_action_result_shdw = ' (\\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..amount..'\\cr'..count..'\\cs('..c_shdw_r..','..c_shdw_g..','..c_shdw_b..')'..amount_total..'\\cr)'
+-				if actor and get_player and actor.index == get_player.pet_index and settings.sections.chat.tabs.dmg then
++				if actor and player_mob and actor.index == player_mob.pet_index and settings.sections.chat.tabs.dmg then
+ 					local target = action_target and truncateName(action_target.name) or 'Unknown'
+ 					local message = action_name..": "..amount..count..amount_total
+ 					addMessageToChatTab('DMG', target, message)
+@@ -10463,7 +10481,7 @@ register_event('action', function (act)
+ 		target_action_shdw = action_name_shdw..action_target_name_shdw
+ 
+ 		--The actor is our pet
+-		if actor and get_player and actor.index == get_player.pet_index then
++		if actor and player_mob and actor.index == player_mob.pet_index then
+ 
+ 			self_action_bar_meter:bg_color(050,255,050)
+ 			self_action_bar_cast_meter:hide()
+@@ -10714,6 +10732,49 @@ function removeDebuff(target_id, effect_id, index)
+ 	end
+ end
+ 
++-- Debuff metadata is immutable.  Keeping these tables at addon scope avoids
++-- constructing them repeatedly in the busiest combat packet handlers.
++local DAZE_DURATIONS = {
++	[1] = 60, [2] = 90, [3] = 120, [4] = 120, [5] = 120,
++	[6] = 120, [7] = 120, [8] = 120, [9] = 120, [10] = 120,
++}
++local DAZE_LEVELS = {
++	[386] = 1, [387] = 2, [388] = 3, [389] = 4, [390] = 5,
++	[391] = 1, [392] = 2, [393] = 3, [394] = 4, [395] = 5,
++	[396] = 1, [397] = 2, [398] = 3, [399] = 4, [400] = 5,
++	[448] = 1, [449] = 2, [450] = 3, [451] = 4, [452] = 5,
++}
++local CUMULATIVE_EFFECT_IDS = T{9219,9496,9497,9498,9499,9500,9501}
++local TREASURE_HUNTER_EFFECT_IDS = T{9902,9903,9904,9905,9906,9907,9908,9909,9910,9911,9912,9913,9914}
++local TH_EFFECT_BY_LEVEL = {[2]=9902,[3]=9903,[4]=9904,[5]=9905,[6]=9906,[7]=9907,[8]=9908,[9]=9909,[10]=9910,[11]=9911,[12]=9912,[13]=9913,[14]=9914}
++local DAMAGING_SPELL_MESSAGES = S{2,7,252,264,265}
++local DEBUFF_SPELL_MESSAGES = S{203,236,237,267,268,269,270,271,272,277,278,279}
++local NO_EFFECT_SPELL_MESSAGES = S{75,283,423,659}
++local CUMULATIVE_SPELL_IDS = T{219,496,497,498,499,500,501}
++local JOB_ABILITY_DEBUFF_MESSAGES = S{100,110,127,141,144,203,242,243,267,270,277,278,279,320,645,672}
++local UNBLINKABLE_DEBUFF_MESSAGES = S{127,141,320,645}
++local DEATH_MESSAGES = S{6,20,113,406,605,646}
++local EXPIRE_MESSAGES = S{64,204,206,350,531}
++local IMPACT_EFFECTS = S{136,137,138,139,140,141,142}
++local DAZE_GROUPS = {
++	{386,387,388,389,390},
++	{391,392,393,394,395},
++	{396,397,398,399,400},
++	{448,449,450,451,452},
++}
++local DAZE_GROUP_BY_EFFECT = {}
++for _, group in ipairs(DAZE_GROUPS) do
++	for _, effect_id in ipairs(group) do
++		DAZE_GROUP_BY_EFFECT[effect_id] = group
++	end
++end
++local DAZE_TYPES = {
++	[519] = {[1]=386, [2]=387, [3]=388, [4]=389, [5]=390, [6]=390, [7]=390, [8]=390, [9]=390, [10]=390},
++	[520] = {[1]=391, [2]=392, [3]=393, [4]=394, [5]=395, [6]=395, [7]=395, [8]=395, [9]=395, [10]=395},
++	[521] = {[1]=396, [2]=397, [3]=398, [4]=399, [5]=400, [6]=400, [7]=400, [8]=400, [9]=400, [10]=400},
++	[591] = {[1]=448, [2]=449, [3]=450, [4]=451, [5]=452, [6]=452, [7]=452, [8]=452, [9]=452, [10]=452},
++}
++
+ --Save debuff to current_debuffs table
+ function saveDebuff(actor_id, target_id, effect_id, spell_id, no_effect)
+ 
+@@ -10734,25 +10795,8 @@ function saveDebuff(actor_id, target_id, effect_id, spell_id, no_effect)
+ 	local check_override = true
+ 
+ 	--Determine if this effect is a Daze and set duration accordingly
+-	local daze_durations = {
+-		[1] = 60,
+-		[2] = 90,
+-		[3] = 120,
+-		[4] = 120,
+-		[5] = 120,
+-		[6] = 120,
+-		[7] = 120,
+-		[8] = 120,
+-		[9] = 120,
+-		[10] = 120,
+-	}
+-	local daze_levels = {
+-		[386] = 1, [387] = 2, [388] = 3, [389] = 4, [390] = 5, --Lethargic Daze
+-		[391] = 1, [392] = 2, [393] = 3, [394] = 4, [395] = 5, --Sluggish Daze
+-		[396] = 1, [397] = 2, [398] = 3, [399] = 4, [400] = 5, --Weakened Daze
+-		[448] = 1, [449] = 2, [450] = 3, [451] = 4, [452] = 5, --Bewildered Daze
+-	}
+-
++	local daze_durations = DAZE_DURATIONS
++	local daze_levels = DAZE_LEVELS
+ 	--Match the effect with daze level
+ 	local level = daze_levels[effect_id]
+ 	if level then
+@@ -10890,7 +10934,7 @@ function saveDebuff(actor_id, target_id, effect_id, spell_id, no_effect)
+ 	elseif res.spells[spell_id] and res.spells[spell_id].skill == 43 then
+ 		removal_timer = duration
+ 	--Comet/Firaja/Blizzaja/Aeroja/Stoneja/Thundaja/Waterja (Cumulative Magic)
+-	elseif T{9219,9496,9497,9498,9499,9500,9501}:contains(effect_id) then
++	elseif CUMULATIVE_EFFECT_IDS:contains(effect_id) then
+ 		local base_duration = 60
+ 		local bonus = durations_data[server] and durations_data[server][actor_name] and durations_data[server][actor_name]["Cumulative Spells"] or nil
+ 		duration = bonus and base_duration + bonus or base_duration
+@@ -10927,7 +10971,7 @@ function saveDebuff(actor_id, target_id, effect_id, spell_id, no_effect)
+ 		duration = bonus and base_duration + (base_duration * bonus) or base_duration
+ 		removal_timer = bonus and duration or max_duration
+ 	--Treasure Hunter
+-	elseif T{9902,9903,9904,9905,9906,9907,9908,9909,9910,9911,9912,9913,9914}:contains(effect_id) then
++	elseif TREASURE_HUNTER_EFFECT_IDS:contains(effect_id) then
+ 		duration = nil
+ 		removal_timer = nil
+ 	end
+@@ -10981,6 +11025,57 @@ function saveDebuff(actor_id, target_id, effect_id, spell_id, no_effect)
+ 
+ end
+ 
++local SHOT_BOOSTS = {
++	[131] = { -- Light Shot
++		{
++			effect_id = 134, -- Dia
++			spell_map = {[23] = 9023, [24] = 9024, [25] = 9025}
++		}
++	},
++	[132] = { -- Dark Shot
++		{
++			effect_id = 135, -- Bio
++			spell_map = {[230] = 9230, [231] = 9231, [232] = 9232}
++		},
++		{
++			effect_id = 5, -- Blind
++			spell_map = {[254] = 9254, [276] = 9276}
++		}
++	},
++	[125] = { -- Fire Shot
++		{ effect_id = 128, spell_map = {[235] = 9235} } -- Burn
++	},
++	[126] = { -- Ice Shot
++		{
++			effect_id = 129, -- Frost
++			spell_map = {[236] = 9236}
++		},
++		{
++			effect_id = 4, -- Paralyze
++			spell_map = {[58] = 9058, [80] = 9080}
++		}
++	},
++	[127] = { -- Wind Shot
++		{ effect_id = 130, spell_map = {[237] = 9237} } -- Choke
++	},
++	[128] = { -- Earth Shot
++		{
++			effect_id = 131, -- Rasp
++			spell_map = {[238] = 9238}
++		},
++		{
++			effect_id = 13, -- Slow
++			spell_map = {[56] = 9056, [79] = 9079}
++		}
++	},
++	[129] = { -- Thunder Shot
++		{ effect_id = 132, spell_map = {[239] = 9239} } -- Shock
++	},
++	[130] = { -- Water Shot
++		{ effect_id = 133, spell_map = {[240] = 9240} } -- Drown
++	},
++}
++
+ function handleAction(act)
+ 
+ 	local actor_id = act.actor_id
+@@ -10991,56 +11086,7 @@ function handleAction(act)
+ 
+ 	local spell_id = act.param
+ 	local target_count = act.target_count
+-	local shot_boosts = {
+-		[131] = { -- Light Shot
+-			{
+-				effect_id = 134, -- Dia
+-				spell_map = {[23] = 9023, [24] = 9024, [25] = 9025}
+-			}
+-		},
+-		[132] = { -- Dark Shot
+-			{
+-				effect_id = 135, -- Bio
+-				spell_map = {[230] = 9230, [231] = 9231, [232] = 9232}
+-			},
+-			{
+-				effect_id = 5, -- Blind
+-				spell_map = {[254] = 9254, [276] = 9276}
+-			}
+-		},
+-		[125] = { -- Fire Shot
+-			{ effect_id = 128, spell_map = {[235] = 9235} } -- Burn
+-		},
+-		[126] = { -- Ice Shot
+-			{
+-				effect_id = 129, -- Frost
+-				spell_map = {[236] = 9236}
+-			},
+-			{
+-				effect_id = 4, -- Paralyze
+-				spell_map = {[58] = 9058, [80] = 9080}
+-			}
+-		},
+-		[127] = { -- Wind Shot
+-			{ effect_id = 130, spell_map = {[237] = 9237} } -- Choke
+-		},
+-		[128] = { -- Earth Shot
+-			{
+-				effect_id = 131, -- Rasp
+-				spell_map = {[238] = 9238}
+-			},
+-			{
+-				effect_id = 13, -- Slow
+-				spell_map = {[56] = 9056, [79] = 9079}
+-			}
+-		},
+-		[129] = { -- Thunder Shot
+-			{ effect_id = 132, spell_map = {[239] = 9239} } -- Shock
+-		},
+-		[130] = { -- Water Shot
+-			{ effect_id = 133, spell_map = {[240] = 9240} } -- Drown
+-		},
+-	}
++	local shot_boosts = SHOT_BOOSTS
+ 	for i = 1, target_count do
+ 
+ 		local target_id = act.targets[i].id
+@@ -11050,7 +11096,7 @@ function handleAction(act)
+ 		--Treasure Hunter procs
+ 		if act.category == 1 and add_message_id == 603 then
+ 			local level = act.targets[i].actions[1].add_effect_param
+-			local th_id = {[2]=9902,[3]=9903,[4]=9904,[5]=9905,[6]=9906,[7]=9907,[8]=9908,[9]=9909,[10]=9910,[11]=9911,[12]=9912,[13]=9913,[14]=9914}
++			local th_id = TH_EFFECT_BY_LEVEL
+ 			effect_id = th_id[level]
+ 			spell_id = th_id[level]
+ 			saveDebuff(actor_id, target_id, effect_id, spell_id)
+@@ -11059,9 +11105,9 @@ function handleAction(act)
+ 		elseif act.category == 4 then
+ 
+ 			--Spell messages to look for
+-			local damaging_spell_messages = S{2,7,252,264,265}
+-			local debuff_spell_messages = S{203,236,237,267,268,269,270,271,272,277,278,279}
+-			local no_effect_spell_messages = S{75,283,423,659}
++			local damaging_spell_messages = DAMAGING_SPELL_MESSAGES
++			local debuff_spell_messages = DEBUFF_SPELL_MESSAGES
++			local no_effect_spell_messages = NO_EFFECT_SPELL_MESSAGES
+ 
+ 			--Damaging spells
+ 			if damaging_spell_messages:contains(message_id) then
+@@ -11071,7 +11117,7 @@ function handleAction(act)
+ 					spell_id = 23 --Diaga (33) puts Dia (23/134) on each target
+ 					effect_id = 134
+ 				--Comet/Firaja/Blizzaja/Aeroja/Stoneja/Thundaja/Waterja (Cumulative Magic)
+-				elseif T{219,496,497,498,499,500,501}:contains(spell_id) then
++				elseif CUMULATIVE_SPELL_IDS:contains(spell_id) then
+ 					local ja_spell = spell_id + 9000
+ 					--If a Cumulative Magic boost of the same element already exists, bump it up a tier
+ 					if current_debuffs[target_id] and current_debuffs[target_id][ja_spell] then
+@@ -11135,7 +11181,7 @@ function handleAction(act)
+ 
+ 		--Most job abilities
+ 		elseif act.category == 3 or act.category == 6 or act.category == 13 or act.category == 15 then
+-			local messages = S{100, 110, 127, 141, 144, 203, 242, 243, 267, 270, 277, 278, 279, 320, 645, 672}
++			local messages = JOB_ABILITY_DEBUFF_MESSAGES
+ 			if messages:contains(message_id) then
+ 				local effect_id = act.targets[i].actions[1].param
+ 				--Odyllic Subterfuge
+@@ -11177,7 +11223,7 @@ function handleAction(act)
+ 			--Bounty Shot procs
+ 			if message_id == 608 then
+ 				local level = act.targets[i].actions[1].param
+-				local th_id = {[2]=9902,[3]=9903,[4]=9904,[5]=9905,[6]=9906,[7]=9907,[8]=9908,[9]=9909,[10]=9910,[11]=9911,[12]=9912,[13]=9913,[14]=9914}
++				local th_id = TH_EFFECT_BY_LEVEL
+ 				effect_id = th_id[level]
+ 				spell_id = th_id[level]
+ 				saveDebuff(actor_id, target_id, effect_id, spell_id)
+@@ -11187,12 +11233,7 @@ function handleAction(act)
+ 		elseif act.category == 14 then
+ 
+ 			--Daze effect groups mapped to their level/message_id
+-			local daze_types = {
+-				[519] = {[1]=386, [2]=387, [3]=388, [4]=389, [5]=390, [6]=390, [7]=390, [8]=390, [9]=390, [10]=390}, --Lethargic Daze
+-				[520] = {[1]=391, [2]=392, [3]=393, [4]=394, [5]=395, [6]=395, [7]=395, [8]=395, [9]=395, [10]=395}, --Sluggish Daze
+-				[521] = {[1]=396, [2]=397, [3]=398, [4]=399, [5]=400, [6]=400, [7]=400, [8]=400, [9]=400, [10]=400}, --Weakened Daze
+-				[591] = {[1]=448, [2]=449, [3]=450, [4]=451, [5]=452, [6]=452, [7]=452, [8]=452, [9]=452, [10]=452}, --Bewildered Daze
+-			}
++			local daze_types = DAZE_TYPES
+ 
+ 			--Check if the message ID is one of the Daze types
+ 			local daze_group = daze_types[message_id]
+@@ -11209,7 +11250,7 @@ function handleAction(act)
+ 				end
+ 			end
+ 
+-			local messages = S{127, 141, 320, 645}
++			local messages = UNBLINKABLE_DEBUFF_MESSAGES
+ 			if messages:contains(message_id) then
+ 				local effect_id = act.targets[i].actions[1].param
+ 				saveDebuff(actor_id, target_id, effect_id, spell_id)
+@@ -11232,8 +11273,8 @@ function handleActionMessage(data)
+ 	local target_index = target_info and target_info.index
+ 
+ 	--Action messages to look for
+-	local death_messages = S{6, 20, 113, 406, 605, 646}
+-	local expire_messages = S{64, 204, 206, 350, 531}
++	local death_messages = DEATH_MESSAGES
++	local expire_messages = EXPIRE_MESSAGES
+ 
+ 	--Check if the target died and clear their table entries
+ 	if death_messages:contains(message_id) then
+@@ -11248,22 +11289,7 @@ function handleActionMessage(data)
+ 
+ 	--Check if the debuff expired and clear just that debuff
+ 	elseif expire_messages:contains(message_id) and current_debuffs[target_id] then
+-		local dazes = {
+-			lethargic	= {386, 387, 388, 389, 390},
+-			sluggish	= {391, 392, 393, 394, 395},
+-			weakened	= {396, 397, 398, 399, 400},
+-			bewildered	= {448, 449, 450, 451, 452},
+-		}
+-
+-		local found_daze = nil
+-
+-		--Check if the effect is a Daze
+-		for _, group in pairs(dazes) do
+-			if S(group):contains(effect_id) then
+-				found_daze = group
+-				break
+-			end
+-		end
++		local found_daze = DAZE_GROUP_BY_EFFECT[effect_id]
+ 
+ 		if found_daze then
+ 			for _, id in ipairs(found_daze) do
+@@ -11271,7 +11297,7 @@ function handleActionMessage(data)
+ 			end
+ 		else
+ 			--Check if the effect is from Impact
+-			local impact_effects = S{136, 137, 138, 139, 140, 141, 142}
++			local impact_effects = IMPACT_EFFECTS
+ 			if impact_effects:contains(effect_id) then
+ 				current_debuffs[target_id][9503] = nil
+ 			end
+@@ -11411,35 +11437,79 @@ register_event('incoming chunk',function(id,original,modified,injected,blocked)
+ 
+ 	if injected then return end
+ 
++	-- The action and zoning paths do not need the generic packets parser.  These
++	-- are the hottest incoming packet IDs during combat, so dispatch them first.
++	if id == 0x028 then
++		handleAction(windower.packets.parse_action(original))
++		return
++	elseif id == 0x029 then
++		handleActionMessage({
++			target_id = original:unpack('I',0x09),
++			param_1 = original:unpack('I',0x0D),
++			message_id = original:unpack('H',0x19)%32768,
++		})
++		return
++	elseif id == 0x00B then
++		zoning = true
++		hideBars()
++		clearTables()
++		if settings.sections.chat.show_during_zoning then
++			showChatBar()
++		else
++			hideChatBar()
++		end
++		if Screen_Test then
++			windower.send_command('bars ui')
++		end
++		return
++	elseif id == 0x00A then
++		zoning = false
++		local target = get_mob_by_target('t')
++		showBars(target)
++		showChatBar()
++		resetFadeDelay()
++		return
++	end
++
++	-- Bars only consumes these remaining packet families.  Avoid parsing every
++	-- movement, model, inventory, and combat packet that passes through Windower.
++	if id ~= 0x061 and id ~= 0x063 and id ~= 0x02D and id ~= 0x067 and id ~= 0x068 and id ~= 0x0F4 then
++		return
++	end
++	if (id == 0x061 or id == 0x063 or id == 0x02D) and not show_xp_bar then
++		return
++	end
++
+ 	local packet = packets.parse('incoming', original)
+-	local player = get_player()
+-	local msg = packet['Message']
+ 
+ 	--XP/JP/EP related info
+-	if id == 0x061 and show_xp_bar then
++	if id == 0x061 then
+ 		master_level = tnml[packet['Required Exemplar Points']]
+ 		synced_master_level = packet['Master Level']
+ 		current_xp = packet["Current EXP"]
+ 		required_xp = packet["Required EXP"]
+ 		current_ep = packet["Current Exemplar Points"]
+ 		required_ep = packet["Required Exemplar Points"]
+-	elseif id == 0x063 and show_xp_bar then
++	elseif id == 0x063 then
+ 		if packet['Order'] == 2 then
+ 			xp_capped = packet["EXP Capped"]
+ 			current_lp = packet['Limit Points'] or current_lp
+ 			current_mp = packet['Merit Points'] or current_mp
+ 			max_merit_points = packet['Max Merit Points'] or max_merit_points
+ 		elseif packet['Order'] == 5 then
+-			local job = player.main_job_full
+-			current_cp = packet[job..' Capacity Points'] or current_cp
+-			job_points_stored = packet[job..' Job Points'] or job_points_stored
++			local player = get_player()
++			if player then
++				local job = player.main_job_full
++				current_cp = packet[job..' Capacity Points'] or current_cp
++				job_points_stored = packet[job..' Job Points'] or job_points_stored
++			end
+ 		end
+-	elseif id == 0x02D and show_xp_bar then
++	elseif id == 0x02D then
++		local msg = packet['Message']
+ 		local points = packet['Param 1']
+ 		local timestamp = os.time()
+ 		local target_id = packet['Player']
+ 		if msg == 8 or msg == 105 or msg == 253 then --Gain XP
+-			--Immediately add the points to the current xp total, unless that would push it over the req xp tnl then we'll let the packet update handle that
+ 			current_xp = current_xp and required_xp and current_xp + points < required_xp and current_xp + points or current_xp
+ 			table.insert(xp_table, {
+ 				timestamp = timestamp,
+@@ -11452,7 +11522,6 @@ register_event('incoming chunk',function(id,original,modified,injected,blocked)
+ 			else
+ 				current_lp = current_lp and current_lp + points or current_lp
+ 			end
+-			--Add LP into the XP table since XP and LP are 1:1 and you only get one or the other at a time
+ 			table.insert(xp_table, {
+ 				timestamp = timestamp,
+ 				points = points,
+@@ -11463,62 +11532,29 @@ register_event('incoming chunk',function(id,original,modified,injected,blocked)
+ 				points = points,
+ 			})
+ 		elseif msg == 809 or msg == 810 then --Gain EP
+-			--Immediately add the exemplar points just like xp above
+ 			current_ep = current_ep and required_ep and current_ep + points < required_ep and current_ep + points or current_ep
+ 			table.insert(ep_table, {
+ 				timestamp = timestamp,
+ 				points = points,
+ 			})
+-		elseif msg == 719 and player.id == target_id then --New JP Total on kill
+-			job_points_stored = points
++		elseif msg == 719 then --New JP Total on kill
++			local player = get_player()
++			if player and player.id == target_id then
++				job_points_stored = points
++			end
+ 		end
+ 
+ 	--Pet TP
+-	elseif id == 0x67 or id == 0x068 then
++	elseif id == 0x067 or id == 0x068 then
+ 		local msg_type = packet['Message Type']
+-		if (msg_type == 0x04) then
++		if msg_type == 0x04 then
+ 			pet_tp = packet['Pet TP']
+ 			pet_mp = packet['Current MP%']
+ 		end
+ 
+-	--Actions (for debuffs)
+-	elseif id == 0x028 then
+-		handleAction(windower.packets.parse_action(original))
+-
+-	--Action messages (for debuffs)
+-	elseif id == 0x029 then
+-		local data = {}
+-		data.target_id = original:unpack('I',0x09)
+-		data.param_1 = original:unpack('I',0x0D)
+-		data.message_id = original:unpack('H',0x19)%32768
+-		handleActionMessage(data)
+-
+ 	--Wide scan (for monster levels)
+-	elseif id == 0xF4 then
++	elseif id == 0x0F4 then
+ 		current_levels[packet.Index] = packet.Level
+-
+-	--Zone start
+-	elseif id == 0xB then
+-		zoning = true
+-		hideBars()
+-		clearTables()
+-		if settings.sections.chat.show_during_zoning then
+-			showChatBar()
+-		else
+-			hideChatBar()
+-		end
+-		if Screen_Test then
+-			windower.send_command('bars ui')
+-		end
+-
+-	--Zone finish
+-	elseif id == 0xA then
+-		zoning = false
+-		local target = get_mob_by_target('t')
+-		showBars(target)
+-		showChatBar()
+-		resetFadeDelay()
+-
+ 	end
+ 
+ end)
+

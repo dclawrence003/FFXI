@@ -33,6 +33,15 @@ test('unknown materials are never auto-dropped', () => {
   assert.equal(result.action, 'REVIEW');
 });
 
+test('the complete Shami seal and crest family is always kept', () => {
+  for (const id of [1126, 1127, 2955, 2956, 2957]) {
+    const result = evaluate({ id, category: 'General', jobs: [] }, null, [], config);
+    assert.equal(result.action, 'KEEP');
+    assert.equal(result.confidence, 'high');
+    assert.match(result.reason, /BCNM orb currency/);
+  }
+});
+
 test('JSE armor materials receive the dedicated upgrade recommendation', () => {
   const result = evaluate(
     { id: 9001, category: 'General', jobs: [] },

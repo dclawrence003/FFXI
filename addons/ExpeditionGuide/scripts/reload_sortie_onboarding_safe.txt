@@ -1,0 +1,46 @@
+echo Reloading the tuned PartyTactics Demisang profile and ExpeditionGuide 0.7.0. Run only while all six characters are out of combat.
+send Dolomedes pt off
+send Dolomedes exg pause
+wait 1
+send Dolomedes lua unload PartyTactics
+send Tackleberry lua unload PartyTactics
+send Kickpuncher lua unload PartyTactics
+send Barneystinson lua unload PartyTactics
+send Smalls lua unload PartyTactics
+send Achoo lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 2
+send Dolomedes lua unload ExpeditionGuide
+send Tackleberry lua unload ExpeditionGuide
+send Kickpuncher lua unload ExpeditionGuide
+send Barneystinson lua unload ExpeditionGuide
+send Smalls lua unload ExpeditionGuide
+send Achoo lua unload ExpeditionGuide
+wait 1
+send Dolomedes lua load ExpeditionGuide
+wait 2
+send Tackleberry lua load ExpeditionGuide
+wait 1
+send Kickpuncher lua load ExpeditionGuide
+wait 1
+send Barneystinson lua load ExpeditionGuide
+wait 1
+send Smalls lua load ExpeditionGuide
+wait 1
+send Achoo lua load ExpeditionGuide
+wait 3
+send Dolomedes pt version
+send Dolomedes exg status
+send Dolomedes exg explain
+echo Reload complete: PartyTactics is inert and ExpeditionGuide remains paused. Verify version 0.7.0 and sensors 6/6, then run //exg start dclear for the direct Sheet D run.

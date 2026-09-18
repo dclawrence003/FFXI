@@ -9,6 +9,9 @@ Every new tool and every modification in this repository was generated with
 AI, directed and tested by the repository owner. The code is published openly
 so other players can inspect it, test it, improve it, or ignore it.
 
+Project design and direction: **Don Lawrence**.  Code development assistance:
+**OpenAI Codex**.  Upstream authors remain credited for their original work.
+
 If AI-generated software is a deal-breaker for you, that is completely fine.
 This is not the repository for you.
 
@@ -33,13 +36,34 @@ limitations before use.
 | [Roller2](addons/Roller2/) | Windower addon/fork | Iterates on Selindrile's Roller with safer Snake Eye sequencing | Prototype; live testing |
 | [PartyStart](addons/PartyStart/) | Windower addon | Atomically validates named compositions, then configures support, offense, and an inert combat-role policy | Six-character prototype |
 | [PartyCombat](addons/PartyCombat/) | Windower addon | Gives composition-selected attackers action-driven targeting, tank-led pull authority, distance-limited pursuit, and explicit combat authorization | Six-character prototype |
+| [PartyTactics](addons/PartyTactics/) | Windower addon | Coordinates versioned encounter profiles and companion actions | Existing offline suite; live results are encounter-specific |
+| [SignetKeeper](addons/SignetKeeper/) | Windower companion | Coordinates bounded Signet maintenance with PartyTactics | Roster-specific prototype |
+| [JubileeKeeper](addons/JubileeKeeper/) | Windower companion | Manages the Jubilee Ring during its authorized profile | Roster-specific prototype |
+| [LocusPuller](addons/LocusPuller/) | Windower companion | Performs target-scoped Locus pulling under explicit authority | Roster-specific prototype |
+| [ExpeditionGuide](addons/ExpeditionGuide/) | Windower addon | Guides content routes and hands combat work to encounter profiles | Prototype |
+| [ConquestCash](addons/ConquestCash/) | Windower addon | Coordinates guarded conquest-point purchases and sales | Candidate; see addon limitations |
+| [SalvageCells](addons/SalvageCells/) | Windower addon | Coordinates cell distribution and use | Roster-specific prototype |
 | [FFXI Core Manager](tools/FFXI-Core-Manager/) | Windows utility + Windower addon | Assigns characters to logical processors and restores multimonitor window layouts | Personal-system prototype |
 | [InventoryCore + LootAdvisor](tools/InventoryCore/) | Local Node service + Windower addon | FindAll inventory guidance, roster gil/key-item/currency views, and automatic Limbus chest rotation tracking | Valefor prototype |
 | [LimbusTracker](addons/LimbusTracker/) | Windower addon | Standalone detection, persistent per-character history, and compact self/roster display for modern Limbus chests | Optional InventoryCore sync |
+| [CombatRecorder](addons/CombatRecorder/) | Windower addon + offline report | Passive per-character combat history, bounded death archives, HP/MP snapshots, and disk-health checks | Quarantined after 0.1.0 startup hang; candidate not deployed |
+| [THHUD](addons/THHUD/) | Windower addon | Tracks per-enemy Treasure Hunter from local job/gear evidence, authoritative action packets, and six-client IPC | Tested repository candidate; not deployed |
 | [HealBot fixes](patches/HealBot/) | Patch | Guards an invalid queued action and cleans up orphaned text boxes | Applies to Lorand's HealBot |
 | [MultiCtrl Warp II queue](patches/MultiCtrl/) | Patch | Replaces fire-and-forget `d2` behavior with confirmation, retries, status, and cancellation | Based on a customized MultiCtrl tree |
 
-## Attribution
+## Offline checks
+
+The shared [offline test setup](tools/OfflineTests/README.md) pins the Lua
+tools and provides one command for six addon suites.  Logs distinguish
+failures and skipped checks.  Tests do not launch or command game clients.
+Passing simulated tests is not evidence of a successful live encounter.
+
+PartyOps remains the separate private evidence, parser and replay platform.
+Its journals and personal operational reports are not part of this public
+repository.  Existing CombatRecorder code is preserved with its documented
+candidate/quarantine status; it is not a replacement for PartyOps.
+
+## Original authors and licensing
 
 AI generation does not erase upstream authorship. Original authors retain
 credit for all work used as a base:

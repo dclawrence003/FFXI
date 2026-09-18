@@ -6,7 +6,7 @@ This is a clean implementation and does not require Lorand's lor_libs.
 Original AutoWS: https://github.com/lorand-ffxi/addons/tree/master/AutoWS
 No AutoWS source is redistributed in this file.
 
-Copyright (c) 2026 OpenAI
+Copyright (c) 2026 Don Lawrence
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -35,11 +35,12 @@ POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'AutoWS2'
 _addon.author = 'OpenAI Codex, inspired by Lorand'
-_addon.version = '0.3.1'
+_addon.version = '0.3.7'
 _addon.command = 'autows2'
 _addon.commands = {'autows2', 'aws2'}
 
 local config = require('config')
+local packets = require('packets')
 local texts = require('texts')
 local res = require('resources')
 
@@ -52,6 +53,9 @@ local AFTERMATH_IDS = {
 
 local RESERVE_MODEL_VERSION = 2
 local OFFENSE_PROFILE_VERSION = 2
+local TARGET_ACK_TIMEOUT = 15
+local ATTACK_OFF_HOLD = 2
+local DIRECT_TARGET_EVIDENCE_TTL = 8
 
 local defaults = {
     display = {
@@ -95,6 +99,12 @@ local enabled = false
 local current_profile_key = nil
 local current_profile = nil
 local current_weapon = nil
+-- Optional fight-scoped automatic WS choice. Manual /ws is untouched;
+-- //aws2 use replaces it and off clears it.
+local session_normal_ws = nil
+-- Session-only fight policy. PartyTactics reapplies this when a profile is
+-- activated; it is deliberately absent from per-character weapon settings.
+local target_exclusion = 'none'
 local reserve_latched = false
 local reserve_reason = nil
 local aftermath_expires_at = nil
@@ -105,6 +115,12 @@ local last_check_at = 0
 local pause_until = 0
 local last_decision = 'Idle'
 local last_ws_warning_key = nil
+local pending_battle_target_id = nil
+local pending_battle_target_until = 0
+local attack_off_hold_until = 0
+local acknowledged_battle_target_id = nil
+local last_direct_target_id = nil
+local last_direct_target_at = 0
 
 local telemetry = {
     last_tp = nil,
@@ -159,14 +175,12 @@ end
 
 local function base_profile(weapon)
     local profile = {
-        normal_ws = '',
         normal_tp = 1000,
         hp_min = 5,
         hp_max = 100,
         aftermath_enabled = false,
         aftermath_mode = 'shadow',
         aftermath_type = 'lv3',
-        aftermath_ws = '',
         aftermath_duration = 180,
         reserve_model_version = RESERVE_MODEL_VERSION,
         fallback_reserve = 18,
@@ -200,9 +214,17 @@ end
 
 local function fill_missing(profile, weapon)
     local template = base_profile(weapon)
+    if type(profile.normal_ws) ~= 'string' then
+        profile.normal_ws = template.normal_ws
+    end
+    if type(profile.aftermath_ws) ~= 'string' then
+        profile.aftermath_ws = template.aftermath_ws
+    end
     local offense_version = tonumber(profile.offense_profile_version) or 0
     if offense_version < OFFENSE_PROFILE_VERSION then
-        if trim(profile.normal_ws) == '' and template.normal_ws ~= '' then
+        if trim(profile.normal_ws) == '' and
+            type(template.normal_ws) == 'string' and
+            template.normal_ws ~= '' then
             profile.normal_ws = template.normal_ws
         end
         if weapon == 'Naegling' or weapon == 'Tauret'
@@ -244,7 +266,7 @@ local function profile_key(player, weapon)
         sanitize(player and player.name),
         sanitize(player and player.main_job),
         sanitize(weapon),
-    }, '__')
+    }, '__'):lower()
 end
 
 local function save_settings()
@@ -257,6 +279,15 @@ local function reset_telemetry(tp)
     telemetry.samples = {}
 end
 
+local function reset_target_transition()
+    pending_battle_target_id = nil
+    pending_battle_target_until = 0
+    attack_off_hold_until = 0
+    acknowledged_battle_target_id = nil
+    last_direct_target_id = nil
+    last_direct_target_at = 0
+end
+
 local function reset_runtime(reason)
     reserve_latched = false
     reserve_reason = nil
@@ -264,6 +295,7 @@ local function reset_runtime(reason)
     aftermath_timer_unknown = false
     last_aftermath_active = nil
     last_decision = reason or 'Reset'
+    reset_target_transition()
     local player = get_player()
     reset_telemetry(player and player.vitals and player.vitals.tp or nil)
 end
@@ -314,12 +346,78 @@ local function target_is_valid(mob)
     if not mob or not mob.hpp then
         return false
     end
+    -- Independent final check for profiles that opt into elemental exclusion,
+    -- including the frame before PartyCombat releases game auto-targeting.
+    if target_exclusion == 'elemental'
+        and mob.spawn_type == 16 and type(mob.name) == 'string'
+        and mob.name:lower():find('%f[%a]elemental%f[%A]') ~= nil
+    then
+        return false
+    end
     if mob.is_npc == false then
         return false
     end
     local minimum = tonumber(current_profile.hp_min) or 5
     local maximum = tonumber(current_profile.hp_max) or 100
     return mob.hpp > minimum and mob.hpp < maximum
+end
+
+local function battle_target_acknowledged(mob, now)
+    if now < attack_off_hold_until then
+        last_decision = 'Waiting for disengage acknowledgement'
+        return false
+    end
+    if pending_battle_target_id
+        and mob and tonumber(mob.id) == pending_battle_target_id
+    then
+        acknowledged_battle_target_id = pending_battle_target_id
+        pending_battle_target_id = nil
+        pending_battle_target_until = 0
+        last_direct_target_id = nil
+        last_direct_target_at = 0
+        last_decision = 'Battle target acknowledged'
+        return true
+    end
+    if pending_battle_target_id then
+        if now >= pending_battle_target_until then
+            last_decision = ('Target handoff unresolved; auto WS held for #%d')
+                :format(pending_battle_target_id)
+        else
+            last_decision = ('Waiting for battle target #%d')
+                :format(pending_battle_target_id)
+        end
+        return false
+    end
+
+    local direct_is_fresh = last_direct_target_id
+        and now - last_direct_target_at <= DIRECT_TARGET_EVIDENCE_TTL
+    if direct_is_fresh then
+        acknowledged_battle_target_id = last_direct_target_id
+        if not mob or tonumber(mob.id) ~= acknowledged_battle_target_id then
+            last_decision = ('Using direct combat target evidence for #%d')
+                :format(acknowledged_battle_target_id)
+        end
+        return true
+    end
+    if not acknowledged_battle_target_id and mob then
+        acknowledged_battle_target_id = tonumber(mob.id)
+    end
+    if mob and tonumber(mob.id) == acknowledged_battle_target_id then
+        return true
+    end
+    last_decision = ('Unacknowledged battle-target drift; auto WS held for #%s')
+        :format(tostring(acknowledged_battle_target_id or 'none'))
+    return false
+end
+
+local function automatic_ws_target(mob, now)
+    if not battle_target_acknowledged(mob, now) then return nil end
+    local target_id = acknowledged_battle_target_id
+        or mob and tonumber(mob.id) or nil
+    if not target_id then return nil end
+    local exact = windower.ffxi.get_mob_by_id(target_id)
+    if not exact and mob and tonumber(mob.id) == target_id then exact = mob end
+    return exact
 end
 
 local function update_telemetry(now, tp, engaged)
@@ -441,7 +539,7 @@ local function observe_aftermath(now, active)
     last_aftermath_active = active
 end
 
-local function send_ws(name, reason)
+local function send_ws(name, reason, target_id)
     name = trim(name)
     if name == '' then
         last_decision = 'WS not configured'
@@ -475,13 +573,25 @@ local function send_ws(name, reason)
     end
     last_ws_warning_key = nil
 
+    target_id = tonumber(target_id)
+    if not target_id or target_id < 1 or target_id > 4294967295
+        or target_id ~= math.floor(target_id)
+    then
+        last_decision = 'Exact WS target unavailable'
+        return false
+    end
+
     local now = os.clock()
     if now - last_command_at < 2.8 then
         return false
     end
 
-    windower.send_command(('input /ws "%s" <t>'):format(
-        name:gsub('"', '')))
+    -- PartyCombat owns the engagement lane. Spend on the exact acknowledged
+    -- server ID rather than resolving <bt> again after this frame; the live
+    -- Qutrub capture proved that <bt> can briefly expose Bigwig while direct
+    -- melee is still landing on an add. Manual weapon skills are untouched.
+    windower.send_command(('input /ws "%s" %d'):format(
+        name:gsub('"', ''), target_id))
     last_command_at = now
     last_decision = reason .. ': ' .. name
     return true
@@ -542,10 +652,11 @@ local function update_display(now, player, active, rate, reserve_seconds)
         ('Reserve %.1fs | %s'):format(reserve_seconds, last_decision),
         ('%s | Normal: %s | AM: %s'):format(
             current_weapon or 'Unknown',
-            trim(current_profile and current_profile.normal_ws) ~= '' and
-                current_profile.normal_ws or '(unset)',
+            trim(session_normal_ws or
+                (current_profile and current_profile.normal_ws)) ~= '' and
+                trim(session_normal_ws or current_profile.normal_ws) or '(unset)',
             trim(current_profile and current_profile.aftermath_ws) ~= '' and
-                current_profile.aftermath_ws or '(unset)'),
+                trim(current_profile.aftermath_ws) or '(unset)'),
     }, '\n')
 
     display:text(value)
@@ -561,7 +672,7 @@ local function print_status()
     chat(207, ('%s | weapon=%s | normal="%s" @ %d TP'):format(
         bool_word(enabled),
         current_weapon,
-        trim(current_profile.normal_ws),
+        trim(session_normal_ws or current_profile.normal_ws),
         tonumber(current_profile.normal_tp) or 1000))
     chat(207, ('aftermath=%s | mode=%s | type=%s | ws="%s" | duration=%ds'):format(
         bool_word(current_profile.aftermath_enabled),
@@ -575,6 +686,7 @@ local function print_status()
         tostring(current_profile.maximum_reserve),
         tostring(current_profile.safety_margin),
         bool_word(reserve_latched)))
+    chat(207, 'target exclusion='..target_exclusion..' (session only)')
 end
 
 local function set_number(field, value, low, high)
@@ -592,7 +704,9 @@ local function print_help()
     chat(207, 'Commands:')
     chat(207, '  //aws2 on|off|toggle|status')
     chat(207, '  //aws2 use <normal WS> | //aws2 tp <1000-3000>')
+    chat(207, '  //aws2 sessionws <normal WS> (automatic WS, session only)')
     chat(207, '  //aws2 hp <min> <max>')
+    chat(207, '  //aws2 exclude elemental|none (session only)')
     chat(207, '  //aws2 aftermath on|off')
     chat(207, '  //aws2 aftermath mode shadow|active')
     chat(207, '  //aws2 aftermath ws <WS> | duration <seconds>')
@@ -677,22 +791,39 @@ windower.register_event('addon command', function(command, ...)
         print_status()
     elseif command == 'off' or command == 'disable' or command == 'stop' then
         enabled = false
+        session_normal_ws = nil
         reserve_latched = false
         reserve_reason = nil
+        reset_target_transition()
         print_status()
     elseif command == 'toggle' then
         enabled = not enabled
         if not enabled then
+            session_normal_ws = nil
             reserve_latched = false
             reserve_reason = nil
+            reset_target_transition()
         end
         print_status()
     elseif command == 'status' then
         print_status()
+    elseif command == 'exclude' then
+        local exclusion = tostring(args[1] or ''):lower()
+        if exclusion ~= 'elemental' and exclusion ~= 'none' then
+            chat(123, 'Usage: //aws2 exclude elemental|none')
+            return
+        end
+        target_exclusion = exclusion
+        chat(207, 'Target exclusion: '..target_exclusion..' (session only).')
     elseif command == 'use' or command == 'ws' or command == 'set' then
+        session_normal_ws = nil
         current_profile.normal_ws = trim(table.concat(args, ' '))
         last_ws_warning_key = nil
         save_settings()
+        print_status()
+    elseif command == 'sessionws' then
+        session_normal_ws = trim(table.concat(args, ' '))
+        last_ws_warning_key = nil
         print_status()
     elseif command == 'tp' then
         if set_number('normal_tp', args[1], 1000, 3000) then
@@ -741,6 +872,70 @@ windower.register_event('addon command', function(command, ...)
         print_help()
     else
         chat(123, 'Unknown command. Use //aws2 help.')
+    end
+end)
+
+windower.register_event('outgoing chunk', function(id, original, modified,
+    injected, blocked)
+    if id ~= 0x01A or blocked then return end
+    local raw = modified or original
+    local ok, packet = pcall(packets.parse, 'outgoing', raw)
+    if not ok or type(packet) ~= 'table' then return end
+    local category = tonumber(packet['Category'])
+    local now = os.clock()
+    if category == 0x02 or category == 0x0F then
+        local target_id = tonumber(packet['Target'])
+        if target_id and target_id >= 1 and target_id <= 4294967295
+            and target_id == math.floor(target_id)
+        then
+            -- Observe both PartyCombat injections and direct operator target
+            -- changes. Only this addon's automatic WS lane waits; manual /ws
+            -- input and every other addon remain completely untouched.
+            pending_battle_target_id = target_id
+            pending_battle_target_until = now + TARGET_ACK_TIMEOUT
+            attack_off_hold_until = 0
+            if acknowledged_battle_target_id ~= target_id then
+                last_direct_target_id = nil
+                last_direct_target_at = 0
+            end
+        end
+    elseif category == 0x04 then
+        pending_battle_target_id = nil
+        pending_battle_target_until = 0
+        acknowledged_battle_target_id = nil
+        last_direct_target_id = nil
+        last_direct_target_at = 0
+        attack_off_hold_until = now + ATTACK_OFF_HOLD
+    end
+end)
+
+windower.register_event('action', function(action)
+    if type(action) ~= 'table'
+        or (tonumber(action.category) ~= 1
+            and tonumber(action.category) ~= 2)
+    then return end
+    local player = get_player()
+    if not player or tonumber(action.actor_id) ~= tonumber(player.id) then
+        return
+    end
+    local target = type(action.targets) == 'table' and action.targets[1]
+        or nil
+    local target_id = tonumber(target and target.id)
+    if not target_id or target_id < 1 or target_id > 4294967295
+        or target_id ~= math.floor(target_id)
+        or pending_battle_target_id
+            and pending_battle_target_id ~= target_id
+    then return end
+
+    -- A completed local melee/ranged action is stronger evidence than the
+    -- transient client cursor. It also acknowledges a PartyCombat handoff
+    -- when the <bt> token lags behind the server's actual attack target.
+    acknowledged_battle_target_id = target_id
+    last_direct_target_id = target_id
+    last_direct_target_at = os.clock()
+    if pending_battle_target_id == target_id then
+        pending_battle_target_id = nil
+        pending_battle_target_until = 0
     end
 end)
 
@@ -807,8 +1002,10 @@ windower.register_event('prerender', function()
         return
     end
 
-    local mob = windower.ffxi.get_mob_by_target('t')
-    local engaged = player.status == 1 and mob ~= nil
+    local mob = player.status == 1
+        and windower.ffxi.get_mob_by_target('bt') or nil
+    local engaged = player.status == 1
+        and (mob ~= nil or acknowledged_battle_target_id ~= nil)
     local tp = tonumber(player.vitals.tp) or 0
     update_telemetry(now, tp, engaged)
 
@@ -829,10 +1026,11 @@ windower.register_event('prerender', function()
 
     update_display(now, player, aftermath_active, rate, reserve_seconds)
 
-    if not enabled or now < pause_until or not engaged or
-        not target_is_valid(mob) then
+    if not enabled or now < pause_until or not engaged then
         return
     end
+    local ws_target = automatic_ws_target(mob, now)
+    if not target_is_valid(ws_target) then return end
 
     if current_profile.aftermath_enabled and
         current_profile.aftermath_mode == 'active' and reserve_latched then
@@ -848,12 +1046,13 @@ windower.register_event('prerender', function()
             last_decision = 'Armed at 3000; holding for AM loss'
             return
         end
-        send_ws(current_profile.aftermath_ws, 'Reapply aftermath')
+        send_ws(current_profile.aftermath_ws, 'Reapply aftermath', ws_target.id)
         return
     end
 
     if tp >= (tonumber(current_profile.normal_tp) or 1000) then
-        send_ws(current_profile.normal_ws, 'Normal WS')
+        send_ws(session_normal_ws or current_profile.normal_ws,
+            'Normal WS', ws_target.id)
     end
 end)
 

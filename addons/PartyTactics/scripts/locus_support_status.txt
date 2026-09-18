@@ -1,0 +1,6 @@
+echo Locus support status: profile, combat interlock, RDM, GEO, and DNC.
+send Dolomedes pt status
+send Dolomedes pc status
+send Smalls gs c pstartrdm status
+send Achoo gs c pstartgeo status
+send Kickpuncher gs c pstartdnc status

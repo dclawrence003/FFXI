@@ -1,0 +1,6 @@
+send @all lua c BattleMod perf status
+send @all lua c HealBot perf status
+send @all lua c PartyTactics perf status
+send @all lua c React perf status
+send @all lua c GearSwap perf status
+echo Hot-path profiler status requested on all clients.

@@ -17,6 +17,20 @@ repository uses the following rules:
 There is no repository-wide blanket license. The notice or license within each
 project governs that project's files.
 
+## Project design and AI assistance
+
+PartyStart, JubileeKeeper, LocusPuller, SalvageCells and SignetKeeper were
+designed and directed by **Don Lawrence**, with code developed using **OpenAI
+Codex**.  Their original contributions use the BSD 3-Clause license supplied
+in each addon.  This credit describes the development process; it does not
+claim upstream work or replace any third-party notice.
+
+Some early generated notices incorrectly named OpenAI as the copyright
+holder for project-specific code.  Those notices now name Don Lawrence;
+Codex remains credited as the development tool.  Upstream notices, including
+Akaden's and Selindrile's, are preserved.  This does not assert ownership of
+third-party code or guarantee copyright protection for every generated line.
+
 ## AutoWS / AutoWS2
 
 `addons/AutoWS2/` is a clean implementation inspired by AutoWS 0.3.1 by
@@ -83,8 +97,9 @@ The installed addon identifies its author as Kate. A public source is:
 <https://github.com/Mary-Elizabeth/FFXI-Addons/tree/master/Multictrl>
 
 That repository does not advertise a repository-level license through GitHub.
-This repository therefore publishes only the generated Warp II queue patch and
-does not redistribute the complete addon.
+This repository therefore publishes only focused generated patches for the
+Warp II queue, lifecycle compatibility, and action-event CPU path; it does not
+redistribute the complete addon.
 
 ## SendAllTarget / PartyCombat
 
@@ -110,6 +125,10 @@ from **Motenten's** base files. PartyStart does not redistribute Selindrile's
 or Motenten's GearSwap files. Users supply their own compatible GearSwap
 installation.
 
+The focused local GearSwap profiler and CPU-path diffs under
+`patches/GearSwap/` preserve the installed source's copyright header and do
+not redistribute the complete addon.
+
 PartyStart sends documented commands to Roller2 and HealBot but does not
 bundle either addon.
 
@@ -127,9 +146,64 @@ redistribute those projects or the local wiki mirror:
 - <https://www.ffxiah.com/>
 - <https://github.com/LandSandBoat/server>
 
-## Windower
+## Lottery
+
+Windower's Lottery addon is authored by **Arcon** and carries a BSD 3-Clause
+license. This repository publishes only a focused compatibility patch that
+excludes the 20 Salvage cell IDs from Lottery's cross-client pass broadcast.
+The installed upstream addon retains its complete copyright notice,
+redistribution conditions, and disclaimer.
+
+## ConquestCash menu recovery
+
+ConquestCash's local menu-release sequence uses the recovery sequence from
+EventGuard/Superwarp by **Akaden of Asura**, with reset-function credit to
+**Ivaar**.  `ConquestCash.lua` retains the applicable upstream BSD notice.
+ConquestCash's MIT terms apply to its own code and do not replace that notice.
+
+Upstream: <https://github.com/AkadenTK/superwarp>
+
+## Offline test dependencies
+
+The offline test tools install **Fengari/fengari-node-cli** and **luaparse**
+under their MIT licenses.  Their packages retain their authors' notices.
+These are development dependencies, not bundled game addons.
+
+## Preserved upstream modification candidates
+
+The FastFollow safe-zone candidate is based on FastFollow by
+**DiscipleOfEris** and retains its MIT license.  Local changes extend that
+addon; they do not make its original implementation our work.
+
+The Superwarp sendall candidate is based on **Akaden of Asura's** Superwarp.
+Its folder includes the full upstream BSD notice.  The local contribution
+concerns participant discovery.  Neither candidate's presence in Git proves
+that it is deployed or working in the game.
+
+## Windower APIs
 
 The projects rely on Windower APIs, libraries, and resources but do not
 redistribute Windower itself:
 
 <https://github.com/Windower>
+
+## LimbusTracker references
+
+LimbusTracker's README credits Superwarp by **Akaden**, with its Limbus
+support credited to **Staticvoid**, as a reference for final-chest identifiers.
+It also credits **Kaius @ Bahamut (djlabbe)** for LimbusHelper and **Nynja**
+for a firsthand reward-message report.  The README states that no Superwarp
+or LimbusHelper source is incorporated.  These are reference credits, not
+claims that those authors wrote or endorsed LimbusTracker.
+
+- <https://github.com/AkadenTK/superwarp>
+- <https://github.com/djlabbe/LimbusHelper>
+- <https://www.ffxiah.com/forum/topic/58447/limbus-2025/63/>
+
+### THHUD behavioral reference
+
+`addons/THHUD/` is an independent implementation. Its action-message and
+lifecycle packet selection was checked against Windower's BSD-licensed
+THTracker addon by **Krizz**; no THTracker source is redistributed in THHUD.
+Treasure Hunter mechanics were checked against the repository owner's local
+BG Wiki mirror.

@@ -1,8 +1,9 @@
 # LootAdvisor
 
 LootAdvisor is the read-only Windower frontend for InventoryCore. It watches the
-treasure pool and prints an English recommendation for every newly observed
-item.
+treasure pool and prints an English recommendation for newly observed items.
+The five Shami seal/crest currencies are retained silently during automatic
+pool scanning because their disposition is always `KEEP`.
 
 ## Requirements
 
@@ -38,6 +39,10 @@ Copy this complete folder into `Windower\addons\LootAdvisor`, then load it:
   queues Valefor pricing in the background.
 - Repeat `//la pool` after a few seconds to pick up a completed market query.
 - Output uses ASCII-only punctuation for FFXI chat compatibility.
+- Beastmen's Seal, Kindred's Seal, Kindred's Crest, H. Kindred Crest, and
+  S. Kindred Crest are classified as BCNM orb currency and kept. Automatic
+  drop notices for these five are suppressed; `//la pool` and `//la item`
+  still display their recommendation on demand.
 
 LootAdvisor never lots, passes, sells, sends, or drops items.
 
@@ -66,14 +71,17 @@ When InventoryCore is running locally, LootAdvisor also reports:
 - all owned key items;
 - all numeric Currencies and Currencies 2 values.
 
-Snapshots are sent once per minute and after login or zoning. Currency packets
-are requested every five minutes. Data is posted only to
+Snapshots are sent every five minutes and after login or zoning. Currency
+packet responses are coalesced into one snapshot instead of producing
+duplicate posts. Data is posted only to
 `http://127.0.0.1:8787`; no remote telemetry service is used.
 
-Version 0.2.2 limits each localhost request to 100 milliseconds and opens a
-60-to-300-second circuit breaker when InventoryCore is unavailable. Cached
-recommendations remain usable during an outage, network warning spam is
-suppressed, and `//la telemetry` forces an immediate recovery attempt.
+Version 0.2.3 limits each localhost request to 100 milliseconds, ignores one
+isolated transport timeout, and opens a 60-to-300-second circuit breaker only
+after consecutive failures. InventoryCore performs FindAll refreshes in a
+separate worker process so wiki and market processing cannot block the HTTP
+server. Cached recommendations remain usable during an outage, network warning
+spam is suppressed, and `//la telemetry` forces an immediate recovery attempt.
 
 Limbus chest detection was moved to the standalone `LimbusTracker` addon in
 version 0.2.1. LootAdvisor no longer observes chest interactions or writes

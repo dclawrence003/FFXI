@@ -1,0 +1,97 @@
+echo Loading PartyCombat v0.6.18, AutoWS2 v0.3.7, PartyTactics v0.11.2, and no-Cait Qutrub v1.14.0. Run while all six characters are out of combat.
+send Dolomedes pt off
+wait 2
+send Smalls gs reload
+wait 4
+send Dolomedes lua unload PartyCombat
+wait 1
+send Dolomedes lua load PartyCombat
+wait 2
+send Tackleberry lua unload PartyCombat
+wait 1
+send Tackleberry lua load PartyCombat
+wait 2
+send Kickpuncher lua unload PartyCombat
+wait 1
+send Kickpuncher lua load PartyCombat
+wait 2
+send Barneystinson lua unload PartyCombat
+wait 1
+send Barneystinson lua load PartyCombat
+wait 2
+send Smalls lua unload PartyCombat
+wait 1
+send Smalls lua load PartyCombat
+wait 2
+send Achoo lua unload PartyCombat
+wait 1
+send Achoo lua load PartyCombat
+wait 2
+send Dolomedes lua unload AutoWS2
+wait 1
+send Dolomedes lua load AutoWS2
+wait 1
+send Tackleberry lua unload AutoWS2
+wait 1
+send Tackleberry lua load AutoWS2
+wait 1
+send Kickpuncher lua unload AutoWS2
+wait 1
+send Kickpuncher lua load AutoWS2
+wait 1
+send Barneystinson lua unload AutoWS2
+wait 1
+send Barneystinson lua load AutoWS2
+wait 1
+send Achoo lua unload AutoWS2
+wait 1
+send Achoo lua load AutoWS2
+wait 2
+send Dolomedes lua unload PartyTactics
+wait 1
+send Dolomedes lua load PartyTactics
+wait 2
+send Tackleberry lua unload PartyTactics
+wait 1
+send Tackleberry lua load PartyTactics
+wait 2
+send Kickpuncher lua unload PartyTactics
+wait 1
+send Kickpuncher lua load PartyTactics
+wait 2
+send Barneystinson lua unload PartyTactics
+wait 1
+send Barneystinson lua load PartyTactics
+wait 2
+send Smalls lua unload PartyTactics
+wait 1
+send Smalls lua load PartyTactics
+wait 2
+send Achoo lua unload PartyTactics
+wait 1
+send Achoo lua load PartyTactics
+wait 3
+unbind ^p
+unbind !p
+bind ^p pt arm
+bind !p pt disarm
+send Dolomedes pt v1-qutrub-nocait
+wait 5
+send Dolomedes pc policy pt-ambu2609v1-qutrub-nocait Dolomedes Dolomedes Dolomedes,Tackleberry,Kickpuncher,Barneystinson,Achoo Dolomedes,Kickpuncher,Barneystinson mobile - - -
+send Tackleberry pc policy pt-ambu2609v1-qutrub-nocait Dolomedes Dolomedes Dolomedes,Tackleberry,Kickpuncher,Barneystinson,Achoo Dolomedes,Kickpuncher,Barneystinson mobile - - -
+send Kickpuncher pc policy pt-ambu2609v1-qutrub-nocait Dolomedes Dolomedes Dolomedes,Tackleberry,Kickpuncher,Barneystinson,Achoo Dolomedes,Kickpuncher,Barneystinson mobile - - -
+send Barneystinson pc policy pt-ambu2609v1-qutrub-nocait Dolomedes Dolomedes Dolomedes,Tackleberry,Kickpuncher,Barneystinson,Achoo Dolomedes,Kickpuncher,Barneystinson mobile - - -
+send Smalls pc policy pt-ambu2609v1-qutrub-nocait Dolomedes Dolomedes Dolomedes,Tackleberry,Kickpuncher,Barneystinson,Achoo Dolomedes,Kickpuncher,Barneystinson mobile - - -
+send Achoo pc policy pt-ambu2609v1-qutrub-nocait Dolomedes Dolomedes Dolomedes,Tackleberry,Kickpuncher,Barneystinson,Achoo Dolomedes,Kickpuncher,Barneystinson mobile - - -
+wait 2
+send Dolomedes pt status
+send Dolomedes pc status
+send Tackleberry pc status
+send Tackleberry aws2 status
+send Dolomedes aws2 status
+send Kickpuncher aws2 status
+send Barneystinson aws2 status
+send Achoo aws2 status
+echo Cooperative no-Cait Qutrub v1.14.0 is selected and armed automatically. It prepares food, shadows, defensive buffs, Reraise, songs, and healing in place; no combat assignment, movement, debuff, or enemy-targeted GEO action begins before the pull. Add acquisition gets one bounded repair after a stall; Dolo's automatic Last Stand is fight-scoped.
+echo When buffs are ready, Dolo manually pulls Bigwig roughly 10-15 yalms toward the party-start side. The exact action, party claim, or Bigwig retaliation releases combat automatically; no second command is required. CTRL-P or //pt arm only reasserts after ALT-P, //pt disarm, or a missed bind.
+echo Normal waves retain unique Tackle/Achoo/nonholder anchors, the six-and-a-quarter-second assembly interval, shared Astrologer-first focus, exact-target AutoWS2, packet-confirmed Dia then Light Shot, focus-only Wail cleanup, profile-local Smalls healing, Tackle's 40-percent backstop, and loss-reactive shadows. Manual actions remain free, and checks, supplies, geometry, results, and difficulty never block start.

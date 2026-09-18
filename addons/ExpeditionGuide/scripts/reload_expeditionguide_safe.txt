@@ -1,0 +1,28 @@
+echo ExpeditionGuide inert reload beginning. Run only while all six characters are out of combat and after pausing the route.
+send Dolomedes lua unload ExpeditionGuide
+wait 1
+send Dolomedes lua load ExpeditionGuide
+wait 3
+send Tackleberry lua unload ExpeditionGuide
+wait 1
+send Tackleberry lua load ExpeditionGuide
+wait 2
+send Kickpuncher lua unload ExpeditionGuide
+wait 1
+send Kickpuncher lua load ExpeditionGuide
+wait 2
+send Barneystinson lua unload ExpeditionGuide
+wait 1
+send Barneystinson lua load ExpeditionGuide
+wait 2
+send Smalls lua unload ExpeditionGuide
+wait 1
+send Smalls lua load ExpeditionGuide
+wait 2
+send Achoo lua unload ExpeditionGuide
+wait 1
+send Achoo lua load ExpeditionGuide
+wait 3
+send Dolomedes exg status
+send Dolomedes exg explain
+echo ExpeditionGuide reload complete. It did not start or resume a route, load a combat profile, or touch another addon. Verify paused state and sensors 6/6 before manual resume.
