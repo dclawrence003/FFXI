@@ -56,6 +56,10 @@ expect('Snake Eye handles ten', {
     total = 10, lucky = 4, unlucky = 8, policy = 'conservative',
     snake_eye_ready = true, fold_ready = false,
 }, 'snake_eye')
+expect('Snake Eye makes a safe nine continuation', {
+    total = 9, lucky = 2, unlucky = 6, policy = 'conservative',
+    snake_eye_ready = true, fold_ready = false,
+}, 'snake_eye')
 expect('ten stops without Snake Eye', {
     total = 10, lucky = 4, unlucky = 8, policy = 'aggressive',
     snake_eye_ready = false, fold_ready = true,
@@ -68,10 +72,18 @@ expect('Snake Eye escapes high unlucky', {
     total = 8, lucky = 4, unlucky = 8, policy = 'conservative',
     snake_eye_ready = true, fold_ready = false,
 }, 'snake_eye')
-expect('Crooked Cards prevents continuation', {
-    total = 3, lucky = 4, unlucky = 8, policy = 'aggressive',
-    snake_eye_ready = true, fold_ready = true, crooked = true,
-}, 'stop')
+expect('Crooked Cards keeps safe Double-Up progression', {
+    total = 2, lucky = 4, unlucky = 8, policy = 'conservative',
+    snake_eye_ready = false, fold_ready = false, crooked = true,
+}, 'double_up')
+expect('Crooked Cards keeps Snake Eye lucky conversion', {
+    total = 3, lucky = 4, unlucky = 8, policy = 'conservative',
+    snake_eye_ready = true, fold_ready = false, crooked = true,
+}, 'snake_eye')
+expect('Crooked Cards keeps Snake Eye unlucky escape', {
+    total = 8, lucky = 4, unlucky = 8, policy = 'conservative',
+    snake_eye_ready = true, fold_ready = false, crooked = true,
+}, 'snake_eye')
 expect('invalid policy becomes conservative', {
     total = 6, lucky = 4, unlucky = 8, policy = 'reckless',
     snake_eye_ready = false, fold_ready = true,

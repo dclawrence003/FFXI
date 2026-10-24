@@ -25,7 +25,7 @@
 --SOFTWARE, EVEN IFIF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'Roller2'
-_addon.version = '2.1.0-prototype'
+_addon.version = '2.1.1-prototype'
 _addon.author = 'Selindrile; Roller2 safety iteration by Codex'
 _addon.commands = {'roller2','r2'}
 
@@ -50,7 +50,6 @@ zonedelay = 6
 stealthy = ''
 was_stealthy = ''
 
-lastRollCrooked = false
 midRoll = false
 snakeEyeUsedThisRoll = false
 snakeEyeRequestPending = false
@@ -706,10 +705,6 @@ windower.register_event('action', function(act)
 	snakeEyeDoubleUpPending = false
 	midRoll = false
 
-	if result.message ~= 424 then
-		lastRollCrooked = false
-	end
-
 	local roll_name = rollInfo[rollID][1] .. ' Roll'
 	if not autoroll then
 		set_last_decision(roll_name, rollNum, 'stop', 'autoroll is off')
@@ -735,7 +730,6 @@ windower.register_event('action', function(act)
 		policy = roll_policy(),
 		snake_eye_ready = snake_ready,
 		fold_ready = fold_ready,
-		crooked = lastRollCrooked,
 	})
 
 	set_last_decision(roll_name, rollNum, action, reason)
@@ -866,10 +860,6 @@ function doRoll()
 	if player.main_job == 'COR' and haveBuff('Bust') and available_ja:contains(178) and abil_recasts[198] and abil_recasts[198] == 0 then windower.send_command('input /ja "Fold" <me>') return end
 	if not abil_recasts[193] or abil_recasts[193] > 0 then return end
 
-	if not haveBuff(Rollindex[settings.Roll_ind_1]) and not haveBuff(Rollindex[settings.Roll_ind_2]) then
-		lastRollCrooked = false
-	end
-
 	if not haveBuff(Rollindex[settings.Roll_ind_1]) then
 		if player.main_job == 'COR' and player.main_job_level > 94 and abil_recasts[96] == 0 then
 			request_phantom_roll(Rollindex[settings.Roll_ind_1], true)
@@ -913,13 +903,7 @@ windower.register_event('gain buff', function(buff_id)
 end)
 
 windower.register_event('lose buff', function(buff_id)
-	if buff_id == 601 then
-		local abil_recasts = ability_recasts()
-
-		if (abil_recasts[193] or 0) > 40 and haveBuff("Double-Up Chance") then
-			lastRollCrooked = true
-		end
-	elseif buff_id == 308 then
+	if buff_id == 308 then
 		midRoll = false
 		reset_snake_eye_state()
 		update_displaybox()
@@ -930,7 +914,6 @@ end)
 windower.register_event('zone change', function()
 	zonedelay = 0
 	autoroll = false
-	lastRollCrooked = false
 	lastDecision = 'Waiting'
 	lastDecisionTotal = nil
 	lastDecisionRoll = nil
@@ -941,7 +924,6 @@ end)
 windower.register_event('job change', function()
 	zonedelay = 0
 	autoroll = false
-	lastRollCrooked = false
 	lastDecision = 'Waiting'
 	lastDecisionTotal = nil
 	lastDecisionRoll = nil
