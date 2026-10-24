@@ -18,7 +18,7 @@ LUA = {
     'CombatRecorder': ['test_recorder.lua', 'test_addon.lua'],
     'LimbusTracker': ['test_currency_correlation.lua'],
     'THHUD': ['run.lua', 'runtime_harness.lua'],
-    'Roller2': ['decision_spec.lua', 'runtime_stop.lua'],
+    'Roller2': ['decision_spec.lua', 'runtime_stop.lua', 'runtime_decision.lua'],
     'SalvageCells': ['test_runtime.lua'],
 }
 

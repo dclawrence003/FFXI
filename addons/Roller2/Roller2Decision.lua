@@ -48,13 +48,12 @@ function decision.decide(context)
     if lucky and total == lucky then
         return 'stop', 'lucky number'
     end
-    if context.crooked then
-        return 'stop', 'Crooked Cards roll is protected'
-    end
-
     if context.snake_eye_ready then
         if total == 10 then
             return 'snake_eye', 'Snake Eye guarantees XI'
+        end
+        if total == 9 then
+            return 'snake_eye', 'Snake Eye makes a safe 9 continuation'
         end
         if lucky and total == lucky - 1 then
             return 'snake_eye', 'Snake Eye guarantees the lucky number'

@@ -76,11 +76,13 @@ Rules shared by every policy:
 - Stop on XI.
 - Never raw Double-Up on 9.
 - On 10, use Snake Eye when available; otherwise stop.
+- On 9, use Snake Eye when available. Its forced increment reaches 10, or XI
+  when the merit adds two, without a bust risk.
 - Use Snake Eye at one below the lucky number.
 - Use Snake Eye to move off an unlucky number above 6.
-- Protect a detected Crooked Cards roll from further Double-Ups.
-
-Snake Eye on 9 would only guarantee 10, not XI, so Roller2 stops on 9 instead.
+- Crooked Cards does not freeze the sequence. Safe Double-Ups and every normal
+  Snake Eye opportunity remain available, while each policy's raw Double-Up
+  ceiling still applies.
 
 Set or inspect the policy:
 
@@ -220,8 +222,8 @@ buffs when reporting a problem.
 
 The pure policy engine is `Roller2Decision.lua`. The included
 `tests\decision_spec.lua` covers conservative, balanced, and aggressive
-ceilings; lucky/XI/bust stops; 9/10 safety; Snake Eye opportunities; Crooked
-Cards protection; invalid-policy fallback; and preserved Snake Eye reuse.
+ ceilings; lucky/XI/bust stops; 9/10 safety; Snake Eye opportunities; Crooked
+ Cards continuation; invalid-policy fallback; and preserved Snake Eye reuse.
 
 From the Roller2 directory, run it with a compatible Lua interpreter:
 
@@ -238,6 +240,7 @@ timing and job-ability confirmation.
 - Removed cross-sequence `lastRoll == 11` behavior.
 - Eliminated blind delayed Double-Up commands.
 - Prohibited raw Double-Up on 9 and 10.
+- Allows Snake Eye from 9 and normal safe continuation after Crooked Cards.
 - Added a pure, tested decision module.
 - Rebuilt the display lifecycle and added positioning commands.
 - Added pending-action and last-decision display fields.
